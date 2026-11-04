@@ -131,6 +131,12 @@ function renderWithClient(): ReturnType<typeof render> {
 describe('MyFoodHistoryScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (typeof path === 'string' && path.includes('/me/photos?')) return { items: [] } as never;
+      if (path === '/photos/config') return { enabled: false } as never;
+      if (path === '/me/food-item-logs') return [...MOCK_LOGS] as never;
+      return {} as never;
+    });
   });
 
   test('R8.1-R8.5: renders full food history with dish name, place, date, rating, note, and stale badge', async () => {
@@ -348,7 +354,7 @@ describe('MyFoodHistoryScreen', () => {
     expect(screen.getByText('No food logs yet')).toBeTruthy();
   });
 
-  test('R8.11: tapping "+ Add rating" on an unrated log opens prompt and submits rating via PATCH', async () => {
+  test('R8.11: tapping "+ Add rating" on an unrated log opens edit modal and submits rating via PATCH', async () => {
     apiRequestMock.mockResolvedValue([...MOCK_LOGS]);
 
     renderWithClient();
@@ -361,23 +367,23 @@ describe('MyFoodHistoryScreen', () => {
     fireEvent.press(screen.getByTestId('food-history-add-rating-log-4'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
       expect(screen.getAllByText('Spring Roll').length).toBeGreaterThanOrEqual(1);
     });
 
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-8'));
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+    fireEvent.press(screen.getByTestId('edit-rating-btn-8'));
+    fireEvent.press(screen.getByTestId('submit-edit-food-log-btn'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith(
         'PATCH',
         '/me/food-items/item-4/logs/log-4',
-        { rating: 8 },
+        expect.objectContaining({ rating: 8 }),
       );
     });
   });
 
-  test('R8.11: tapping existing rating badge opens prompt with initial rating and submits updated rating via PATCH', async () => {
+  test('R8.11: tapping existing rating badge opens edit modal with initial rating and submits updated rating via PATCH', async () => {
     apiRequestMock.mockResolvedValue([...MOCK_LOGS]);
 
     renderWithClient();
@@ -390,19 +396,36 @@ describe('MyFoodHistoryScreen', () => {
     fireEvent.press(screen.getByTestId('food-history-rating-log-1'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
-      expect(screen.getByText('Update rating (1–10)')).toBeTruthy();
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
+      expect(screen.getByText('Rating (9/10)')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-10'));
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+    fireEvent.press(screen.getByTestId('edit-rating-btn-10'));
+    fireEvent.press(screen.getByTestId('submit-edit-food-log-btn'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith(
         'PATCH',
         '/me/food-items/item-1/logs/log-1',
-        { rating: 10 },
+        expect.objectContaining({ rating: 10 }),
       );
+    });
+  });
+
+  test('R8.11: tapping edit button opens edit food log modal', async () => {
+    apiRequestMock.mockResolvedValue([...MOCK_LOGS]);
+
+    renderWithClient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-history-edit-log-1')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-history-edit-log-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
+      expect(screen.getAllByText('Dole Whip Float').length).toBeGreaterThanOrEqual(2);
     });
   });
 });

@@ -34,10 +34,12 @@ import { VISIT_SUMMARY_MAX_IDS } from '@dwt/shared';
 
 import { registerErrorHandler } from '../../../../errors/handler.js';
 import { AppError } from '../../../../errors/AppError.js';
+import type { RodeWithTagCreatedNotice } from '../../../trips/events.js';
 import {
   experienceLogRoutes,
   type ExperienceLogRoutesOptions,
 } from '../routes.js';
+import type { TripLogPort } from '../tripLogPort.js';
 import type {
   CreateLogInput,
   DeleteLogResult,
@@ -129,16 +131,20 @@ const requireSession: ExperienceLogRoutesOptions['requireSession'] = async (
 async function buildApp(
   repo: FakeLogRepo,
   clock?: () => Date,
+  tripLog?: TripLogPort,
+  onRodeWithTagCreated?: (notice: RodeWithTagCreatedNotice) => void,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   registerErrorHandler(app);
-  // Only pass `clock` when supplied; the option is `exactOptionalPropertyTypes`
-  // so `clock: undefined` would be a type error.
-  await app.register(
-    experienceLogRoutes(
-      clock ? { repo, requireSession, clock } : { repo, requireSession },
-    ),
-  );
+  // Only pass exact optional properties when supplied to satisfy exactOptionalPropertyTypes.
+  const opts: ExperienceLogRoutesOptions = {
+    repo,
+    requireSession,
+    ...(clock ? { clock } : {}),
+    ...(tripLog ? { tripLog } : {}),
+    ...(onRodeWithTagCreated ? { onRodeWithTagCreated } : {}),
+  };
+  await app.register(experienceLogRoutes(opts));
   await app.ready();
   return app;
 }
@@ -342,6 +348,194 @@ describe('experienceLogRoutes', () => {
     expect(res.json().error.code).toBe('trip_forbidden');
   });
 
+  it('POST 201 trip-linked happy path delegates to TripLogPort, returns tripLog and newlyAwardedPinIds, and dispatches notices', async () => {
+    const member1 = '88888888-8888-4888-8888-888888888888';
+    const member2 = '99999999-9999-4999-8999-999999999999';
+    const tripLogCalls: Parameters<TripLogPort['logToTrip']>[0][] = [];
+    const fakeTripLog: TripLogPort = {
+      async logToTrip(input) {
+        tripLogCalls.push(input);
+        return {
+          logId: LOG_ID,
+          loggedAt: '2026-01-02T16:00:00.000Z',
+          logEntryId: '77777777-7777-7777-7777-777777777777',
+          pendingTags: [
+            { tagId: 'tag-1', taggedMemberId: member1 },
+            { tagId: 'tag-2', taggedMemberId: member2 },
+          ],
+        };
+      },
+      async purgeFeedForLog() {},
+    };
+    const notices: RodeWithTagCreatedNotice[] = [];
+    const customApp = await buildApp(
+      repo,
+      undefined,
+      fakeTripLog,
+      (notice) => notices.push(notice),
+    );
+    try {
+      const res = await customApp.inject({
+        method: 'POST',
+        url: `/me/experiences/${EXPERIENCE_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-01-02',
+          userTz: 'America/New_York',
+          rating: 9,
+          note: 'Epic ride',
+          tripId: TRIP_ID,
+          rodeWith: [member1, member2],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = res.json();
+      expect(body).toMatchObject({
+        id: LOG_ID,
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+        visitedOn: '2026-01-02',
+        userTz: 'America/New_York',
+        loggedAt: '2026-01-02T16:00:00.000Z',
+        rating: 9,
+        note: 'Epic ride',
+        tripLog: {
+          tripId: TRIP_ID,
+          logEntryId: '77777777-7777-7777-7777-777777777777',
+          taggedCount: 2,
+        },
+        newlyAwardedPinIds: [],
+      });
+
+      expect(tripLogCalls).toHaveLength(1);
+      expect(tripLogCalls[0]).toEqual({
+        tripId: TRIP_ID,
+        userId: USER_ID,
+        experienceId: EXPERIENCE_ID,
+        visitedOn: '2026-01-02',
+        userTz: 'America/New_York',
+        rating: 9,
+        note: 'Epic ride',
+        rodeWith: [member1, member2],
+      });
+
+      expect(repo.addCalls).toHaveLength(0);
+
+      expect(notices).toHaveLength(2);
+      expect(notices[0]).toEqual({
+        tagId: 'tag-1',
+        tripLogEntryId: '77777777-7777-7777-7777-777777777777',
+        taggedMemberId: member1,
+        taggingMemberId: USER_ID,
+      });
+      expect(notices[1]).toEqual({
+        tagId: 'tag-2',
+        tripLogEntryId: '77777777-7777-7777-7777-777777777777',
+        taggedMemberId: member2,
+        taggingMemberId: USER_ID,
+      });
+    } finally {
+      await customApp.close();
+    }
+  });
+
+  it('POST 400 validation_failed when rodeWith is provided without tripId', async () => {
+    const member1 = '88888888-8888-4888-8888-888888888888';
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/experiences/${EXPERIENCE_ID}/logs`,
+      headers: { 'x-test-user-id': USER_ID },
+      payload: {
+        visitedOn: '2026-01-02',
+        userTz: 'America/New_York',
+        rodeWith: [member1],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('validation_failed');
+    expect(repo.addCalls).toHaveLength(0);
+  });
+
+  it('POST 403 trip_forbidden surfaced when tripLog port throws trip_forbidden', async () => {
+    const fakeTripLog: TripLogPort = {
+      async logToTrip() {
+        throw new AppError('trip_forbidden', 'User is not a member of the trip.');
+      },
+      async purgeFeedForLog() {},
+    };
+    const customApp = await buildApp(repo, undefined, fakeTripLog);
+    try {
+      const res = await customApp.inject({
+        method: 'POST',
+        url: `/me/experiences/${EXPERIENCE_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-01-02',
+          userTz: 'America/New_York',
+          tripId: TRIP_ID,
+        },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('trip_forbidden');
+    } finally {
+      await customApp.close();
+    }
+  });
+
+  it('POST 400 log_outside_trip_dates surfaced when tripLog port throws log_outside_trip_dates', async () => {
+    const fakeTripLog: TripLogPort = {
+      async logToTrip() {
+        throw new AppError('log_outside_trip_dates', 'Visited date is outside the trip date range.');
+      },
+      async purgeFeedForLog() {},
+    };
+    const customApp = await buildApp(repo, undefined, fakeTripLog);
+    try {
+      const res = await customApp.inject({
+        method: 'POST',
+        url: `/me/experiences/${EXPERIENCE_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-01-02',
+          userTz: 'America/New_York',
+          tripId: TRIP_ID,
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('log_outside_trip_dates');
+    } finally {
+      await customApp.close();
+    }
+  });
+
+  it('POST 201 non-trip create does not invoke tripLog port and writes to personal repo', async () => {
+    const fakeTripLog: TripLogPort = {
+      async logToTrip() {
+        throw new Error('tripLog.logToTrip must not be called');
+      },
+      async purgeFeedForLog() {},
+    };
+    const customApp = await buildApp(repo, undefined, fakeTripLog);
+    try {
+      const res = await customApp.inject({
+        method: 'POST',
+        url: `/me/experiences/${EXPERIENCE_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-01-02',
+          userTz: 'America/New_York',
+          rating: 7,
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(repo.addCalls).toHaveLength(1);
+      expect(repo.addCalls[0]?.tripId).toBeNull();
+    } finally {
+      await customApp.close();
+    }
+  });
+
   // --- GET ------------------------------------------------------------------
 
   it('GET 200 returns the visit history payload', async () => {
@@ -415,6 +609,40 @@ describe('experienceLogRoutes', () => {
       experienceId: EXPERIENCE_ID,
       logId: LOG_ID,
     });
+  });
+
+  it('DELETE calls purgeFeedForLog before repo.deleteLog when tripLog is provided', async () => {
+    const callOrder: string[] = [];
+    const fakeTripLog: TripLogPort = {
+      async logToTrip() {
+        throw new Error('not called');
+      },
+      async purgeFeedForLog(logId, userId) {
+        callOrder.push(`purgeFeed:${logId}:${userId}`);
+      },
+    };
+    const customRepo = makeRepo();
+    const origDelete = customRepo.deleteLog;
+    customRepo.deleteLog = async (userId, expId, logId) => {
+      callOrder.push(`deleteLog:${logId}:${userId}`);
+      return origDelete.call(customRepo, userId, expId, logId);
+    };
+
+    const customApp = await buildApp(customRepo, undefined, fakeTripLog);
+    try {
+      const res = await customApp.inject({
+        method: 'DELETE',
+        url: `/me/experiences/${EXPERIENCE_ID}/logs/${LOG_ID}`,
+        headers: { 'x-test-user-id': USER_ID },
+      });
+      expect(res.statusCode).toBe(204);
+      expect(callOrder).toEqual([
+        `purgeFeed:${LOG_ID}:${USER_ID}`,
+        `deleteLog:${LOG_ID}:${USER_ID}`,
+      ]);
+    } finally {
+      await customApp.close();
+    }
   });
 
   it('DELETE 404 log_not_found when the repo reports not deleted', async () => {

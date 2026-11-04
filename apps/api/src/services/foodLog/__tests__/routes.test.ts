@@ -694,6 +694,8 @@ describe('foodLog routes', () => {
         payload: {
           rating: 9,
           note: 'Delicious update',
+          visitedOn: '2026-06-12',
+          userTz: 'America/New_York',
         },
       });
 
@@ -705,6 +707,8 @@ describe('foodLog routes', () => {
           logId: LOG_ID,
           rating: 9,
           note: 'Delicious update',
+          visitedOn: '2026-06-12',
+          userTz: 'America/New_York',
         },
       ]);
       const body = res.json();

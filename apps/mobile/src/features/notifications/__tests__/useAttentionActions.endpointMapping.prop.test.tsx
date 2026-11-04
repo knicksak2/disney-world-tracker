@@ -213,7 +213,7 @@ const rodeWithTagCaseArb: fc.Arbitrary<ActionCase> = fc.record({
       item,
       expectedPath: `/me/rode-with-tags/${tagId}/confirm`,
       // A body is sent only when a numeric rating was provided (R2.2).
-      expectedBody: hasRating ? { rating } : undefined,
+      expectedBody: hasRating ? { rating } : {},
     };
   }
   return {

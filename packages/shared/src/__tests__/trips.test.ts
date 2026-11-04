@@ -32,6 +32,8 @@ import {
   dayParkParamsSchema,
   tripOptimizationInputSchema,
   tripEditSchema,
+  tripLogEntryCreateSchema,
+  rodeWithConfirmSchema,
 } from '../trips.js';
 
 // A stable, well-formed pending rode-with tag DTO (all fields present, valid).
@@ -435,5 +437,127 @@ describe('dayParkParamsSchema (R24.6)', () => {
 
   it('rejects non-uuid id', () => {
     expect(dayParkParamsSchema.safeParse({ id: 'invalid-id', date: '2026-10-01' }).success).toBe(false);
+  });
+});
+
+describe('tripLogEntryCreateSchema (note support)', () => {
+  const validExpId = '55555555-5555-4555-8555-555555555555';
+
+  it('accepts valid input without note', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({ experienceId: validExpId });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts valid input with null note', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({ experienceId: validExpId, note: null });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.note).toBeNull();
+    }
+  });
+
+  it('accepts valid input with a note and trims whitespace', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      note: '  Great ride!  ',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.note).toBe('Great ride!');
+    }
+  });
+
+  it('rejects whitespace-only note', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      note: '    ',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects note exceeding 2000 characters', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      note: 'a'.repeat(2001),
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts valid input with visitedOn and userTz (R5.6)', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      visitedOn: '2026-05-10',
+      userTz: 'America/New_York',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.visitedOn).toBe('2026-05-10');
+      expect(parsed.data.userTz).toBe('America/New_York');
+    }
+  });
+
+  it('rejects invalid visitedOn date format', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      visitedOn: 'not-a-date',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects invalid userTz', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      userTz: 'not a timezone!',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects unknown extra fields (strict)', () => {
+    const parsed = tripLogEntryCreateSchema.safeParse({
+      experienceId: validExpId,
+      extraField: 'unknown',
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe('rodeWithConfirmSchema', () => {
+  it('accepts undefined (omitted body) and defaults to {}', () => {
+    const parsed = rodeWithConfirmSchema.safeParse(undefined);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toEqual({});
+      expect(parsed.data.rating).toBeUndefined();
+    }
+  });
+
+  it('accepts an empty object {} without rating', () => {
+    const parsed = rodeWithConfirmSchema.safeParse({});
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toEqual({});
+      expect(parsed.data.rating).toBeUndefined();
+    }
+  });
+
+  it('accepts a valid integer rating between 1 and 10', () => {
+    const parsed = rodeWithConfirmSchema.safeParse({ rating: 7 });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.rating).toBe(7);
+    }
+  });
+
+  it('rejects ratings outside 1..10 range', () => {
+    expect(rodeWithConfirmSchema.safeParse({ rating: 0 }).success).toBe(false);
+    expect(rodeWithConfirmSchema.safeParse({ rating: 11 }).success).toBe(false);
+  });
+
+  it('rejects non-integer ratings', () => {
+    expect(rodeWithConfirmSchema.safeParse({ rating: 7.5 }).success).toBe(false);
+  });
+
+  it('rejects unrecognized extra fields due to strict mode', () => {
+    expect(rodeWithConfirmSchema.safeParse({ rating: 5, extra: 'forbidden' }).success).toBe(false);
   });
 });

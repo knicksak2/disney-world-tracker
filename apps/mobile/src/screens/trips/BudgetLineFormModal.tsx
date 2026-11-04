@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -1724,7 +1726,11 @@ export function BudgetLineFormModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} testID={testID}>
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTitleWrap}>
@@ -1811,6 +1817,38 @@ export function BudgetLineFormModal({
                 );
               })}
             </View>
+            {/* Spanning full-width shelf for Other */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="other"
+              accessibilityState={{ selected: category === 'other' }}
+              testID="category-card-other"
+              onPress={() => handleCategoryChange('other')}
+              style={[
+                styles.categoryCardOther,
+                {
+                  backgroundColor: category === 'other' ? palette.chipActiveBg : palette.chipInactiveBg,
+                  borderColor: category === 'other' ? palette.chipActiveBg : palette.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name={CATEGORY_META.other.icon}
+                size={16}
+                color={category === 'other' ? palette.chipActiveText : palette.hintText}
+              />
+              <Text
+                style={[
+                  styles.categoryCardText,
+                  {
+                    color: category === 'other' ? palette.chipActiveText : palette.chipInactiveText,
+                    fontWeight: category === 'other' ? '700' : '500',
+                  },
+                ]}
+              >
+                {CATEGORY_META.other.label}
+              </Text>
+            </Pressable>
           </View>
 
           {/* Hotel Selection & Nightly Calculator Card when category is lodging */}
@@ -3741,6 +3779,7 @@ export function BudgetLineFormModal({
         ) : null}
 
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -3812,6 +3851,18 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+  },
+  categoryCardOther: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: t.radius.md,
+    borderWidth: 1.5,
+    marginTop: 8,
+    gap: 8,
   },
   categoryCardText: {
     fontSize: 12,

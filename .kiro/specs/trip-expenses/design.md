@@ -394,7 +394,7 @@ CREATE TABLE expenses (
   CONSTRAINT chk_expenses_amount CHECK (amount_cents > 0 AND amount_cents <= 10000000),
   CONSTRAINT chk_expenses_description_nonempty CHECK (length(trim(description)) > 0),
   CONSTRAINT chk_expenses_category CHECK (category IS NULL OR category IN
-    ('hotel', 'tickets', 'dining', 'shopping', 'transportation', 'other')),
+    ('hotel', 'tickets', 'lightning_lane', 'dining', 'shopping', 'transportation', 'other')),
   CONSTRAINT chk_expenses_split_mode CHECK (split_mode IN ('exact', 'even', 'tiered', 'itemized'))
 );
 CREATE INDEX expenses_trip_idx ON expenses (trip_id, expense_date);
@@ -696,7 +696,7 @@ No new environment variables, secrets, base URLs, or cadences: the feature adds 
 | Constant | Value | Where | Meaning |
 | --- | --- | --- | --- |
 | `EXPENSE_SPLIT_MODES` | `['exact','even','tiered','itemized']` | `packages/shared/src/enums.ts` | Closed Split_Mode vocabulary; also the `chk_expenses_split_mode` text. |
-| `EXPENSE_CATEGORIES` | `['hotel','tickets','dining','shopping','transportation','other']` | `packages/shared/src/enums.ts` | Closed Category vocabulary; also `chk_expenses_category`. |
+| `EXPENSE_CATEGORIES` | `['hotel','tickets','lightning_lane','dining','shopping','transportation','other']` | `packages/shared/src/enums.ts` | Closed Category vocabulary; also `chk_expenses_category`. |
 | `CHARGE_LINE_KINDS` | `['tax','gratuity','fee','discount']` | `packages/shared/src/enums.ts` | Closed Charge_Line kind vocabulary; also `chk_charge_lines_kind`. |
 | `EXPENSE_AMOUNT_MAX_CENTS` | `10_000_000` ($100,000.00) | `packages/shared/src/tripExpenses.ts` | Sanity cap on any single Amount (Req 1.3). |
 | `EXPENSE_LIMIT` | `1_000` | `packages/shared/src/tripExpenses.ts` | Per-Trip Expense count cap (Req 1.12). |

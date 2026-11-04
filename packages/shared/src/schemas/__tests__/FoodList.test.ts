@@ -287,6 +287,46 @@ describe('foodListItemSchema and foodListDetailSchema', () => {
     ).toBe(false);
   });
 
+  it('validates foodListItemSchema visitedOn and note fields when gotten', () => {
+    // Valid ISO date and valid note
+    expect(
+      foodListItemSchema.safeParse({
+        ...sampleItem,
+        gotten: true,
+        visitedOn: '2026-10-18',
+        note: 'Loved the crust!',
+      }).success,
+    ).toBe(true);
+
+    // Null and absent are accepted
+    expect(
+      foodListItemSchema.safeParse({
+        ...sampleItem,
+        gotten: true,
+        visitedOn: null,
+        note: null,
+      }).success,
+    ).toBe(true);
+
+    // Invalid visitedOn format rejected
+    expect(
+      foodListItemSchema.safeParse({
+        ...sampleItem,
+        gotten: true,
+        visitedOn: 'not-a-date',
+      }).success,
+    ).toBe(false);
+
+    // Note over 2000 chars rejected
+    expect(
+      foodListItemSchema.safeParse({
+        ...sampleItem,
+        gotten: true,
+        note: 'a'.repeat(2001),
+      }).success,
+    ).toBe(false);
+  });
+
   it('validates foodListSchema', () => {
     expect(foodListSchema.safeParse(sampleList).success).toBe(true);
     expect(foodListSchema.safeParse({ ...sampleList, isChecklist: true }).success).toBe(true);

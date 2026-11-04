@@ -17,6 +17,7 @@ import type { FoodItemDTO, FoodListDetailDTO, FoodListDTO } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { ADD_TO_LISTS } from './AddToListsSheet.palette';
 
 export interface AddToListsSheetProps {
@@ -42,6 +43,7 @@ export default function AddToListsSheet({
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [isSubmittingNewList, setIsSubmittingNewList] = useState(false);
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   // Fetch owned food lists (Requirement 9.2 / 9.6: restricted to owned food lists)
   const ownedListsQuery = useQuery<readonly FoodListDTO[]>({
@@ -242,9 +244,19 @@ export default function AddToListsSheet({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
+        style={[
+          styles.backdrop,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
-        <View style={styles.container}>
+        <View
+          style={[
+            styles.container,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitles}>

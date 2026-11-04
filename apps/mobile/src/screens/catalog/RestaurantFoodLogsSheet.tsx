@@ -24,7 +24,9 @@ import { apiRequest } from '../../api/client';
 import { Badge, Card, EmptyState } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
+import EditFoodLogModal from './EditFoodLogModal';
 import {
   FOOD_HISTORY_SORT_OPTIONS,
   type FoodHistorySort,
@@ -59,6 +61,8 @@ export default function RestaurantFoodLogsSheet({
   const [searchText, setSearchText] = useState<string>('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<FoodItemLogWithContextDTO | null>(null);
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   const scopeId = experienceId ?? locationId;
 
@@ -106,29 +110,46 @@ export default function RestaurantFoodLogsSheet({
           <Text style={styles.dishName} numberOfLines={2}>
             {item.foodItemName}
           </Text>
-          <Pressable
-            onPress={() => void handleDeleteLog(item)}
-            disabled={deletingId === item.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Delete log for ${item.foodItemName}`}
-            style={styles.deleteBtn}
-            testID={`scoped-food-log-delete-${item.id}`}
-          >
-            {deletingId === item.id ? (
-              <ActivityIndicator size="small" color={t.color.danger} />
-            ) : (
-              <Ionicons name="trash-outline" size={18} color={t.color.danger} />
-            )}
-          </Pressable>
+          <View style={styles.cardActions}>
+            <Pressable
+              onPress={() => setEditingLog(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit log for ${item.foodItemName}`}
+              style={styles.editBtn}
+              testID={`scoped-food-log-edit-${item.id}`}
+            >
+              <Ionicons name="pencil-outline" size={18} color={t.color.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={() => void handleDeleteLog(item)}
+              disabled={deletingId === item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete log for ${item.foodItemName}`}
+              style={styles.deleteBtn}
+              testID={`scoped-food-log-delete-${item.id}`}
+            >
+              {deletingId === item.id ? (
+                <ActivityIndicator size="small" color={t.color.danger} />
+              ) : (
+                <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+              )}
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.metaRow}>
           <Text style={styles.dateText}>{item.visitedOn}</Text>
           {item.rating !== null && (
-            <View style={styles.ratingBadge}>
+            <Pressable
+              onPress={() => setEditingLog(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Rating for ${item.foodItemName}: ${item.rating} out of 10. Tap to edit`}
+              style={styles.ratingBadge}
+              testID={`scoped-food-log-rating-${item.id}`}
+            >
               <Ionicons name="star" size={13} color={t.color.accent} />
               <Text style={styles.ratingText}>{item.rating}/10</Text>
-            </View>
+            </Pressable>
           )}
           {!item.currentlyOnMenu && (
             <Badge
@@ -192,9 +213,19 @@ export default function RestaurantFoodLogsSheet({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
+        style={[
+          styles.backdrop,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
-        <View style={styles.container}>
+        <View
+          style={[
+            styles.container,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitles}>
@@ -311,6 +342,14 @@ export default function RestaurantFoodLogsSheet({
           )}
         </View>
       </KeyboardAvoidingView>
+
+      {editingLog ? (
+        <EditFoodLogModal
+          visible={Boolean(editingLog)}
+          log={editingLog}
+          onClose={() => setEditingLog(null)}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -444,6 +483,14 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '700',
     color: t.color.textPrimary,
     marginRight: 8,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBtn: {
+    padding: 6,
   },
   deleteBtn: {
     padding: 6,

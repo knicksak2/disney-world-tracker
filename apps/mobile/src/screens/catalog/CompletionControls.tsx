@@ -71,6 +71,7 @@ import type { CompletionDTO } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { PrimaryButton, SecondaryButton } from '../../theme/components';
 import { SCRIM } from './CompletionControls.palette';
 
@@ -219,6 +220,7 @@ export default function CompletionControls({
   const [editorVisible, setEditorVisible] = useState(false);
   const [editorDraft, setEditorDraft] = useState('');
   const [editorError, setEditorError] = useState<string | null>(null);
+  const { keyboardInset } = useKeyboardBottomInset(editorVisible);
 
   // `today_in_local_tz` is recomputed on each render so the
   // future-date rule reflects the current wall clock. The ref captures
@@ -414,7 +416,10 @@ export default function CompletionControls({
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
+          style={[
+            styles.modalBackdrop,
+            Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+          ]}
         >
           <View style={styles.modalCard} testID="completion-edit-modal">
             <Text style={styles.modalTitle}>Edit completion date</Text>

@@ -325,6 +325,7 @@ export type ExpenseSplitMode = (typeof EXPENSE_SPLIT_MODES)[number];
 export const EXPENSE_CATEGORIES = [
   'hotel',
   'tickets',
+  'lightning_lane',
   'dining',
   'shopping',
   'transportation',

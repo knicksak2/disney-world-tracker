@@ -51,10 +51,10 @@ import {
   TRIP_REACTION_VALUES,
   isAvatarPresetId,
   tripCommentInputSchema,
-  tripLogEntryCreateSchema,
   tripReactionValueSchema,
   type ExperienceCategory,
   type RodeWithTagState,
+  type TripDTO,
   type TripFeedItemDTO,
   type TripFeedTargetType,
   type TripMemberDTO,
@@ -93,6 +93,8 @@ import { isFinalPhotoStatus } from '../../photos/pollPlan';
 import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
 import { PhotoViewer, type PhotoViewerItem } from '../../photos/PhotoViewer';
 import type { PreparedImages } from '../../photos/imagePrep';
+import LogExperienceSheet from '../logging/LogExperienceSheet';
+import { tripFeedKeys } from './tripFeedQueryKeys';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,6 +130,7 @@ export interface PickedExperience {
   readonly id: string;
   readonly name: string;
   readonly park: string | null;
+  readonly category?: string | null;
 }
 
 /** One rode-with tag as folded into a `completion_logged` item's metadata. */
@@ -135,6 +138,7 @@ interface FeedRodeWith {
   readonly taggedMemberId: string;
   readonly displayName: string;
   readonly state: RodeWithTagState;
+  readonly tagId?: string | null;
 }
 
 /**
@@ -208,10 +212,7 @@ function applyReaction(
 // ---------------------------------------------------------------------------
 
 /** Query keys for the reads the Trip_Activity surface depends on. */
-export const tripFeedKeys = {
-  feed: (tripId: string) => ['trips', 'feed', tripId] as const,
-  members: (tripId: string) => ['trips', 'members', tripId] as const,
-};
+export { tripFeedKeys };
 
 /**
  * R13.3-style deadline reused from the Trips list: a retrieval that does not
@@ -225,9 +226,6 @@ const FEED_LOAD_TIMEOUT_MS = 10_000;
  * addressed from this screen is a `feed_item` (R13.10).
  */
 const FEED_TARGET_TYPE: TripFeedTargetType = 'feed_item';
-
-/** The selectable canonical Rating values, a whole number 1–10 (R10.10). */
-const RATING_VALUES: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 /**
  * Display label + both an outline (idle) and solid (active) glyph for each
@@ -414,7 +412,12 @@ export default function TripFeedScreen({
   // `items`, since hooks must run unconditionally on every render.
   const renderRow = useCallback(
     ({ item }: { item: TripFeedItemDTO }) => (
-      <FeedItemCard tripId={tripId} item={item} canDeleteAnyPhoto={isOrganizer} />
+      <FeedItemCard
+        tripId={tripId}
+        item={item}
+        canDeleteAnyPhoto={isOrganizer}
+        isOrganizer={isOrganizer}
+      />
     ),
     [tripId, isOrganizer],
   );
@@ -554,12 +557,12 @@ export default function TripFeedScreen({
                     pressed && styles.pressed,
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel="Log a ride or snack. Tag who rode with you and share ratings."
+                  accessibilityLabel="Log a ride or food. Tag who was with you and share ratings."
                   testID="trip-activity-log-cta"
                 >
                   <Text style={styles.composerCtaIcon}>✨</Text>
                   <Text style={styles.composerCtaTitle} numberOfLines={1}>
-                    Log a ride or snack
+                    Log a ride or food
                   </Text>
                 </Pressable>
 
@@ -672,11 +675,13 @@ function FeedItemCard({
   tripId,
   item,
   canDeleteAnyPhoto,
+  isOrganizer,
 }: {
   readonly tripId: string;
   readonly item: TripFeedItemDTO;
   /** The caller is an organizer, so the viewer offers Delete on others' photos. */
   readonly canDeleteAnyPhoto: boolean;
+  readonly isOrganizer?: boolean;
 }): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -734,7 +739,51 @@ function FeedItemCard({
   const experienceCategory = readString(item.metadata, 'experienceCategory');
   const experienceLand = readString(item.metadata, 'experienceLand');
   const rating = readNumber(item.metadata, 'rating');
+  const note = readString(item.metadata, 'note');
   const rodeWith = readRodeWith(item.metadata);
+
+  const [tagActionError, setTagActionError] = useState<string | null>(null);
+
+  const confirmTagMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (tagId: string) => {
+      setTagActionError(null);
+      await apiRequest<void>(
+        'POST',
+        `/me/rode-with-tags/${encodeURIComponent(tagId)}/confirm`,
+        {},
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
+    },
+    onError: (err) => {
+      setTagActionError(err.message || 'Could not confirm tag.');
+    },
+  });
+
+  const declineTagMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (tagId: string) => {
+      setTagActionError(null);
+      await apiRequest<void>(
+        'POST',
+        `/me/rode-with-tags/${encodeURIComponent(tagId)}/decline`,
+        {},
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
+    },
+    onError: (err) => {
+      setTagActionError(err.message || 'Could not decline tag.');
+    },
+  });
+
+  const tagMutationBusy =
+    confirmTagMutation.isPending || declineTagMutation.isPending;
 
   const reactionMutation = useMutation<
     void,
@@ -877,6 +926,41 @@ function FeedItemCard({
     },
   });
 
+  const deleteCompletionMutation = useMutation<void, ApiError, void, FeedPatchContext>({
+    mutationFn: async () => {
+      const logEntryId = readString(item.metadata, 'logEntryId') ?? item.id;
+      await apiRequest<void>('DELETE', `/trips/${tripId}/log-entries/${logEntryId}`);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+      queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+        prev?.filter((it) => it.id !== item.id),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'planned-items'] });
+      void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
+      const experienceId = readString(item.metadata, 'experienceId');
+      if (experienceId) {
+        void queryClient.invalidateQueries({ queryKey: ['experience-logs', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-completion', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-rating', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-aggregate', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['visit-summary', experienceId] });
+      }
+    },
+  });
+
   const caption = readString(item.metadata, 'caption');
 
   // Accessible name for a tappable ready photo: the author, plus the caption
@@ -909,7 +993,8 @@ function FeedItemCard({
     reactionMutation.isPending ||
     addCommentMutation.isPending ||
     removeCommentMutation.isPending ||
-    deletePostMutation.isPending;
+    deletePostMutation.isPending ||
+    deleteCompletionMutation.isPending;
 
   const canSubmit = draft.trim().length > 0 && !addCommentMutation.isPending;
   const commentCount = item.comments.length;
@@ -936,6 +1021,21 @@ function FeedItemCard({
             accessibilityRole="button"
             accessibilityLabel="Delete post"
             testID={`trip-feed-post-delete-${item.id}`}
+            style={({ pressed }) => [styles.postDeleteBtn, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+          </Pressable>
+        ) : null}
+        {item.type === 'completion_logged' && (item.mine === true || isOrganizer === true) ? (
+          <Pressable
+            onPress={() => {
+              if (deleteCompletionMutation.isPending) return;
+              setError(null);
+              deleteCompletionMutation.mutate();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete completion"
+            testID={`trip-feed-completion-delete-${item.id}`}
             style={({ pressed }) => [styles.postDeleteBtn, pressed && styles.pressed]}
           >
             <Ionicons name="trash-outline" size={18} color={t.color.danger} />
@@ -1020,20 +1120,62 @@ function FeedItemCard({
                 {rodeWith.map((tag) => {
                   const visual = rodeWithVisual[tag.state];
                   return (
-                    <View
-                      key={tag.taggedMemberId}
-                      style={[styles.tagChip, { backgroundColor: visual.bg }]}
-                    >
-                      <Text
-                        style={[styles.tagChipText, { color: visual.fg }]}
-                        numberOfLines={1}
+                    <View key={tag.taggedMemberId} style={styles.tagWrapper}>
+                      <View
+                        style={[styles.tagChip, { backgroundColor: visual.bg }]}
                       >
-                        {visual.prefix}{tag.displayName}
-                      </Text>
+                        <Text
+                          style={[styles.tagChipText, { color: visual.fg }]}
+                          numberOfLines={1}
+                        >
+                          {visual.prefix}{tag.displayName}
+                        </Text>
+                      </View>
+                      {tag.state === 'pending' && Boolean(tag.tagId) && (
+                        <View style={styles.tagInlineActions}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Confirm tag for ${tag.displayName}`}
+                            disabled={tagMutationBusy}
+                            onPress={() => confirmTagMutation.mutate(tag.tagId!)}
+                            style={styles.tagActionBtn}
+                            testID={`feed-tag-confirm-${tag.tagId}`}
+                          >
+                            <Text style={styles.tagConfirmText}>Confirm</Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decline tag for ${tag.displayName}`}
+                            disabled={tagMutationBusy}
+                            onPress={() => declineTagMutation.mutate(tag.tagId!)}
+                            style={styles.tagActionBtn}
+                            testID={`feed-tag-decline-${tag.tagId}`}
+                          >
+                            <Text style={styles.tagDeclineText}>Decline</Text>
+                          </Pressable>
+                        </View>
+                      )}
                     </View>
                   );
                 })}
               </View>
+            ) : null}
+            {tagActionError !== null ? (
+              <Text
+                style={styles.error}
+                accessibilityRole="alert"
+                testID={`feed-tag-error-${item.id}`}
+              >
+                {tagActionError}
+              </Text>
+            ) : null}
+            {note !== null ? (
+              <Text
+                style={styles.experienceNote}
+                testID={`trip-feed-note-${item.id}`}
+              >
+                "{note}"
+              </Text>
             ) : null}
           </View>
         </View>
@@ -1205,7 +1347,7 @@ function FeedItemCard({
 export function LogComposerModal({
   visible,
   tripId,
-  candidates,
+  candidates: _candidates,
   initialExperience = null,
   onClose,
   onLogged,
@@ -1213,230 +1355,140 @@ export function LogComposerModal({
   readonly visible: boolean;
   readonly tripId: string;
   readonly candidates: readonly TripMemberDTO[];
-  /**
-   * When provided, the composer opens with this Experience pre-selected — the
-   * one-tap "log from a plan" path (planned-list-completion-sync R1.2). The
-   * rode-with tagging, optional Rating, and the `POST /trips/:id/log-entries`
-   * submission are otherwise identical to opening it empty from the feed.
-   */
   readonly initialExperience?: PickedExperience | null;
   readonly onClose: () => void;
   readonly onLogged: () => void;
-}): JSX.Element {
+}): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
+
   const [experience, setExperience] = useState<PickedExperience | null>(
     initialExperience,
   );
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [rating, setRating] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // Seed a fresh form on the hidden→visible edge so re-opening the composer
-  // (from the feed empty, or from a Planned_Item pre-filled) always starts from
-  // the intended Experience without stale state from a prior open.
+  const tripQuery = useQuery<TripDTO, ApiError>({
+    queryKey: ['trips', tripId] as const,
+    queryFn: () => apiRequest<TripDTO>('GET', `/trips/${tripId}`),
+    enabled: visible,
+  });
+
   const wasVisible = useRef(false);
   useEffect(() => {
     if (visible && !wasVisible.current) {
       setExperience(initialExperience);
-      setSelected(new Set());
-      setRating(null);
-      setError(null);
     }
     wasVisible.current = visible;
   }, [visible, initialExperience]);
 
-  const resetForm = (): void => {
-    setExperience(initialExperience);
-    setSelected(new Set());
-    setRating(null);
-    setError(null);
-  };
+  if (!visible) return null;
 
-  const logMutation = useMutation<void, ApiError, void>({
-    mutationFn: async () => {
-      const draft = {
-        experienceId: experience?.id ?? '',
-        rodeWith: [...selected],
-        ...(rating !== null ? { rating } : {}),
-      };
-      const parsed = tripLogEntryCreateSchema.safeParse(draft);
-      if (!parsed.success) {
-        throw new ApiError({
-          code: 'trip_validation_failed',
-          message: 'trip_validation_failed',
-          status: 400,
-        });
-      }
-      await apiRequest<void>('POST', `/trips/${tripId}/log-entries`, parsed.data);
-    },
-    onSuccess: () => {
-      resetForm();
-      onLogged();
-    },
-    onError: (err) => {
-      setError(logErrorMessage(err));
-    },
-  });
-
-  const busy = logMutation.isPending;
-
-  const toggleMember = (userId: string): void => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) {
-        next.delete(userId);
-      } else {
-        next.add(userId);
-      }
-      return next;
-    });
-    if (error !== null) setError(null);
-  };
-
-  const closeAndReset = (): void => {
-    if (busy) return;
-    resetForm();
-    onClose();
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={closeAndReset}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalBackdrop}
+  // When Trip status is upcoming, show message instead of opening sheet (Requirement 2.10)
+  if (tripQuery.data?.status === 'upcoming') {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
       >
-        <View style={styles.modalCard} testID="activity-log-composer">
-          <View style={styles.modalHeaderRow}>
-            <Text style={styles.modalTitle}>Log a completion</Text>
-            <Pressable
-              onPress={closeAndReset}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              hitSlop={8}
-              style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
-              testID="activity-log-close"
-            >
-              <Ionicons name="close" size={22} color={t.color.textSecondary} />
-            </Pressable>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="activity-log-composer">
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Trip hasn't started</Text>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
+                testID="activity-log-close"
+              >
+                <Ionicons name="close" size={22} color={t.color.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
+              <Text style={styles.helper}>
+                Logging opens when the trip starts.
+              </Text>
+              <SecondaryButton
+                label="Close"
+                onPress={onClose}
+                testID="activity-log-upcoming-close"
+              />
+            </View>
           </View>
-          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>Experience</Text>
-            {experience === null ? (
+        </View>
+      </Modal>
+    );
+  }
+
+  // If experience is not chosen yet, show ExperiencePicker modal
+  if (experience === null) {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard} testID="activity-log-composer">
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Log a completion</Text>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
+                testID="activity-log-close"
+              >
+                <Ionicons name="close" size={22} color={t.color.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.label}>Experience</Text>
               <ExperiencePicker
                 enabled={visible}
                 onSelect={(picked) => {
                   setExperience(picked);
-                  if (error !== null) setError(null);
                 }}
                 testIDPrefix="activity-log"
               />
-            ) : (
-              <View style={styles.selectedRow} testID="activity-log-selected">
-                <View style={styles.selectedText}>
-                  <Text style={styles.selectedName} numberOfLines={2}>
-                    {experience.name}
-                  </Text>
-                  {experience.park !== null ? (
-                    <Badge label={experience.park} color={t.color.primaryFg} />
-                  ) : null}
-                </View>
-                <SecondaryButton
-                  label="Change"
-                  onPress={() => {
-                    if (busy) return;
-                    setExperience(null);
-                  }}
-                  disabled={busy}
-                  testID="activity-log-change-experience"
-                />
-              </View>
-            )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    );
+  }
 
-            <Text style={styles.label}>Rode with</Text>
-            {candidates.length === 0 ? (
-              <Text style={styles.helper} testID="activity-log-no-candidates">
-                No other Members to tag yet. You can still log this on your own.
-              </Text>
-            ) : (
-              <View style={styles.chips} testID="activity-log-rodewith">
-                {candidates.map((member) => (
-                  <Chip
-                    key={member.userId}
-                    label={member.displayName}
-                    active={selected.has(member.userId)}
-                    onPress={() => {
-                      if (busy) return;
-                      toggleMember(member.userId);
-                    }}
-                    testID={`activity-log-member-${member.userId}`}
-                  />
-                ))}
-              </View>
-            )}
-
-            <Text style={styles.label}>Your rating (optional)</Text>
-            <Text style={styles.helper}>
-              {rating === null
-                ? 'No rating selected — none will be recorded.'
-                : `Selected ${rating}/10 — tap it again to clear.`}
-            </Text>
-            <View style={styles.chips} testID="activity-log-rating">
-              {RATING_VALUES.map((value) => (
-                <Chip
-                  key={value}
-                  label={String(value)}
-                  active={rating === value}
-                  onPress={() => {
-                    if (busy) return;
-                    setRating(rating === value ? null : value);
-                    if (error !== null) setError(null);
-                  }}
-                  testID={`activity-log-rating-${value}`}
-                />
-              ))}
-            </View>
-
-            {error !== null ? (
-              <Text
-                style={styles.error}
-                accessibilityRole="alert"
-                testID="activity-log-composer-error"
-              >
-                {error}
-              </Text>
-            ) : null}
-
-            <View style={styles.modalActions}>
-              <PrimaryButton
-                label={busy ? 'Logging\u2026' : 'Log it'}
-                icon="checkmark-circle-outline"
-                onPress={() => {
-                  setError(null);
-                  logMutation.mutate();
-                }}
-                disabled={busy || experience === null}
-                testID="activity-log-submit"
-                style={styles.flexBtn}
-              />
-              <SecondaryButton
-                label="Cancel"
-                onPress={closeAndReset}
-                disabled={busy}
-                testID="activity-log-cancel"
-                style={styles.flexBtn}
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+  // Once experience is chosen, render LogExperienceSheet in locked mode
+  return (
+    <LogExperienceSheet
+      experienceId={experience.id}
+      experience={{
+        name: experience.name,
+        category: experience.category ?? null,
+        park: experience.park,
+      }}
+      visible={visible}
+      lockedTripId={tripId}
+      testIDPrefix="activity-log"
+      onClose={() => {
+        setExperience(null);
+        onClose();
+      }}
+      onLogged={() => {
+        setExperience(null);
+        onLogged();
+      }}
+    />
   );
 }
 
@@ -1926,7 +1978,13 @@ function readRodeWith(metadata: Record<string, unknown>): readonly FeedRodeWith[
       typeof (entry as { displayName?: unknown }).displayName === 'string' &&
       typeof (entry as { state?: unknown }).state === 'string'
     ) {
-      out.push(entry as FeedRodeWith);
+      const tagId = (entry as { tagId?: unknown }).tagId;
+      out.push({
+        taggedMemberId: (entry as { taggedMemberId: string }).taggedMemberId,
+        displayName: (entry as { displayName: string }).displayName,
+        state: (entry as { state: RodeWithTagState }).state,
+        tagId: typeof tagId === 'string' ? tagId : null,
+      });
     }
   }
   return out;
@@ -1978,24 +2036,6 @@ function actionErrorMessage(err: ApiError): string {
   switch (err.code) {
     case 'trip_validation_failed':
       return 'Please enter a comment between 1 and 2000 characters.';
-    case 'trip_forbidden':
-    case 'trip_not_found':
-      return 'This trip is no longer available.';
-    default:
-      return 'We had trouble reaching the server. Please try again.';
-  }
-}
-
-/** Map a log-entry error to user-facing copy. */
-function logErrorMessage(err: ApiError | null): string {
-  if (err === null) {
-    return 'Something went wrong. Please try again.';
-  }
-  switch (err.code) {
-    case 'trip_validation_failed':
-      return 'Please enter a valid Experience and check your tags and rating.';
-    case 'rating_out_of_range':
-      return 'Please choose a rating from 1 to 10.';
     case 'trip_forbidden':
     case 'trip_not_found':
       return 'This trip is no longer available.';
@@ -2216,6 +2256,34 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '700',
     flexShrink: 1,
   },
+  tagWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tagInlineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tagActionBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: theme.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  tagConfirmText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.color.accent,
+  },
+  tagDeclineText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
   feedReactionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2373,7 +2441,8 @@ const useStyles = makeStyles((t) => ({
   },
   label: {
     ...theme.typography.meta,
-    color: t.color.textSecondary,
+    fontWeight: '700',
+    color: t.color.textPrimary,
     marginTop: theme.spacing.sm,
   },
   helper: {
@@ -2383,8 +2452,13 @@ const useStyles = makeStyles((t) => ({
   selectedRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
   },
   selectedText: {
     flexShrink: 1,
@@ -2395,12 +2469,44 @@ const useStyles = makeStyles((t) => ({
   selectedName: {
     ...theme.typography.subtitle,
     color: t.color.textPrimary,
+    fontWeight: '700',
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
+  },
+  ratingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.xs,
+  },
+  ratingTile: {
+    width: '18%',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+    minHeight: 42,
+  },
+  ratingTileActive: {
+    borderColor: t.color.primary,
+    backgroundColor: t.color.primary,
+  },
+  ratingTileText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  ratingTileTextActive: {
+    color: t.color.textOnPrimary,
+    fontWeight: '800',
   },
   modalActions: {
     flexDirection: 'row',
@@ -2466,5 +2572,26 @@ const useStyles = makeStyles((t) => ({
   selectedPhotosText: {
     ...theme.typography.subtitle,
     color: t.color.textPrimary,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    minHeight: 64,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    ...theme.typography.body,
+    fontSize: 15,
+  },
+  experienceNote: {
+    ...theme.typography.body,
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: t.color.textSecondary,
+    marginTop: 2,
   },
 }));

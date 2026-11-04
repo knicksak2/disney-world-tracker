@@ -78,6 +78,16 @@ import { TripGuestManagementModal } from './TripGuestManagementModal';
 
 type Props = NativeStackScreenProps<TripsStackParamList, 'TripExpenses'>;
 
+const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  hotel: 'Hotel',
+  tickets: 'Tickets',
+  lightning_lane: 'Lightning Lane',
+  dining: 'Dining',
+  shopping: 'Shopping',
+  transportation: 'Transportation',
+  other: 'Other',
+};
+
 function getCategoryMeta(cat: ExpenseCategory | null | undefined, t: Pick<AppTheme, 'scheme'>): {
   icon: keyof typeof Ionicons.glyphMap;
   emoji: string;
@@ -90,6 +100,8 @@ function getCategoryMeta(cat: ExpenseCategory | null | undefined, t: Pick<AppThe
       return { icon: 'bed-outline', emoji: '🏨', bg: catPal.hotelBg, fg: catPal.hotelFg };
     case 'tickets':
       return { icon: 'ticket-outline', emoji: '🎟️', bg: catPal.ticketsBg, fg: catPal.ticketsFg };
+    case 'lightning_lane':
+      return { icon: 'flash-outline', emoji: '⚡', bg: catPal.lightningLaneBg, fg: catPal.lightningLaneFg };
     case 'dining':
       return { icon: 'restaurant-outline', emoji: '🍽️', bg: catPal.diningBg, fg: catPal.diningFg };
     case 'shopping':
@@ -822,7 +834,7 @@ export default function TripExpensesScreen({
                       testID={`category-filter-${cat}`}
                     >
                       <Text style={[styles.filterChipText, isSel && styles.filterChipTextSelected]}>
-                        {meta.emoji} {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        {meta.emoji} {EXPENSE_CATEGORY_LABELS[cat] ?? cat}
                       </Text>
                     </Pressable>
                   );

@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { withAlpha } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { apiRequest } from '../../api/client';
 
 export interface ResortItem {
@@ -48,6 +49,7 @@ export function ResortPickerModal({
   const styles = useStyles();
   const t = useAppTheme();
   const [search, setSearch] = useState('');
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   const resortsQuery = useQuery<{ resorts: readonly ResortItem[] }>({
     queryKey: ['resorts', 'active'],
@@ -65,9 +67,20 @@ export function ResortPickerModal({
   const content = (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.overlay}
+      style={[
+        styles.overlay,
+        Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+      ]}
     >
-      <View style={styles.content} testID="resort-picker-modal">
+      <View
+        style={[
+          styles.content,
+          Platform.OS === 'android' && keyboardInset > 0
+            ? { maxHeight: getAvailableModalHeight(40) }
+            : null,
+        ]}
+        testID="resort-picker-modal"
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Select Resort Hotel</Text>
           <Pressable

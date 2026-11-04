@@ -47,6 +47,16 @@ describe('createExperienceLogInputSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts rodeWith as an array of UUIDs (R1.2)', () => {
+    const result = createExperienceLogInputSchema.safeParse({
+      visitedOn: '2026-01-02',
+      userTz: 'America/New_York',
+      tripId: UUID_A,
+      rodeWith: [UUID_B, UUID_C],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('accepts null for the optional rating/note/tripId fields', () => {
     const result = createExperienceLogInputSchema.safeParse({
       visitedOn: '2026-01-02',
@@ -181,6 +191,13 @@ describe('experienceLogSchema', () => {
       note: null,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('error catalog', () => {
+  it('registers log_outside_trip_dates and maps it to HTTP 400 (R6.5)', () => {
+    expect(ERROR_CODES).toContain('log_outside_trip_dates');
+    expect(errorCodeToHttpStatus.log_outside_trip_dates).toBe(400);
   });
 });
 

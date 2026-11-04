@@ -522,7 +522,13 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
         // so a rating shown on the row reflects the User's latest visit,
         // not an arbitrary one among several.
         const itemsRes = await pool.query<
-          FoodListItemRow & { gotten: boolean; rating: number | null; log_id: string | null }
+          FoodListItemRow & {
+            gotten: boolean;
+            rating: number | null;
+            log_id: string | null;
+            visited_on: string | Date | null;
+            note: string | null;
+          }
         >(
           `SELECT
              fli.food_item_id,
@@ -537,14 +543,16 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
              p.display_name AS added_by_display_name,
              (fil.food_item_id IS NOT NULL) AS gotten,
              fil.rating,
-             fil.log_id
+             fil.log_id,
+             fil.visited_on,
+             fil.note
            FROM food_lists_items fli
            JOIN food_items fi ON fi.id = fli.food_item_id
            LEFT JOIN experiences e ON e.id = fi.experience_id
            LEFT JOIN user_submitted_locations usl ON usl.id = fi.location_id
            LEFT JOIN profile_identity p ON p.user_id = fli.added_by_user_id
            LEFT JOIN (
-             SELECT DISTINCT ON (food_item_id) food_item_id, id AS log_id, rating
+             SELECT DISTINCT ON (food_item_id) food_item_id, id AS log_id, rating, visited_on, note
                FROM food_item_logs
               WHERE user_id = $2
                 AND visited_on >= $3
@@ -568,10 +576,19 @@ export function createFoodListRepo(pool: DbPool): FoodListRepo {
             addedByUserId: itemRow.added_by_user_id ?? null,
             addedByDisplayName: itemRow.added_by_display_name ?? null,
             gotten,
-            // Requirement 13.19, 13.23: `rating` and `logId` are present if and
-            // only if `gotten` is `true`.
+            // Requirement 13.19, 13.23: `rating`, `logId`, `visitedOn`, and `note`
+            // are present if and only if `gotten` is `true`.
             ...(gotten
-              ? { rating: itemRow.rating ?? null, logId: itemRow.log_id ?? null }
+              ? {
+                  rating: itemRow.rating ?? null,
+                  logId: itemRow.log_id ?? null,
+                  visitedOn: itemRow.visited_on
+                    ? (typeof itemRow.visited_on === 'string'
+                        ? itemRow.visited_on.slice(0, 10)
+                        : (itemRow.visited_on as unknown as Date).toISOString().slice(0, 10))
+                    : null,
+                  note: itemRow.note ?? null,
+                }
               : {}),
           };
         });

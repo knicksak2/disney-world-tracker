@@ -933,4 +933,22 @@ export type {
   PriceQuoteDTO,
 } from './tripBudget.js';
 
+// Unified experience logging (unified-experience-logging).
+export {
+  isDateWithinTrip,
+  preselectTripId,
+  reconcileDraft,
+  ridingWithCandidates,
+  ridingWithLabel,
+  offersDishPrompt,
+  buildLogSubmission,
+  formatLogToast,
+} from './unifiedLogging.js';
+export type {
+  LogTripRef,
+  LogDraft,
+  DraftHint,
+  LogSubmission,
+} from './unifiedLogging.js';
+
 

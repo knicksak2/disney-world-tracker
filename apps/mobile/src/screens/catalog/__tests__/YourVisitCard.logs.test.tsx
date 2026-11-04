@@ -341,6 +341,10 @@ describe('YourVisitCard — activity logging', () => {
 
   // R6.3 — trip selection is reflected in the payload
   test('selecting an active trip includes its id in the POST payload (R6.3)', async () => {
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
     apiRequestMock.mockImplementation(async (method, path) => {
       if (method === 'GET' && path === '/me/trips') {
         return [
@@ -349,13 +353,13 @@ describe('YourVisitCard — activity logging', () => {
             trips: [
               {
                 id: TRIP_ID,
-                name: 'WDW 2026',
+                name: 'WDW Current Trip',
                 description: '',
-                startDate: '2026-01-01',
-                endDate: '2026-01-05',
+                startDate: yesterday,
+                endDate: tomorrow,
                 status: 'active',
                 role: 'organizer',
-                createdAt: '2026-01-01T00:00:00.000Z',
+                createdAt: new Date().toISOString(),
               },
             ],
           },

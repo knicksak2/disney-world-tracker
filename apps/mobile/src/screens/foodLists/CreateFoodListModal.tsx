@@ -24,6 +24,7 @@ import type { FoodListDTO } from '@dwt/shared';
 import { apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export interface CreateFoodListModalProps {
   readonly visible: boolean;
@@ -44,6 +45,7 @@ export default function CreateFoodListModal({
   const [newListIsChecklist, setNewListIsChecklist] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const { keyboardInset } = useKeyboardBottomInset(visible);
 
   function handleRequestClose(): void {
     Keyboard.dismiss();
@@ -87,7 +89,10 @@ export default function CreateFoodListModal({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalBackdrop}
+        style={[
+          styles.modalBackdrop,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Create Food List</Text>

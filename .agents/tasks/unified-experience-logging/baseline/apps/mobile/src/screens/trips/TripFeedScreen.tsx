@@ -1,0 +1,2651 @@
+// Feature: trips, Task 19.2 — Trip_Activity (consolidated feed + logging)
+//
+// Validates: Requirements 20.1–20.5, 13.3, 13.4, 13.7, 13.8, 13.11, 12.4, 12.8
+//
+// Behavior summary:
+//   - This is the Trip_Activity section of the Trip_Detail_View hub (the
+//     `TripFeed` route, R18.1/R18.6): the single surface that combines the
+//     activity feed with the control to log a Completion (R20.1). The prior
+//     Shared_Log screen is folded in here — there is no separate destination.
+//   - It reads `GET /trips/:id/feed`, already ordered reverse-chronologically
+//     (see `services/trips/feedOrder.ts::orderFeed`, R13.3), and renders each
+//     item. A `completion_logged` item carries — folded into its `metadata` by
+//     the read projection — the Experience name/Park, the logging Member's live
+//     canonical Rating (or an unrated indicator, R12.4/R12.8), and each
+//     Rode_With_Tag's Tagged_Member and confirmation state (R20.3).
+//   - A "Log a completion" control at the head opens the log + rode-with picker
+//     that assembles the same `POST /trips/:id/log-entries` body as before
+//     (R20.2, R10). An All / Completions filter narrows the stream to
+//     `completion_logged` items (R20.4); because completions are feed items,
+//     they keep their reactions and comments in either view (R20.5).
+//   - Each feed item exposes reaction controls over the closed `Trip_Reaction`
+//     vocabulary (R13.4/R13.6/R13.7) and a comment composer (R13.8/R13.11),
+//     rendered from the server projection and reconciled via optimistic cache
+//     updates + a background refetch.
+//
+// READ CONTRACT: `GET /trips/:id/feed` returns `TripFeedItemDTO[]`, each item
+// carrying its identity/type/actor/timestamp/metadata plus the group's
+// engagement (aggregated Trip_Reactions with the caller's `mine` state and the
+// Trip_Comments with a `mine` flag). The rode-with picker additionally reads
+// `GET /trips/:id/members` (the only Users it may tag, R10.4) and `GET /me` (to
+// exclude the logging Member, R10.5).
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import {
+  TRIP_REACTION_VALUES,
+  isAvatarPresetId,
+  tripCommentInputSchema,
+  tripLogEntryCreateSchema,
+  tripReactionValueSchema,
+  type ExperienceCategory,
+  type RodeWithTagState,
+  type TripFeedItemDTO,
+  type TripFeedTargetType,
+  type TripMemberDTO,
+  type TripPostPhotoSlotDTO,
+  type TripReactionValue,
+} from '@dwt/shared';
+
+import { Ionicons } from '@expo/vector-icons';
+
+import { ApiError, apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
+import type { TripsStackParamList } from '../../navigation/TripsStack';
+import { theme, type AppTheme } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import {
+  FEED_AVATAR,
+  FEED_MISC,
+  FEED_TONE,
+  REACTION_TINT,
+  RODE_WITH,
+} from './TripFeedScreen.palette';
+import {
+  Badge,
+  Card,
+  Chip,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  ScreenContainer,
+  SecondaryButton,
+} from '../../theme/components';
+import { ExperiencePicker } from './ExperiencePicker';
+import { uploadPhotos, usePhotoConfig, usePhotoStatuses } from '../../photos/api';
+import { isFinalPhotoStatus } from '../../photos/pollPlan';
+import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
+import { PhotoViewer, type PhotoViewerItem } from '../../photos/PhotoViewer';
+import type { PreparedImages } from '../../photos/imagePrep';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type Props = NativeStackScreenProps<TripsStackParamList, 'TripFeed'>;
+
+/** Wire shape of `GET /trips/:id/feed`: the ordered Trip_Feed_Items (R13.3). */
+type TripFeedResponse = readonly TripFeedItemDTO[];
+
+/** Wire shape of `GET /me`: the caller's identity (to exclude self, R10.5). */
+interface MeResponse {
+  readonly user: { readonly id: string };
+}
+
+/** Wire shape of `GET /trips/:id/members`: the Trip's current Members. */
+type TripMembersResponse = readonly TripMemberDTO[];
+
+/** Wire shape of `POST .../comments`: the created Trip_Comment's identity. */
+interface TripCommentCreatedResponse {
+  readonly id: string;
+}
+
+/**
+ * The minimal Experience shape the `Log_Composer` needs: the `id` it submits on
+ * `POST /trips/:id/log-entries` plus the `name`/`park` it shows in the selected
+ * row. An `ExperienceDTO` from the picker is structurally assignable to it, and
+ * a `Planned_Item` can pre-fill it directly (its `experienceId`/`experienceName`
+ * /`park`), so `TripPlannedListScreen` can open the same composer pre-filled
+ * without forking it (planned-list-completion-sync R1.2).
+ */
+export interface PickedExperience {
+  readonly id: string;
+  readonly name: string;
+  readonly park: string | null;
+  readonly category?: string | null;
+}
+
+/** One rode-with tag as folded into a `completion_logged` item's metadata. */
+interface FeedRodeWith {
+  readonly taggedMemberId: string;
+  readonly displayName: string;
+  readonly state: RodeWithTagState;
+}
+
+/**
+ * Rollback context for the optimistic feed mutations: the feed snapshot taken
+ * before the optimistic patch, restored if the request fails.
+ */
+interface FeedPatchContext {
+  readonly previous: readonly TripFeedItemDTO[] | undefined;
+}
+
+/** Which slice of the activity stream is shown (R20.4, R20.9). */
+type ActivityFilter = 'all' | 'posts' | 'completions';
+
+/**
+ * Ids of the signed-in user's own post photos that are still being checked. Only these can
+ * be polled: `GET /me/photos/status` answers for the caller's own photos and omits everyone
+ * else's, and other members' `checking` slots (visible to them, Requirement 14.9) would
+ * never turn final there. A slot whose status is already final (the owner's `rejected`
+ * photo keeps the `checking` state) is excluded too, so polling ends once the feed shows it.
+ */
+function collectOwnCheckingPhotoIds(
+  items: readonly TripFeedItemDTO[] | undefined,
+): readonly string[] {
+  const ids: string[] = [];
+  for (const item of items ?? []) {
+    for (const slot of item.photos ?? []) {
+      if (
+        slot.state === 'checking' &&
+        slot.mine &&
+        (slot.status === null || !isFinalPhotoStatus(slot.status))
+      ) {
+        ids.push(slot.photoId);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * Apply a reaction add/remove to an item's aggregated reaction list for the
+ * optimistic cache update: toggling the caller's own `mine` flag and adjusting
+ * the count, dropping a summary that falls to zero.
+ */
+function applyReaction(
+  list: readonly { reaction: TripReactionValue; count: number; mine: boolean }[],
+  reaction: TripReactionValue,
+  remove: boolean,
+): { reaction: TripReactionValue; count: number; mine: boolean }[] {
+  const map = new Map(list.map((s) => [s.reaction, { ...s }]));
+  const current = map.get(reaction) ?? { reaction, count: 0, mine: false };
+  if (remove) {
+    if (current.mine) {
+      current.count = Math.max(0, current.count - 1);
+      current.mine = false;
+    }
+    if (current.count === 0) {
+      map.delete(reaction);
+    } else {
+      map.set(reaction, current);
+    }
+  } else if (!current.mine) {
+    current.count += 1;
+    current.mine = true;
+    map.set(reaction, current);
+  }
+  return [...map.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Query keys for the reads the Trip_Activity surface depends on. */
+export const tripFeedKeys = {
+  feed: (tripId: string) => ['trips', 'feed', tripId] as const,
+  members: (tripId: string) => ['trips', 'members', tripId] as const,
+};
+
+/**
+ * R13.3-style deadline reused from the Trips list: a retrieval that does not
+ * complete within 10 seconds is treated as a failure rather than surfaced as an
+ * empty feed. Enforced per attempt via `AbortController`.
+ */
+const FEED_LOAD_TIMEOUT_MS = 10_000;
+
+/**
+ * The feed items are the Trip_Feed's reaction/comment targets, so every target
+ * addressed from this screen is a `feed_item` (R13.10).
+ */
+const FEED_TARGET_TYPE: TripFeedTargetType = 'feed_item';
+
+/** The selectable canonical Rating values, a whole number 1–10 (R10.10). */
+const RATING_VALUES: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/**
+ * Display label + both an outline (idle) and solid (active) glyph for each
+ * supported Trip_Reaction (closed set, R13.6). The solid glyph is shown when
+ * the caller has applied that reaction so the control reads as "on".
+ */
+function reactionMetaFor(t: AppTheme): Record<
+  TripReactionValue,
+  {
+    readonly label: string;
+    readonly icon: keyof typeof Ionicons.glyphMap;
+    readonly iconActive: keyof typeof Ionicons.glyphMap;
+    readonly tint: string;
+    readonly emoji: string;
+  }
+> {
+  const tint = REACTION_TINT[t.scheme];
+  return {
+    like: { label: 'Like', icon: 'thumbs-up-outline', iconActive: 'thumbs-up', tint: tint.like, emoji: '👍' },
+    love: { label: 'Love', icon: 'heart-outline', iconActive: 'heart', tint: t.color.danger, emoji: '❤️' },
+    celebrate: { label: 'Celebrate', icon: 'sparkles-outline', iconActive: 'sparkles', tint: tint.celebrate, emoji: '✨' },
+    wow: { label: 'Wow', icon: 'star-outline', iconActive: 'star', tint: t.color.primaryLight, emoji: '🤩' },
+  };
+}
+
+/** Human copy + glyph + accent tone for the known Trip_Feed_Item types (R13.1). */
+function feedTypeMetaFor(t: AppTheme): Record<
+  string,
+  {
+    readonly label: string;
+    readonly icon: keyof typeof Ionicons.glyphMap;
+    readonly tone: string;
+  }
+> {
+  const tone = FEED_TONE[t.scheme];
+  return {
+    trip_created: { label: 'created the trip', icon: 'flag', tone: t.color.primaryLight },
+    member_joined: { label: 'joined the trip', icon: 'person-add', tone: tone.memberJoined },
+    completion_logged: { label: 'logged a completion', icon: 'checkmark-circle', tone: t.color.success },
+    rating_recorded: { label: 'recorded a rating', icon: 'star', tone: tone.ratingRecorded },
+    member_post: { label: 'posted photos', icon: 'camera', tone: t.color.primaryFg },
+  };
+}
+
+/** Per-state visuals for a rode-with tag chip (R10.3 lifecycle). */
+function rodeWithVisualFor(t: AppTheme): Record<
+  RodeWithTagState,
+  { readonly bg: string; readonly fg: string; readonly prefix: string }
+> {
+  const rode = RODE_WITH[t.scheme];
+  return {
+    confirmed: { bg: withAlpha(t.color.success, 0.14), fg: rode.confirmedFg, prefix: '✓ ' },
+    pending: { bg: rode.pendingBg, fg: rode.pendingFg, prefix: '⏳ ' },
+    declined: { bg: withAlpha(t.color.danger, 0.12), fg: t.color.danger, prefix: '✕ ' },
+    cancelled: { bg: t.color.surfaceAlt, fg: t.color.textSecondary, prefix: '— ' },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
+export default function TripFeedScreen({
+  navigation,
+  route,
+}: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const { tripId } = route.params;
+  const queryClient = useQueryClient();
+
+  const feedQuery = useQuery<TripFeedResponse, ApiError>({
+    queryKey: tripFeedKeys.feed(tripId),
+    // A retrieval that fails or exceeds the 10s ceiling surfaces as an error
+    // rather than an empty feed. Each attempt gets its own AbortController and
+    // retries are disabled so the error shows on the first failure/timeout.
+    queryFn: async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        controller.abort();
+      }, FEED_LOAD_TIMEOUT_MS);
+      try {
+        return await apiRequest<TripFeedResponse>(
+          'GET',
+          `/trips/${tripId}/feed`,
+          undefined,
+          controller.signal,
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    retry: false,
+  });
+
+  // Photo moderation finishes seconds after a post, while the user is still on this
+  // screen (Requirement 23.10): poll the batched status route for the caller's own
+  // `checking` slots (one request per tick, Requirement 23.4) and refetch the feed when
+  // any of them reaches a final status, so the placeholder becomes the photo (or its
+  // removed state) without leaving the screen. The poll ends when no slot is checking.
+  const checkingPhotoIds = useMemo(
+    () => collectOwnCheckingPhotoIds(feedQuery.data),
+    [feedQuery.data],
+  );
+  usePhotoStatuses(checkingPhotoIds, {
+    onFinal: () => {
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+    },
+  });
+
+  // The caller's own id (to exclude the logging Member from the picker, R10.5)
+  // and the Trip's current Members (the only Users the picker may tag, R10.4).
+  const meQuery = useQuery<MeResponse, ApiError>({
+    queryKey: ['me'],
+    queryFn: () => apiRequest<MeResponse>('GET', '/me'),
+  });
+  const membersQuery = useQuery<TripMembersResponse, ApiError>({
+    queryKey: tripFeedKeys.members(tripId),
+    queryFn: () =>
+      apiRequest<TripMembersResponse>('GET', `/trips/${tripId}/members`),
+  });
+
+  const configQuery = usePhotoConfig();
+  const config = configQuery.data;
+  const canUpload = config?.enabled !== false && config?.tripEnabled !== false;
+
+  const [filter, setFilter] = useState<ActivityFilter>('all');
+  const [composerVisible, setComposerVisible] = useState(false);
+  const [postComposerVisible, setPostComposerVisible] = useState(false);
+  const [quickPostDraft, setQuickPostDraft] = useState('');
+  const [quickPostError, setQuickPostError] = useState<string | null>(null);
+
+  const quickPostMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (captionText) => {
+      const trimmed = captionText.trim();
+      await apiRequest('POST', `/trips/${tripId}/feed/posts`, {
+        photoIds: [],
+        caption: trimmed,
+      });
+    },
+    onSuccess: () => {
+      setQuickPostDraft('');
+      setQuickPostError(null);
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+    },
+    onError: (err) => {
+      setQuickPostError(actionErrorMessage(err));
+    },
+  });
+
+  const ownUserId = meQuery.data?.user.id ?? null;
+  const candidates = useMemo<readonly TripMemberDTO[]>(() => {
+    const members = membersQuery.data ?? [];
+    return members.filter((m) => m.userId !== ownUserId);
+  }, [membersQuery.data, ownUserId]);
+
+  // Same permission source the Trip Album uses for the viewer's Delete on
+  // another member's photo (`delete_any_trip_photo`): the caller is an
+  // organizer of this Trip (photo-uploads R12.11, R14.15).
+  const isOrganizer =
+    ownUserId !== null &&
+    (membersQuery.data ?? []).some(
+      (m) => m.userId === ownUserId && m.role === 'organizer',
+    );
+
+  const backToHub = (): void => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('TripDetail', { tripId });
+  };
+
+  const openComposer = (): void => {
+    setComposerVisible(true);
+  };
+
+  // Stable `renderItem` identity: an inline arrow literal passed to `FlatList`
+  // is recreated every render, which `FlatList`/`VirtualizedList` treats as a
+  // changed render function and forces the whole visible window to
+  // re-render/re-measure even though `FeedItemCard` handles its own updates.
+  // See `DestinationScreen`'s `renderRow` for the same fix. Defined here
+  // (before the loading/error early returns below) rather than next to
+  // `items`, since hooks must run unconditionally on every render.
+  const renderRow = useCallback(
+    ({ item }: { item: TripFeedItemDTO }) => (
+      <FeedItemCard
+        tripId={tripId}
+        item={item}
+        canDeleteAnyPhoto={isOrganizer}
+        isOrganizer={isOrganizer}
+      />
+    ),
+    [tripId, isOrganizer],
+  );
+
+  // -------------------------------------------------------------------------
+  // Loading
+  // -------------------------------------------------------------------------
+
+  if (feedQuery.isLoading && feedQuery.data === undefined) {
+    return (
+      <ScreenContainer>
+        <ActivityHeader onBack={backToHub} />
+        <View style={styles.center} testID="trip-feed-loading">
+          <ActivityIndicator color={t.color.primaryFg} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Load error (membership failures collapse to trip_forbidden — R15.2)
+  // -------------------------------------------------------------------------
+
+  if (feedQuery.isError && feedQuery.data === undefined) {
+    return (
+      <ScreenContainer>
+        <ActivityHeader onBack={backToHub} />
+        <View style={styles.center} testID="trip-feed-error">
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="We couldn't load this activity"
+            body={readErrorMessage(feedQuery.error)}
+          />
+          <PrimaryButton
+            label="Retry"
+            icon="refresh-outline"
+            onPress={() => {
+              void feedQuery.refetch();
+            }}
+            testID="trip-feed-retry"
+            style={styles.retryBtn}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const allItems = feedQuery.data ?? [];
+  const items =
+    filter === 'completions'
+      ? allItems.filter((item) => item.type === 'completion_logged')
+      : filter === 'posts'
+        ? allItems.filter((item) => item.type === 'member_post')
+        : allItems;
+
+  const canQuickPost =
+    quickPostDraft.trim().length > 0 && !quickPostMutation.isPending;
+
+  return (
+    <ScreenContainer>
+      <ActivityHeader onBack={backToHub} />
+
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        renderItem={renderRow}
+        extraData={t.scheme}
+        contentContainerStyle={styles.listContent}
+        refreshing={feedQuery.isRefetching && !feedQuery.isLoading}
+        onRefresh={() => {
+          void feedQuery.refetch();
+        }}
+        testID="trip-feed"
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <Card style={styles.quickPostCard} testID="trip-activity-quick-post-card">
+              <View style={styles.quickPostRow}>
+                <TextInput
+                  value={quickPostDraft}
+                  onChangeText={(val) => {
+                    setQuickPostDraft(val);
+                    if (quickPostError !== null) setQuickPostError(null);
+                  }}
+                  placeholder="Share an update, plan, or thought with the crew..."
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
+                  maxLength={500}
+                  multiline
+                  editable={!quickPostMutation.isPending}
+                  style={styles.quickPostInput}
+                  accessibilityLabel="Share an update with your trip crew"
+                  testID="trip-activity-quick-post-input"
+                />
+                <Pressable
+                  onPress={() => {
+                    if (!canQuickPost) return;
+                    setQuickPostError(null);
+                    quickPostMutation.mutate(quickPostDraft);
+                  }}
+                  disabled={!canQuickPost}
+                  accessibilityRole="button"
+                  accessibilityLabel="Post update"
+                  testID="trip-activity-quick-post-submit"
+                  style={({ pressed }) => [
+                    styles.quickPostSendBtn,
+                    !canQuickPost && styles.quickPostSendBtnDisabled,
+                    pressed && canQuickPost && styles.pressed,
+                  ]}
+                >
+                  {quickPostMutation.isPending ? (
+                    <ActivityIndicator size="small" color={t.color.textOnPrimary} />
+                  ) : (
+                    <Ionicons
+                      name="send"
+                      size={15}
+                      color={canQuickPost ? t.color.textOnPrimary : t.color.textSecondary}
+                    />
+                  )}
+                </Pressable>
+              </View>
+
+              {quickPostError !== null ? (
+                <Text
+                  style={styles.error}
+                  accessibilityRole="alert"
+                  testID="trip-activity-quick-post-error"
+                >
+                  {quickPostError}
+                </Text>
+              ) : null}
+
+              <View style={styles.quickPostToolbar}>
+                <Pressable
+                  onPress={openComposer}
+                  style={({ pressed }) => [
+                    styles.composerCtaCard,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log a ride or food. Tag who was with you and share ratings."
+                  testID="trip-activity-log-cta"
+                >
+                  <Text style={styles.composerCtaIcon}>✨</Text>
+                  <Text style={styles.composerCtaTitle} numberOfLines={1}>
+                    Log a ride or food
+                  </Text>
+                </Pressable>
+
+                {canUpload ? (
+                  <Pressable
+                    onPress={() => setPostComposerVisible(true)}
+                    style={({ pressed }) => [
+                      styles.composerCtaCard,
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Post photos. Share photos with your trip crew."
+                    testID="trip-activity-post-cta"
+                  >
+                    <Text style={styles.composerCtaIcon}>📸</Text>
+                    <Text style={styles.composerCtaTitle} numberOfLines={1}>
+                      Post photos
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </Card>
+
+            <View style={styles.filterRow} testID="trip-activity-filter">
+              <Chip
+                label="All"
+                active={filter === 'all'}
+                onPress={() => setFilter('all')}
+                testID="trip-activity-filter-all"
+              />
+              <Chip
+                label="Posts"
+                active={filter === 'posts'}
+                onPress={() => setFilter('posts')}
+                testID="trip-activity-filter-posts"
+              />
+              <Chip
+                label="Completions"
+                active={filter === 'completions'}
+                onPress={() => setFilter('completions')}
+                testID="trip-activity-filter-completions"
+              />
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.center} testID="trip-feed-empty">
+            <EmptyState
+              icon={
+                filter === 'completions'
+                  ? 'sparkles-outline'
+                  : filter === 'posts'
+                    ? 'chatbubble-ellipses-outline'
+                    : 'megaphone-outline'
+              }
+              title={
+                filter === 'completions'
+                  ? 'No completions yet'
+                  : filter === 'posts'
+                    ? 'No posts yet'
+                    : 'Nothing here yet'
+              }
+              body={
+                filter === 'completions'
+                  ? 'Log an Experience your group did together and it’ll show up here.'
+                  : filter === 'posts'
+                    ? 'Share a quick update or photo with your trip crew above.'
+                    : "As the group plans, logs, and rides together, it'll show up in this feed."
+              }
+            />
+          </View>
+        }
+      />
+
+      <LogComposerModal
+        visible={composerVisible}
+        tripId={tripId}
+        candidates={candidates}
+        onClose={() => setComposerVisible(false)}
+        onLogged={() => {
+          setComposerVisible(false);
+          void queryClient.invalidateQueries({
+            queryKey: tripFeedKeys.feed(tripId),
+          });
+        }}
+      />
+
+      <FeedPostComposerModal
+        visible={postComposerVisible}
+        tripId={tripId}
+        initialCaption={quickPostDraft}
+        onClose={() => setPostComposerVisible(false)}
+        onPosted={() => {
+          setPostComposerVisible(false);
+          setQuickPostDraft('');
+          void queryClient.invalidateQueries({
+            queryKey: tripFeedKeys.feed(tripId),
+          });
+        }}
+      />
+    </ScreenContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed item card — reactions + comments (+ rich completion detail)
+// ---------------------------------------------------------------------------
+
+function FeedItemCard({
+  tripId,
+  item,
+  canDeleteAnyPhoto,
+  isOrganizer,
+}: {
+  readonly tripId: string;
+  readonly item: TripFeedItemDTO;
+  /** The caller is an organizer, so the viewer offers Delete on others' photos. */
+  readonly canDeleteAnyPhoto: boolean;
+  readonly isOrganizer?: boolean;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState('');
+  const [viewerSlot, setViewerSlot] = useState<TripPostPhotoSlotDTO | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+
+  const reactionByValue = useMemo(() => {
+    const map = new Map<TripReactionValue, { count: number; mine: boolean }>();
+    for (const summary of item.reactions) {
+      map.set(summary.reaction, { count: summary.count, mine: summary.mine });
+    }
+    return map;
+  }, [item.reactions]);
+
+  const feedKey = tripFeedKeys.feed(tripId);
+
+  const patchItem = (
+    updater: (current: TripFeedItemDTO) => TripFeedItemDTO,
+  ): readonly TripFeedItemDTO[] | undefined => {
+    const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+    queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+      prev?.map((it) => (it.id === item.id ? updater(it) : it)),
+    );
+    return previous;
+  };
+
+  const invalidateFeed = (): void => {
+    void queryClient.invalidateQueries({ queryKey: feedKey });
+  };
+
+  const hasPostPhotos = Boolean(item.photos && item.photos.length > 0);
+  const baseMeta = feedTypeMetaFor(t)[item.type] ?? {
+    label: item.type.replace(/_/g, ' '),
+    icon: 'ellipse-outline' as const,
+    tone: t.color.primaryFg,
+  };
+  const meta =
+    item.type === 'member_post' && !hasPostPhotos
+      ? {
+          label: 'posted an update',
+          icon: 'chatbubble-ellipses' as const,
+          tone: t.color.primaryFg,
+        }
+      : baseMeta;
+  const rodeWithVisual = rodeWithVisualFor(t);
+  const reactionMeta = reactionMetaFor(t);
+
+  // Human context folded into the feed item by the read projection.
+  const experienceName = readString(item.metadata, 'experienceName');
+  const park = readString(item.metadata, 'park');
+  const experienceImageUrl = readString(item.metadata, 'experienceImageUrl');
+  const experienceCategory = readString(item.metadata, 'experienceCategory');
+  const experienceLand = readString(item.metadata, 'experienceLand');
+  const rating = readNumber(item.metadata, 'rating');
+  const note = readString(item.metadata, 'note');
+  const rodeWith = readRodeWith(item.metadata);
+
+  const reactionMutation = useMutation<
+    void,
+    ApiError,
+    { readonly reaction: TripReactionValue; readonly remove: boolean },
+    FeedPatchContext
+  >({
+    mutationFn: async ({ reaction, remove }) => {
+      const parsed = tripReactionValueSchema.safeParse(reaction);
+      if (!parsed.success) {
+        throw new ApiError({
+          code: 'trip_validation_failed',
+          message: 'trip_validation_failed',
+          status: 400,
+        });
+      }
+      const base = `/trips/${tripId}/feed/${FEED_TARGET_TYPE}/${item.id}/reactions`;
+      if (remove) {
+        await apiRequest<void>('DELETE', `${base}/${parsed.data}`);
+      } else {
+        await apiRequest<void>('POST', base, { reaction: parsed.data });
+      }
+    },
+    onMutate: async ({ reaction, remove }) => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = patchItem((current) => ({
+        ...current,
+        reactions: applyReaction(current.reactions, reaction, remove),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+    },
+  });
+
+  const addCommentMutation = useMutation<
+    TripCommentCreatedResponse,
+    ApiError,
+    string,
+    FeedPatchContext
+  >({
+    mutationFn: async (bodyText) => {
+      const parsed = tripCommentInputSchema.safeParse({ body: bodyText });
+      if (!parsed.success) {
+        throw new ApiError({
+          code: 'trip_validation_failed',
+          message: 'trip_validation_failed',
+          status: 400,
+        });
+      }
+      return apiRequest<TripCommentCreatedResponse>(
+        'POST',
+        `/trips/${tripId}/feed/${FEED_TARGET_TYPE}/${item.id}/comments`,
+        parsed.data,
+      );
+    },
+    onMutate: async (bodyText) => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const trimmed = bodyText.trim();
+      const previous = patchItem((current) => ({
+        ...current,
+        comments: [
+          ...current.comments,
+          {
+            id: `optimistic-${Date.now()}`,
+            authorId: '',
+            authorDisplayName: 'You',
+            // Populated by the background refetch; the optimistic row falls
+            // back to initials until then.
+            authorAvatarPreset: null,
+            body: trimmed,
+            createdAt: new Date().toISOString(),
+            mine: true,
+          },
+        ],
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+    },
+  });
+
+  const removeCommentMutation = useMutation<void, ApiError, string, FeedPatchContext>({
+    mutationFn: async (commentId) => {
+      await apiRequest<void>('DELETE', `/trips/${tripId}/comments/${commentId}`);
+    },
+    onMutate: async (commentId) => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = patchItem((current) => ({
+        ...current,
+        comments: current.comments.filter((c) => c.id !== commentId),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+    },
+  });
+
+  const deletePostMutation = useMutation<void, ApiError, void, FeedPatchContext>({
+    mutationFn: async () => {
+      await apiRequest<void>('DELETE', `/trips/${tripId}/feed/posts/${item.id}`);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+      queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+        prev?.filter((it) => it.id !== item.id),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+    },
+  });
+
+  const deleteCompletionMutation = useMutation<void, ApiError, void, FeedPatchContext>({
+    mutationFn: async () => {
+      const logEntryId = readString(item.metadata, 'logEntryId') ?? item.id;
+      await apiRequest<void>('DELETE', `/trips/${tripId}/log-entries/${logEntryId}`);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+      queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+        prev?.filter((it) => it.id !== item.id),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(feedKey, context.previous);
+      }
+      setError(actionErrorMessage(err));
+    },
+    onSettled: () => {
+      invalidateFeed();
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'planned-items'] });
+      void queryClient.invalidateQueries({ queryKey: ['me-stats'] });
+      const experienceId = readString(item.metadata, 'experienceId');
+      if (experienceId) {
+        void queryClient.invalidateQueries({ queryKey: ['experience-logs', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-completion', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-rating', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['experience-aggregate', experienceId] });
+        void queryClient.invalidateQueries({ queryKey: ['visit-summary', experienceId] });
+      }
+    },
+  });
+
+  const caption = readString(item.metadata, 'caption');
+
+  // Accessible name for a tappable ready photo: the author, plus the caption
+  // when the post has one.
+  const photoOpenLabel =
+    caption !== null
+      ? `View photo by ${item.actorDisplayName}, ${caption}`
+      : `View photo by ${item.actorDisplayName}`;
+
+  // The viewer shows the full-size `url`, falling back to the thumbnail only
+  // when the slot carries no full URL. `mine` drives Delete on the member's own
+  // photo; Report / Block uploader appear for everyone else's.
+  const viewerItem: PhotoViewerItem | null =
+    viewerSlot !== null
+      ? {
+          id: viewerSlot.photoId,
+          url: viewerSlot.url ?? viewerSlot.thumbUrl,
+          thumbUrl: viewerSlot.thumbUrl,
+          width: viewerSlot.width,
+          height: viewerSlot.height,
+          uploader: {
+            displayName: item.actorDisplayName,
+            avatarPreset: item.actorAvatarPreset,
+          },
+          mine: viewerSlot.mine,
+        }
+      : null;
+
+  const busy =
+    reactionMutation.isPending ||
+    addCommentMutation.isPending ||
+    removeCommentMutation.isPending ||
+    deletePostMutation.isPending ||
+    deleteCompletionMutation.isPending;
+
+  const canSubmit = draft.trim().length > 0 && !addCommentMutation.isPending;
+  const commentCount = item.comments.length;
+
+  return (
+    <Card style={styles.itemCard} testID={`trip-feed-item-${item.id}`}>
+      {/* Header: initials avatar, actor + what they did, relative time. */}
+      <View style={styles.itemHeader}>
+        <Avatar name={item.actorDisplayName} preset={item.actorAvatarPreset} />
+        <View style={styles.itemIdentity}>
+          <Text style={styles.itemActorLine} numberOfLines={2}>
+            <Text style={styles.itemActor}>{item.actorDisplayName}</Text>
+            <Text style={styles.itemAction}> {meta.label}</Text>
+          </Text>
+          <Text style={styles.itemMeta}>{formatRelativeTime(item.createdAt)}</Text>
+        </View>
+        {item.type === 'member_post' && item.mine === true ? (
+          <Pressable
+            onPress={() => {
+              if (deletePostMutation.isPending) return;
+              setError(null);
+              deletePostMutation.mutate();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete post"
+            testID={`trip-feed-post-delete-${item.id}`}
+            style={({ pressed }) => [styles.postDeleteBtn, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+          </Pressable>
+        ) : null}
+        {item.type === 'completion_logged' && (item.mine === true || isOrganizer === true) ? (
+          <Pressable
+            onPress={() => {
+              if (deleteCompletionMutation.isPending) return;
+              setError(null);
+              deleteCompletionMutation.mutate();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete completion"
+            testID={`trip-feed-completion-delete-${item.id}`}
+            style={({ pressed }) => [styles.postDeleteBtn, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+          </Pressable>
+        ) : null}
+        <View style={[styles.typeBadge, { backgroundColor: withAlpha(meta.tone, 0.14) }]}>
+          <Ionicons name={meta.icon} size={16} color={meta.tone} />
+        </View>
+      </View>
+
+      {/* For member_post: optional caption and photo slots grid */}
+      {item.type === 'member_post' ? (
+        <View style={styles.memberPostBody} testID={`trip-feed-post-body-${item.id}`}>
+          {caption !== null ? (
+            <Text style={styles.postCaption} testID={`trip-feed-post-caption-${item.id}`}>
+              {caption}
+            </Text>
+          ) : null}
+          {item.photos && item.photos.length > 0 ? (
+            <View style={styles.slotsGrid} testID={`trip-feed-slots-${item.id}`}>
+              {item.photos.map((slot, index) => (
+                <FeedPhotoSlotView
+                  key={slot.photoId || `slot-${index}`}
+                  slot={slot}
+                  openLabel={photoOpenLabel}
+                  onOpen={() => setViewerSlot(slot)}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Full-screen viewer for the tapped ready photo (R14.15). Mounted only
+          while open so a long feed does not carry a viewer per post. */}
+      {viewerSlot !== null ? (
+        <PhotoViewer
+          visible
+          photo={viewerItem}
+          canDelete={canDeleteAnyPhoto}
+          onClose={() => setViewerSlot(null)}
+          onDeleted={invalidateFeed}
+        />
+      ) : null}
+
+      {/* What the activity was about — the completed/confirmed Experience. */}
+      {experienceName !== null ? (
+        <View
+          style={styles.experiencePill}
+          testID={`trip-feed-experience-${item.id}`}
+        >
+          <ExperienceThumb
+            imageUrl={experienceImageUrl}
+            category={experienceCategory}
+          />
+          <View style={styles.experienceText}>
+            <Text style={styles.experienceName} numberOfLines={2}>
+              {experienceName}
+            </Text>
+            <View style={styles.experienceMetaRow}>
+              {park !== null ? (
+                <Badge label={park} color={t.color.primaryFg} />
+              ) : null}
+              {experienceLand !== null ? (
+                <Badge label={experienceLand} color={t.color.accentDark} />
+              ) : null}
+              {experienceCategory !== null ? (
+                <Badge label={experienceCategory} color={t.color.textSecondary} />
+              ) : null}
+              {rating !== null ? (
+                <View style={styles.ratingPill}>
+                  <Ionicons name="star" size={12} color={t.color.accentDark} />
+                  <Text style={styles.ratingText}>{rating}/10</Text>
+                </View>
+              ) : null}
+            </View>
+            {rodeWith.length > 0 ? (
+              <View style={styles.rodeWithRow} testID={`trip-feed-rodewith-${item.id}`}>
+                <Text style={styles.rodeWithLabel}>
+                  {experienceCategory === 'Dining' ? '👥 Dined with:' : '👥 Rode with:'}
+                </Text>
+                {rodeWith.map((tag) => {
+                  const visual = rodeWithVisual[tag.state];
+                  return (
+                    <View
+                      key={tag.taggedMemberId}
+                      style={[styles.tagChip, { backgroundColor: visual.bg }]}
+                    >
+                      <Text
+                        style={[styles.tagChipText, { color: visual.fg }]}
+                        numberOfLines={1}
+                      >
+                        {visual.prefix}{tag.displayName}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+            {note !== null ? (
+              <Text
+                style={styles.experienceNote}
+                testID={`trip-feed-note-${item.id}`}
+              >
+                "{note}"
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {/* Reaction controls over the closed Trip_Reaction vocabulary + comments link. */}
+      <View style={styles.feedReactionsRow}>
+        <View style={styles.reactionsGroup} testID={`trip-feed-reactions-${item.id}`}>
+          {TRIP_REACTION_VALUES.map((reaction) => {
+            const summary = reactionByValue.get(reaction);
+            const active = summary?.mine ?? false;
+            const count = summary?.count ?? 0;
+            const rmeta = reactionMeta[reaction];
+            return (
+              <Pressable
+                key={reaction}
+                onPress={() => {
+                  if (reactionMutation.isPending) return;
+                  setError(null);
+                  reactionMutation.mutate({ reaction, remove: active });
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${rmeta.label}${count > 0 ? `, ${count}` : ''}, ${active ? 'selected' : 'not selected'}`}
+                testID={`trip-feed-reaction-${item.id}-${reaction}`}
+                style={({ pressed }) => [
+                  styles.rxChip,
+                  count === 0 && !active && styles.rxChipIdle,
+                  active && styles.rxChipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.rxEmoji}>{rmeta.emoji}</Text>
+                {count > 0 ? (
+                  <Text style={[styles.rxCount, active && styles.rxCountActive]}>
+                    {count}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable
+          onPress={() => setComposerOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel={`${commentCount} comments, tap to ${composerOpen ? 'close' : 'open'}`}
+          testID={`trip-feed-comment-open-${item.id}`}
+          style={styles.commentLink}
+        >
+          <Text style={styles.commentLinkText}>
+            💬 {commentCount === 1 ? '1 comment' : commentCount > 1 ? `${commentCount} comments` : 'Comment'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Every Member's comments, oldest-first; a remove control appears only
+          on the caller's own comments (author-scoped, R13.11/R13.12). */}
+      {item.comments.length > 0 ? (
+        <View style={styles.comments}>
+          {item.comments.map((comment) => (
+            <View
+              key={comment.id}
+              style={styles.commentRow}
+              testID={`trip-feed-comment-${comment.id}`}
+            >
+              <Avatar
+                name={comment.authorDisplayName}
+                preset={comment.authorAvatarPreset}
+                size={28}
+              />
+              <View style={styles.commentContent}>
+                <Text style={styles.commentAuthorLine} numberOfLines={1}>
+                  <Text style={styles.commentAuthor}>
+                    {comment.mine ? 'You' : comment.authorDisplayName}
+                  </Text>
+                  <Text style={styles.commentTime}>
+                    {'  '}
+                    {formatRelativeTime(comment.createdAt)}
+                  </Text>
+                </Text>
+                <Text style={styles.commentBody}>{comment.body}</Text>
+              </View>
+              {comment.mine ? (
+                <Ionicons
+                  name="trash-outline"
+                  size={18}
+                  color={t.color.danger}
+                  onPress={() => {
+                    if (removeCommentMutation.isPending) return;
+                    setError(null);
+                    removeCommentMutation.mutate(comment.id);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove comment"
+                  testID={`trip-feed-comment-remove-${comment.id}`}
+                />
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Collapsed by default: a single "Comment" action opens the composer. */}
+      {composerOpen ? (
+        <View style={styles.composer}>
+          <TextInput
+            value={draft}
+            onChangeText={(value) => {
+              setDraft(value);
+              if (error !== null) setError(null);
+            }}
+            placeholder="Add a comment"
+            placeholderTextColor={t.color.textSecondary}
+            keyboardAppearance={t.scheme}
+            multiline
+            maxLength={2000}
+            editable={!addCommentMutation.isPending}
+            autoFocus
+            style={styles.composerInput}
+            accessibilityLabel="Add a comment"
+            testID={`trip-feed-comment-input-${item.id}`}
+          />
+          <Ionicons
+            name="send"
+            size={20}
+            color={canSubmit ? t.color.primaryFg : t.color.textSecondary}
+            onPress={() => {
+              if (!canSubmit) return;
+              const bodyText = draft;
+              setError(null);
+              setDraft('');
+              setComposerOpen(false);
+              addCommentMutation.mutate(bodyText);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Post comment"
+            testID={`trip-feed-comment-submit-${item.id}`}
+            style={styles.composerSend}
+          />
+        </View>
+      ) : null}
+
+      {error !== null ? (
+        <Text
+          style={styles.error}
+          accessibilityRole="alert"
+          testID={`trip-feed-item-error-${item.id}`}
+        >
+          {error}
+        </Text>
+      ) : null}
+
+      {busy ? (
+        <ActivityIndicator
+          color={t.color.primaryFg}
+          style={styles.itemBusy}
+          testID={`trip-feed-item-busy-${item.id}`}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Log composer modal — the log + rode-with picker (R10, R20.2)
+// ---------------------------------------------------------------------------
+
+export function LogComposerModal({
+  visible,
+  tripId,
+  candidates,
+  initialExperience = null,
+  onClose,
+  onLogged,
+}: {
+  readonly visible: boolean;
+  readonly tripId: string;
+  readonly candidates: readonly TripMemberDTO[];
+  /**
+   * When provided, the composer opens with this Experience pre-selected — the
+   * one-tap "log from a plan" path (planned-list-completion-sync R1.2). The
+   * rode-with tagging, optional Rating, and the `POST /trips/:id/log-entries`
+   * submission are otherwise identical to opening it empty from the feed.
+   */
+  readonly initialExperience?: PickedExperience | null;
+  readonly onClose: () => void;
+  readonly onLogged: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const [experience, setExperience] = useState<PickedExperience | null>(
+    initialExperience,
+  );
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [rating, setRating] = useState<number | null>(null);
+  const [note, setNote] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
+  const isDining =
+    experience?.category?.toLowerCase() === 'dining' ||
+    experience?.category?.toLowerCase() === 'restaurant';
+
+  // Seed a fresh form on the hidden→visible edge so re-opening the composer
+  // (from the feed empty, or from a Planned_Item pre-filled) always starts from
+  // the intended Experience without stale state from a prior open.
+  const wasVisible = useRef(false);
+  useEffect(() => {
+    if (visible && !wasVisible.current) {
+      setExperience(initialExperience);
+      setSelected(new Set());
+      setRating(null);
+      setNote('');
+      setError(null);
+    }
+    wasVisible.current = visible;
+  }, [visible, initialExperience]);
+
+  const resetForm = (): void => {
+    setExperience(initialExperience);
+    setSelected(new Set());
+    setRating(null);
+    setNote('');
+    setError(null);
+  };
+
+  const logMutation = useMutation<void, ApiError, void>({
+    mutationFn: async () => {
+      const trimmedNote = note.trim();
+      const draft = {
+        experienceId: experience?.id ?? '',
+        rodeWith: [...selected],
+        ...(rating !== null ? { rating } : {}),
+        ...(trimmedNote.length > 0 ? { note: trimmedNote } : {}),
+      };
+      const parsed = tripLogEntryCreateSchema.safeParse(draft);
+      if (!parsed.success) {
+        throw new ApiError({
+          code: 'trip_validation_failed',
+          message: 'trip_validation_failed',
+          status: 400,
+        });
+      }
+      await apiRequest<void>('POST', `/trips/${tripId}/log-entries`, parsed.data);
+    },
+    onSuccess: () => {
+      resetForm();
+      onLogged();
+    },
+    onError: (err) => {
+      setError(logErrorMessage(err));
+    },
+  });
+
+  const busy = logMutation.isPending;
+
+  const toggleMember = (userId: string): void => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+    if (error !== null) setError(null);
+  };
+
+  const closeAndReset = (): void => {
+    if (busy) return;
+    resetForm();
+    onClose();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={closeAndReset}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalBackdrop}
+      >
+        <View style={styles.modalCard} testID="activity-log-composer">
+          <View style={styles.modalHeaderRow}>
+            <Text style={styles.modalTitle}>Log a completion</Text>
+            <Pressable
+              onPress={closeAndReset}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+              style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
+              testID="activity-log-close"
+            >
+              <Ionicons name="close" size={22} color={t.color.textSecondary} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+            <Text style={styles.label}>Experience</Text>
+            {experience === null ? (
+              <ExperiencePicker
+                enabled={visible}
+                onSelect={(picked) => {
+                  setExperience(picked);
+                  if (error !== null) setError(null);
+                }}
+                testIDPrefix="activity-log"
+              />
+            ) : (
+              <View style={styles.selectedRow} testID="activity-log-selected">
+                <View style={styles.selectedText}>
+                  <Text style={styles.selectedName} numberOfLines={2}>
+                    {experience.name}
+                  </Text>
+                  {experience.park !== null ? (
+                    <Badge label={experience.park} color={t.color.primaryFg} />
+                  ) : null}
+                </View>
+                <SecondaryButton
+                  label="Change"
+                  onPress={() => {
+                    if (busy) return;
+                    setExperience(null);
+                  }}
+                  disabled={busy}
+                  testID="activity-log-change-experience"
+                />
+              </View>
+            )}
+
+            <Text style={styles.label}>{isDining ? 'Dined with' : 'Rode with'}</Text>
+            {candidates.length === 0 ? (
+              <Text style={styles.helper} testID="activity-log-no-candidates">
+                No other Members to tag yet. You can still log this on your own.
+              </Text>
+            ) : (
+              <View style={styles.chips} testID="activity-log-rodewith">
+                {candidates.map((member) => (
+                  <Chip
+                    key={member.userId}
+                    label={member.displayName}
+                    active={selected.has(member.userId)}
+                    onPress={() => {
+                      if (busy) return;
+                      toggleMember(member.userId);
+                    }}
+                    testID={`activity-log-member-${member.userId}`}
+                  />
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>Your rating (optional)</Text>
+            <Text style={styles.helper}>
+              {rating === null
+                ? 'No rating selected — none will be recorded.'
+                : `Selected ${rating}/10 — tap it again to clear.`}
+            </Text>
+            <View style={styles.ratingGrid} testID="activity-log-rating">
+              {RATING_VALUES.map((value) => {
+                const active = rating === value;
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      active
+                        ? `Rating ${value} of 10, selected`
+                        : `Rate ${value} of 10`
+                    }
+                    accessibilityState={{ selected: active }}
+                    onPress={() => {
+                      if (busy) return;
+                      setRating(rating === value ? null : value);
+                      if (error !== null) setError(null);
+                    }}
+                    style={({ pressed }) => [
+                      styles.ratingTile,
+                      active && styles.ratingTileActive,
+                      pressed && styles.pressed,
+                    ]}
+                    testID={`activity-log-rating-${value}`}
+                  >
+                    <Text
+                      style={[
+                        styles.ratingTileText,
+                        active && styles.ratingTileTextActive,
+                      ]}
+                    >
+                      {value}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.label}>Notes (optional)</Text>
+            <TextInput
+              value={note}
+              onChangeText={(text) => {
+                if (text.length <= 2000) {
+                  setNote(text);
+                  if (error !== null) setError(null);
+                }
+              }}
+              placeholder={
+                isDining
+                  ? 'How was the food, service, atmosphere?'
+                  : 'Thoughts on the ride, wait time, seats?'
+              }
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              accessibilityLabel="Notes (optional)"
+              multiline
+              maxLength={2000}
+              style={styles.noteInput}
+              testID="activity-log-note-input"
+            />
+
+            {error !== null ? (
+              <Text
+                style={styles.error}
+                accessibilityRole="alert"
+                testID="activity-log-composer-error"
+              >
+                {error}
+              </Text>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <PrimaryButton
+                label={busy ? 'Logging\u2026' : 'Log it'}
+                icon="checkmark-circle-outline"
+                onPress={() => {
+                  setError(null);
+                  logMutation.mutate();
+                }}
+                disabled={busy || experience === null}
+                testID="activity-log-submit"
+                style={styles.flexBtn}
+              />
+              <SecondaryButton
+                label="Cancel"
+                onPress={closeAndReset}
+                disabled={busy}
+                testID="activity-log-cancel"
+                style={styles.flexBtn}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed post composer modal — upload up to 4 photos + optional caption (R14)
+// ---------------------------------------------------------------------------
+
+export function FeedPostComposerModal({
+  visible,
+  tripId,
+  initialCaption = '',
+  onClose,
+  onPosted,
+}: {
+  readonly visible: boolean;
+  readonly tripId: string;
+  readonly initialCaption?: string;
+  readonly onClose: () => void;
+  readonly onPosted: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const [selectedPhotos, setSelectedPhotos] = useState<
+    readonly { prepared: PreparedImages; takenAt?: string }[]
+  >([]);
+  const [caption, setCaption] = useState(initialCaption);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const wasVisible = useRef(false);
+  useEffect(() => {
+    if (visible && !wasVisible.current) {
+      setSelectedPhotos([]);
+      setCaption(initialCaption);
+      setPickerOpen(false);
+      setIsPosting(false);
+      setError(null);
+    }
+    wasVisible.current = visible;
+  }, [visible, initialCaption]);
+
+  const resetForm = (): void => {
+    setSelectedPhotos([]);
+    setCaption('');
+    setPickerOpen(false);
+    setIsPosting(false);
+    setError(null);
+  };
+
+  const closeAndReset = (): void => {
+    if (isPosting) return;
+    resetForm();
+    onClose();
+  };
+
+  const handlePost = async (): Promise<void> => {
+    const trimmed = caption.trim();
+    if ((selectedPhotos.length === 0 && trimmed.length === 0) || isPosting) return;
+    setIsPosting(true);
+    setError(null);
+    try {
+      let photoIds: readonly string[] = [];
+      if (selectedPhotos.length > 0) {
+        const uploadResult = await uploadPhotos({
+          target: { kind: 'trip', id: tripId },
+          items: selectedPhotos,
+        });
+        photoIds = uploadResult.photoIds;
+      }
+      const postPayload = {
+        photoIds,
+        ...(trimmed.length > 0 ? { caption: trimmed } : {}),
+      };
+      await apiRequest('POST', `/trips/${tripId}/feed/posts`, postPayload);
+      resetForm();
+      onPosted();
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setError(err.message || 'Failed to post photos');
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to post photos');
+      }
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  return (
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAndReset}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard} testID="feed-post-composer">
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Post photos</Text>
+              <Pressable
+                onPress={closeAndReset}
+                disabled={isPosting}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}
+                testID="feed-post-close"
+              >
+                <Ionicons name="close" size={22} color={t.color.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.label}>Photos (up to 4)</Text>
+              {selectedPhotos.length === 0 ? (
+                <View style={styles.pickPhotosBox}>
+                  <PrimaryButton
+                    label="Choose photos (up to 4)"
+                    icon="images-outline"
+                    onPress={() => setPickerOpen(true)}
+                    disabled={isPosting}
+                    testID="feed-post-pick-photos"
+                  />
+                </View>
+              ) : (
+                <View style={styles.selectedPhotosRow} testID="feed-post-selected-photos">
+                  <Text style={styles.selectedPhotosText}>
+                    {selectedPhotos.length} photo{selectedPhotos.length === 1 ? '' : 's'} selected
+                  </Text>
+                  <SecondaryButton
+                    label="Change"
+                    onPress={() => setPickerOpen(true)}
+                    disabled={isPosting}
+                    testID="feed-post-change-photos"
+                  />
+                </View>
+              )}
+
+              <Text style={styles.label}>Caption (optional)</Text>
+              <TextInput
+                value={caption}
+                onChangeText={(val) => {
+                  setCaption(val);
+                  if (error !== null) setError(null);
+                }}
+                placeholder="Write a caption (optional)"
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
+                maxLength={500}
+                multiline
+                editable={!isPosting}
+                style={styles.composerInput}
+                accessibilityLabel="Post caption"
+                testID="feed-post-caption-input"
+              />
+
+              {error !== null ? (
+                <Text
+                  style={styles.error}
+                  accessibilityRole="alert"
+                  testID="feed-post-error"
+                >
+                  {error}
+                </Text>
+              ) : null}
+
+              <View style={styles.modalActions}>
+                <PrimaryButton
+                  label={isPosting ? 'Posting\u2026' : 'Post'}
+                  icon="checkmark-circle-outline"
+                  onPress={handlePost}
+                  disabled={
+                    isPosting ||
+                    (selectedPhotos.length === 0 && caption.trim().length === 0)
+                  }
+                  testID="feed-post-submit"
+                  style={styles.flexBtn}
+                />
+                <SecondaryButton
+                  label="Cancel"
+                  onPress={closeAndReset}
+                  disabled={isPosting}
+                  testID="feed-post-cancel"
+                  style={styles.flexBtn}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <PhotoPickerSheet
+        visible={pickerOpen}
+        target="trip"
+        title="Select up to 4 photos"
+        allowsMultipleSelection
+        maxSelection={4}
+        onClose={() => setPickerOpen(false)}
+        onConfirmBatch={(items) => {
+          setSelectedPhotos(items);
+          setPickerOpen(false);
+          if (error !== null) setError(null);
+        }}
+      />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed photo slot view — ready / checking / removed / unavailable (R14.4, R14.6)
+// ---------------------------------------------------------------------------
+
+function FeedPhotoSlotView({
+  slot,
+  openLabel,
+  onOpen,
+}: {
+  readonly slot: TripPostPhotoSlotDTO;
+  /** Accessible name of the tap target that opens the viewer (ready slots only). */
+  readonly openLabel: string;
+  readonly onOpen: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+
+  if (slot.state === 'ready') {
+    const uri = slot.thumbUrl ?? slot.url ?? '';
+    return (
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed }) => [styles.slotWrapper, pressed && styles.pressed]}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={openLabel}
+        testID={`trip-feed-slot-press-${slot.photoId}`}
+      >
+        <View style={styles.slotFill} testID={`trip-feed-slot-${slot.photoId}`}>
+          <Image
+            source={{ uri }}
+            style={styles.slotImage}
+            resizeMode="cover"
+            accessibilityLabel="Photo"
+            testID={`trip-feed-slot-ready-${slot.photoId}`}
+          />
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (slot.state === 'checking') {
+    return (
+      <View
+        style={[styles.slotWrapper, styles.slotPlaceholder]}
+        testID={`trip-feed-slot-checking-${slot.photoId}`}
+      >
+        <Ionicons name="time-outline" size={24} color={t.color.textSecondary} />
+        <Text style={styles.slotPlaceholderText}>Checking photo...</Text>
+      </View>
+    );
+  }
+
+  if (slot.state === 'removed') {
+    return (
+      <View
+        style={[styles.slotWrapper, styles.slotPlaceholder]}
+        testID={`trip-feed-slot-removed-${slot.photoId}`}
+      >
+        <Ionicons name="trash-outline" size={24} color={t.color.textSecondary} />
+        <Text style={styles.slotPlaceholderText}>photo removed</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.slotWrapper, styles.slotPlaceholder]}
+      testID={`trip-feed-slot-unavailable-${slot.photoId}`}
+    >
+      <Ionicons name="eye-off-outline" size={24} color={t.color.textSecondary} />
+      <Text style={styles.slotPlaceholderText}>Photo unavailable</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Avatar — initials in a color derived from the actor's name
+// ---------------------------------------------------------------------------
+
+function Avatar({
+  name,
+  preset = null,
+  size = 40,
+}: {
+  readonly name: string;
+  /** The Member's avatar preset id, or `null` to fall back to initials. */
+  readonly preset?: string | null;
+  readonly size?: number;
+}): JSX.Element {
+  const styles = useStyles();
+  const avatarPal = usePalette(FEED_AVATAR);
+  // Render the chosen avatar art when the Member has a valid preset; otherwise
+  // fall back to the name-hashed initials disc so a preset-less Member still
+  // reads clearly.
+  if (isAvatarPresetId(preset)) {
+    return (
+      <View
+        style={[
+          styles.avatar,
+          { width: size, height: size, borderRadius: size / 2, overflow: 'hidden' },
+        ]}
+      >
+        {renderAvatarPreset(preset, size)}
+      </View>
+    );
+  }
+  const initials = initialsOf(name);
+  const avatarColors = [
+    avatarPal.a0,
+    avatarPal.a1,
+    avatarPal.a2,
+    avatarPal.a3,
+    avatarPal.a4,
+    avatarPal.a5,
+    avatarPal.a6,
+    avatarPal.a7,
+  ];
+  const bg = avatarColors[hashString(name) % avatarColors.length]!;
+  return (
+    <View
+      style={[
+        styles.avatar,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
+      ]}
+    >
+      <Text style={styles.avatarText}>{initials}</Text>
+    </View>
+  );
+}
+
+/**
+ * Leading thumbnail for a `completion_logged` item's Experience. Shows the
+ * Disney-sourced image when present; otherwise a category-tinted placeholder
+ * with the category glyph, mirroring the catalog's `ExperienceThumb`, so the
+ * pill has a consistent shape whether or not an image exists.
+ */
+function ExperienceThumb({
+  imageUrl,
+  category,
+}: {
+  readonly imageUrl: string | null;
+  readonly category: string | null;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const misc = usePalette(FEED_MISC);
+  const [failed, setFailed] = useState(false);
+  const visual =
+    category !== null && category in t.categoryVisual
+      ? t.categoryVisual[category as ExperienceCategory]
+      : null;
+
+  if (imageUrl !== null && imageUrl.length > 0 && !failed) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={styles.experienceThumb}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+        testID="trip-feed-experience-image"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.experienceThumb,
+        styles.experienceThumbPlaceholder,
+        { backgroundColor: visual?.fill ?? t.color.surfaceAlt },
+      ]}
+      testID="trip-feed-experience-placeholder"
+    >
+      <Ionicons
+        name={
+          (visual?.glyph as keyof typeof Ionicons.glyphMap | undefined) ??
+          'sparkles'
+        }
+        size={18}
+        color={misc.thumbGlyph}
+      />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
+
+/** Shared compact header for every state of the Trip_Activity screen. */
+function ActivityHeader({
+  onBack,
+}: {
+  readonly onBack: () => void;
+}): JSX.Element {
+  return (
+    <GradientHeader
+      title="Trip Activity"
+      subtitle="Log what you did and follow the group."
+      icon="megaphone"
+      compact
+      onBack={onBack}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Format an ISO-8601 timestamp for display; falls back to the raw value. */
+function formatTimestamp(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return iso;
+  }
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Compact "time ago" for the feed: "just now", "5m", "2h", "3d" for recent
+ * events, then an absolute date once older than a week.
+ */
+function formatRelativeTime(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return iso;
+  }
+  const seconds = Math.floor((Date.now() - parsed.getTime()) / 1000);
+  if (seconds < 45) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatTimestamp(iso);
+}
+
+/** Read a string field from a feed item's `metadata`, or `null` when absent. */
+function readString(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** Read a finite number field from a feed item's `metadata`, or `null`. */
+function readNumber(
+  metadata: Record<string, unknown>,
+  key: string,
+): number | null {
+  const value = metadata[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Read the rode-with tag list folded into a completion item's `metadata`. */
+function readRodeWith(metadata: Record<string, unknown>): readonly FeedRodeWith[] {
+  const value = metadata.rodeWith;
+  if (!Array.isArray(value)) return [];
+  const out: FeedRodeWith[] = [];
+  for (const entry of value) {
+    if (
+      entry !== null &&
+      typeof entry === 'object' &&
+      typeof (entry as { taggedMemberId?: unknown }).taggedMemberId === 'string' &&
+      typeof (entry as { displayName?: unknown }).displayName === 'string' &&
+      typeof (entry as { state?: unknown }).state === 'string'
+    ) {
+      out.push(entry as FeedRodeWith);
+    }
+  }
+  return out;
+}
+
+/** Up-to-two-letter initials from a display name, uppercased. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+}
+
+/** Stable non-negative hash of a string, for picking an avatar color. */
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+/** Convert a `#rrggbb` hex to an `rgba()` string at the given alpha. */
+function withAlpha(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Map a read error to user-facing copy (non-disclosure, R15.2). */
+function readErrorMessage(err: ApiError | null): string {
+  if (err === null) {
+    return 'Something went wrong. Please try again.';
+  }
+  switch (err.code) {
+    case 'trip_forbidden':
+    case 'trip_not_found':
+      return 'This trip is no longer available.';
+    default:
+      return 'We had trouble reaching the server. Please try again.';
+  }
+}
+
+/** Map a reaction/comment action error to user-facing copy. */
+function actionErrorMessage(err: ApiError): string {
+  switch (err.code) {
+    case 'trip_validation_failed':
+      return 'Please enter a comment between 1 and 2000 characters.';
+    case 'trip_forbidden':
+    case 'trip_not_found':
+      return 'This trip is no longer available.';
+    default:
+      return 'We had trouble reaching the server. Please try again.';
+  }
+}
+
+/** Map a log-entry error to user-facing copy. */
+function logErrorMessage(err: ApiError | null): string {
+  if (err === null) {
+    return 'Something went wrong. Please try again.';
+  }
+  switch (err.code) {
+    case 'trip_validation_failed':
+      return 'Please enter a valid Experience and check your tags and rating.';
+    case 'rating_out_of_range':
+      return 'Please choose a rating from 1 to 10.';
+    case 'trip_forbidden':
+    case 'trip_not_found':
+      return 'This trip is no longer available.';
+    default:
+      return 'We had trouble reaching the server. Please try again.';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const useStyles = makeStyles((t) => ({
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  retryBtn: {
+    alignSelf: 'center',
+    minWidth: 160,
+  },
+  listContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl,
+    gap: theme.spacing.md,
+  },
+  listHeader: {
+    gap: theme.spacing.md,
+  },
+  quickPostCard: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  quickPostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  quickPostInput: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 96,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    color: t.color.textPrimary,
+    fontSize: 15,
+  },
+  quickPostSendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: t.color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickPostSendBtnDisabled: {
+    backgroundColor: t.color.surfaceAlt,
+  },
+  quickPostToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+  },
+  logBtn: {
+    alignSelf: 'stretch',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  itemCard: {
+    gap: theme.spacing.md,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: t.color.textOnPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  itemIdentity: {
+    flex: 1,
+    gap: 2,
+  },
+  itemActorLine: {
+    flexShrink: 1,
+    ...t.textDefault,
+  },
+  itemActor: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+  },
+  itemAction: {
+    ...theme.typography.body,
+    color: t.color.textSecondary,
+  },
+  itemMeta: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
+  },
+  typeBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  experiencePill: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  experienceThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surface,
+  },
+  experienceThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  experienceText: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  experienceName: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+  },
+  experienceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  ratingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 4,
+    borderRadius: theme.radius.pill,
+    backgroundColor: withAlpha(t.color.accent, 0.18),
+  },
+  ratingText: {
+    ...theme.typography.meta,
+    color: t.color.accentDark,
+  },
+  composerCtaCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: FEED_MISC[t.scheme].ctaBg,
+    borderWidth: 1,
+    borderColor: FEED_MISC[t.scheme].ctaBorder,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+  },
+  composerCtaIcon: {
+    fontSize: 14,
+    ...t.textDefault,
+  },
+  composerCtaTitle: {
+    fontSize: 13,
+    color: t.color.primaryFg,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  rodeWithRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  rodeWithLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.color.textSecondary,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.radius.pill,
+    maxWidth: '100%',
+  },
+  tagChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  feedReactionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+  },
+  reactionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rxChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: theme.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  rxChipIdle: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    opacity: 0.78,
+  },
+  rxChipActive: {
+    backgroundColor: withAlpha(t.color.primary, 0.12),
+    borderColor: withAlpha(t.color.primaryFg, 0.35),
+  },
+  rxEmoji: {
+    fontSize: 14,
+    ...t.textDefault,
+  },
+  rxCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  rxCountActive: {
+    color: t.color.primaryFg,
+    fontWeight: '800',
+  },
+  commentLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  commentLinkText: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  comments: {
+    gap: theme.spacing.sm,
+  },
+  commentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  commentContent: {
+    flex: 1,
+    gap: 2,
+  },
+  commentAuthorLine: {
+    flexShrink: 1,
+    ...t.textDefault,
+  },
+  commentAuthor: {
+    ...theme.typography.meta,
+    color: t.color.textPrimary,
+  },
+  commentTime: {
+    ...theme.typography.meta,
+    fontWeight: '400',
+    color: t.color.textSecondary,
+  },
+  commentBody: {
+    ...theme.typography.body,
+    color: t.color.textPrimary,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: theme.spacing.sm,
+  },
+  composerInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    fontSize: 16,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    minHeight: 44,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+  },
+  composerSend: {
+    padding: theme.spacing.sm,
+  },
+  error: {
+    color: t.color.danger,
+    fontSize: 13,
+  },
+  itemBusy: {
+    alignSelf: 'flex-start',
+  },
+  // Log composer modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: FEED_MISC[t.scheme].scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '85%',
+    ...t.shadow.floating,
+  },
+  modalScroll: {
+    gap: theme.spacing.sm,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.sm,
+  },
+  modalTitle: {
+    ...theme.typography.heading,
+    color: t.color.textPrimary,
+    flexShrink: 1,
+  },
+  modalClose: {
+    padding: theme.spacing.xs,
+    marginLeft: theme.spacing.sm,
+  },
+  label: {
+    ...theme.typography.meta,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+    marginTop: theme.spacing.sm,
+  },
+  helper: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
+  },
+  selectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  selectedText: {
+    flexShrink: 1,
+    flexGrow: 1,
+    gap: theme.spacing.xs,
+    alignItems: 'flex-start',
+  },
+  selectedName: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+    fontWeight: '700',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  ratingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.xs,
+  },
+  ratingTile: {
+    width: '18%',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+    minHeight: 42,
+  },
+  ratingTileActive: {
+    borderColor: t.color.primary,
+    backgroundColor: t.color.primary,
+  },
+  ratingTileText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  ratingTileTextActive: {
+    color: t.color.textOnPrimary,
+    fontWeight: '800',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  flexBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+  },
+  postDeleteBtn: {
+    padding: theme.spacing.xs,
+    marginRight: theme.spacing.xs,
+  },
+  memberPostBody: {
+    gap: theme.spacing.sm,
+  },
+  postCaption: {
+    ...theme.typography.body,
+    color: t.color.textPrimary,
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  slotWrapper: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    aspectRatio: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    backgroundColor: t.color.surfaceAlt,
+  },
+  slotFill: {
+    width: '100%',
+    height: '100%',
+  },
+  slotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  slotPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  slotPlaceholderText: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+  },
+  pickPhotosBox: {
+    paddingVertical: theme.spacing.sm,
+  },
+  selectedPhotosRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.sm,
+  },
+  selectedPhotosText: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    minHeight: 64,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    ...theme.typography.body,
+    fontSize: 15,
+  },
+  experienceNote: {
+    ...theme.typography.body,
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: t.color.textSecondary,
+    marginTop: 2,
+  },
+}));

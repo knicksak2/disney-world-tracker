@@ -282,6 +282,23 @@ describe('updateFoodItemLogInputSchema', () => {
     expect(updateFoodItemLogInputSchema.safeParse({ note: 'a'.repeat(2001) }).success).toBe(false);
   });
 
+  it('accepts valid visitedOn and userTz', () => {
+    const res = updateFoodItemLogInputSchema.safeParse({
+      visitedOn: '2026-10-18',
+      userTz: 'America/New_York',
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it('rejects invalid visitedOn format', () => {
+    expect(updateFoodItemLogInputSchema.safeParse({ visitedOn: 'invalid-date' }).success).toBe(false);
+  });
+
+  it('rejects invalid userTz', () => {
+    expect(updateFoodItemLogInputSchema.safeParse({ userTz: '' }).success).toBe(false);
+    expect(updateFoodItemLogInputSchema.safeParse({ userTz: 'invalid tz with spaces' }).success).toBe(false);
+  });
+
   it('rejects unknown fields (strict)', () => {
     expect(updateFoodItemLogInputSchema.safeParse({ rating: 8, extraField: 'bad' }).success).toBe(false);
   });

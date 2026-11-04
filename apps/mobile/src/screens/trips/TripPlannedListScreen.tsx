@@ -253,10 +253,10 @@ export default function TripPlannedListScreen({
   // done or not (R1.5).
   const [loggingItem, setLoggingItem] = useState<PlannedItemView | null>(null);
 
-  const tripQuery = useQuery<{ startDate?: string | null }, ApiError>({
+  const tripQuery = useQuery<{ status?: string | null; startDate?: string | null }, ApiError>({
     queryKey: tripDetailKeys.detail(tripId),
     queryFn: () =>
-      apiRequest<{ startDate?: string | null }>('GET', `/trips/${tripId}`),
+      apiRequest<{ status?: string | null; startDate?: string | null }>('GET', `/trips/${tripId}`),
     staleTime: 30 * 1000,
   });
   const tripStartDate = tripQuery.data?.startDate ?? null;
@@ -400,6 +400,10 @@ export default function TripPlannedListScreen({
 
   const openLogComposer = (item: PlannedItemView): void => {
     setActionError(null);
+    if (tripQuery.data?.status === 'upcoming') {
+      setActionError('Logging opens when the trip starts.');
+      return;
+    }
     setLoggingItem(item);
   };
 
@@ -418,6 +422,7 @@ export default function TripPlannedListScreen({
           id: loggingItem.experienceId,
           name: loggingItem.experienceName,
           park: loggingItem.park,
+          category: loggingItem.mealPeriod ? 'Dining' : null,
         }
       : null;
 

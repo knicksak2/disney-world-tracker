@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { PhotoReportReason } from '@dwt/shared';
 import { PHOTO_REPORT_REASONS } from '@dwt/shared';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../hooks/useKeyboardBottomInset';
 import { useReportPhoto } from './api';
 
 export interface PhotoReportSheetProps {
@@ -41,6 +44,7 @@ export function PhotoReportSheet({
   const styles = useStyles();
   const t = useAppTheme();
   const reportMutation = useReportPhoto();
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   const [selectedReason, setSelectedReason] = useState<PhotoReportReason>('not_food');
   const [note, setNote] = useState('');
@@ -80,8 +84,22 @@ export function PhotoReportSheet({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.sheet} testID="photo-report-sheet">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[
+          styles.overlay,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
+      >
+        <View
+          style={[
+            styles.sheet,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+          testID="photo-report-sheet"
+        >
           <View style={styles.header}>
             <Text style={styles.title} accessibilityRole="header">
               Report Photo
@@ -187,7 +205,7 @@ export function PhotoReportSheet({
             </ScrollView>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

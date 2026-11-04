@@ -37,6 +37,8 @@ import {
 
 import { AppError } from '../../../errors/AppError.js';
 import type { ExperienceLogRepo } from './repo.js';
+import type { TripLogPort } from './tripLogPort.js';
+import { validateNotFutureVisitDate } from './visitDate.js';
 
 // ---------------------------------------------------------------------------
 // Plugin options
@@ -59,6 +61,19 @@ export interface ExperienceLogRoutesOptions {
    * in tests that don't exercise pins; wired in `composeServices.ts`.
    */
   readonly awardPins?: (userId: string) => Promise<readonly string[]>;
+  /**
+   * Structural port delegating Trip-linked creates and feed purges to the Trip_Service.
+   */
+  readonly tripLog?: TripLogPort;
+  /**
+   * Notification dispatch for created Rode_With_Tags.
+   */
+  readonly onRodeWithTagCreated?: (e: {
+    readonly tagId: string;
+    readonly tripLogEntryId: string;
+    readonly taggedMemberId: string;
+    readonly taggingMemberId: string;
+  }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +131,66 @@ export function experienceLogRoutes(
         // valid originating log and is intentionally unaffected.
         validateNotFutureVisitDate(body.visitedOn, body.userTz, clock());
 
+        // R5.11: rodeWith without tripId must be rejected with validation_failed.
+        if (body.rodeWith && body.rodeWith.length > 0 && !body.tripId) {
+          throw new AppError(
+            'validation_failed',
+            'Rode with tags can only be supplied when linking to a trip.',
+            { field: 'rodeWith' },
+          );
+        }
+
+        // Trip-linked create via TripLogPort (R5.1-R5.5, R5.9)
+        if (body.tripId && options.tripLog) {
+          const tripLogResult = await options.tripLog.logToTrip({
+            tripId: body.tripId,
+            userId,
+            experienceId,
+            visitedOn: body.visitedOn,
+            userTz: body.userTz,
+            rating: body.rating ?? null,
+            note: body.note ?? null,
+            rodeWith: body.rodeWith ?? [],
+          });
+
+          for (const tag of tripLogResult.pendingTags) {
+            options.onRodeWithTagCreated?.({
+              tagId: tag.tagId,
+              tripLogEntryId: tripLogResult.logEntryId,
+              taggedMemberId: tag.taggedMemberId,
+              taggingMemberId: userId,
+            });
+          }
+
+          const newlyAwardedPinIds = await awardPinsSafely(
+            options.awardPins,
+            userId,
+            request,
+          );
+
+          const dto = {
+            id: tripLogResult.logId,
+            userId,
+            experienceId,
+            visitedOn: body.visitedOn,
+            userTz: body.userTz,
+            loggedAt: tripLogResult.loggedAt,
+            rating: body.rating ?? null,
+            note: body.note ?? null,
+          };
+
+          reply.code(201);
+          return {
+            ...dto,
+            tripLog: {
+              tripId: body.tripId,
+              logEntryId: tripLogResult.logEntryId,
+              taggedCount: tripLogResult.pendingTags.length,
+            },
+            newlyAwardedPinIds,
+          };
+        }
+
         const dto = await options.repo.addLog({
           userId,
           experienceId,
@@ -161,6 +236,11 @@ export function experienceLogRoutes(
           deleteParamsSchema,
           request.params,
         );
+
+        // Purge feed item (+ reactions/comments) before deleting the log (R11.1)
+        if (options.tripLog) {
+          await options.tripLog.purgeFeedForLog(logId, userId);
+        }
 
         const result = await options.repo.deleteLog(userId, experienceId, logId);
         if (!result.deleted) {
@@ -310,76 +390,6 @@ function parseOrAppError<S extends z.ZodTypeAny>(
     }
     throw err;
   }
-}
-
-/**
- * Reject a `visitedOn` strictly later than today in the caller's `userTz`
- * (R1.5). The TZ has passed the shared `ianaTzSchema` structural check; here it
- * is resolved against the live IANA database via `Intl` to derive
- * `today_in_user_tz`, and the two `YYYY-MM-DD` strings are compared
- * lexicographically (zero-padded ISO dates make string order equal calendar
- * order). Mirrors the Completion route's `completion_future_date` guard.
- */
-function validateNotFutureVisitDate(
-  visitedOn: string,
-  userTz: string,
-  now: Date,
-): void {
-  const todayInUserTz = formatYmdInTimeZone(now, userTz);
-  if (visitedOn > todayInUserTz) {
-    throw new AppError(
-      'log_future_date',
-      'Visit date must not be later than today in the user time zone.',
-      { field: 'visitedOn' },
-    );
-  }
-}
-
-/**
- * Format a `Date` as `YYYY-MM-DD` in the supplied IANA time zone via
- * `Intl.DateTimeFormat` (no bundled TZ database). An unknown zone raises
- * `RangeError`, which we translate to `validation_failed` on `userTz`; an
- * unexpected Intl shape fails closed the same way rather than letting a future
- * date slip through.
- */
-function formatYmdInTimeZone(now: Date, timeZone: string): string {
-  let parts: Intl.DateTimeFormatPart[];
-  try {
-    parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(now);
-  } catch (err) {
-    if (err instanceof RangeError) {
-      throw new AppError(
-        'validation_failed',
-        'Unknown IANA time zone identifier.',
-        { field: 'userTz' },
-      );
-    }
-    throw err;
-  }
-
-  let yyyy = '';
-  let mm = '';
-  let dd = '';
-  for (const part of parts) {
-    if (part.type === 'year') yyyy = part.value;
-    else if (part.type === 'month') mm = part.value;
-    else if (part.type === 'day') dd = part.value;
-  }
-
-  if (yyyy.length === 0 || mm.length === 0 || dd.length === 0) {
-    throw new AppError(
-      'validation_failed',
-      'Could not resolve current date in the user time zone.',
-      { field: 'userTz' },
-    );
-  }
-
-  return `${yyyy.padStart(4, '0')}-${mm}-${dd}`;
 }
 
 function zodErrorToAppError(error: ZodError): AppError {

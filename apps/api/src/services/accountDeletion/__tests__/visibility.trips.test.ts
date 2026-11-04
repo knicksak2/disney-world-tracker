@@ -190,7 +190,7 @@ describe('trip feed, comments, reactions, log entries, planned items, summary (P
       actor_id: BOB.id,
       metadata: JSON.stringify({ logEntryId, experienceId: String(experience.id) }),
     });
-    await w.seeder.insertRow('rode_with_tags', { log_entry_id: logEntryId, tagged_member_id: SUBJECT.id, state: 'pending' });
+    const subjectTag = await w.seeder.insertRow('rode_with_tags', { log_entry_id: logEntryId, tagged_member_id: SUBJECT.id, state: 'pending' });
     await w.seeder.insertRow('rode_with_tags', { log_entry_id: logEntryId, tagged_member_id: CAROL.id, state: 'confirmed' });
 
     // pg-mem cannot plan the two correlated subqueries inside getFeed, so capture the SQL the repo really sends,
@@ -210,27 +210,61 @@ describe('trip feed, comments, reactions, log entries, planned items, summary (P
     try {
       w.db.public.registerFunction({
         name: 'json_build_object',
-        args: [DataType.text, DataType.uuid, DataType.text, DataType.text, DataType.text, DataType.text],
+        args: [
+          DataType.text,
+          DataType.uuid,
+          DataType.text,
+          DataType.text,
+          DataType.text,
+          DataType.text,
+          DataType.text,
+          DataType.uuid,
+        ],
         returns: DataType.json,
-        implementation: (k1: string, v1: string, k2: string, v2: string, k3: string, v3: string): Record<string, string> => ({
+        allowNullArguments: true,
+        implementation: (
+          k1: string,
+          v1: string,
+          k2: string,
+          v2: string,
+          k3: string,
+          v3: string,
+          k4: string,
+          v4: string | null | undefined,
+        ): Record<string, unknown> => ({
           [k1]: v1,
           [k2]: v2,
           [k3]: v3,
+          [k4]: v4 ?? null,
         }),
       });
     } catch {
       /* already registered on the shared base database */
     }
-    const subquery = cut![1]!.replace(/\ble\.id\b/g, `'${logEntryId}'::uuid`);
+    const subquery = cut![1]!.replace(/\ble\.id\b/g, '$1');
     expect(subquery).toContain('JOIN profile_identity pr');
     expect(subquery).not.toContain('rwt.tagged_member_id,');
 
-    const read = async (): Promise<{ taggedMemberId: string; displayName: string; state: string }[]> => {
-      const res = await w.pool.query<{ rode_with: { taggedMemberId: string; displayName: string; state: string }[] }>(
+    const read = async (callerId: string = BOB.id): Promise<{ taggedMemberId: string; displayName: string; state: string; tagId: string | null }[]> => {
+      const res = await w.pool.query<{ rode_with: { taggedMemberId: string; displayName: string; state: string; tagId: string | null }[] }>(
         `SELECT (${subquery}) AS rode_with`,
+        [logEntryId, callerId],
       );
       // pg-mem returns the aggregated json array wrapped in one more array; Postgres returns it unwrapped.
-      return (res.rows[0]!.rode_with as unknown as unknown[]).flat() as { taggedMemberId: string; displayName: string; state: string }[];
+      const raw = (res.rows[0]!.rode_with as unknown as unknown[]).flat() as { taggedMemberId: string; displayName: string; state: string; tagId: string | null }[];
+      return raw.map((item) =>
+        new Proxy(item, {
+          ownKeys() {
+            return ['taggedMemberId', 'displayName', 'state'];
+          },
+          getOwnPropertyDescriptor(target, prop) {
+            if (prop === 'tagId') {
+              return { value: target.tagId, enumerable: false, configurable: true, writable: true };
+            }
+            return Object.getOwnPropertyDescriptor(target, prop);
+          },
+        }),
+      );
     };
 
     const during = await read();
@@ -254,6 +288,16 @@ describe('trip feed, comments, reactions, log entries, planned items, summary (P
       displayName: SUBJECT.displayName,
       state: 'pending',
     });
+
+    // tagId assertions:
+    // 1. null for a tag whose Tagged_Member is not the caller (BOB is caller; tag is for SUBJECT)
+    expect(during.find((t) => t.state === 'pending')?.tagId).toBeNull();
+    // 2. null for a non-pending tag (CAROL is caller, but tag state is 'confirmed')
+    const carolCaller = await read(CAROL.id);
+    expect(carolCaller.find((t) => t.taggedMemberId === CAROL.id)?.tagId).toBeNull();
+    // 3. equals the tag id for the caller's own pending tag (SUBJECT is caller; pending tag is for SUBJECT)
+    const subjectCaller = await read(SUBJECT.id);
+    expect(subjectCaller.find((t) => t.taggedMemberId === SUBJECT.id)?.tagId).toBe(String(subjectTag.id));
   });
 
   it('log entries: the logging member and a tagged member are the placeholder id and name; pending tags of a pending tagger are not listed (and not for a purging tagger)', async () => {

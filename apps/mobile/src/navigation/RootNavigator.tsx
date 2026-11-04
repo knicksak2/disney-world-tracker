@@ -29,6 +29,7 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 import AccountRestoredNotice from '../components/AccountRestoredNotice';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
+import LogToastHost from '../screens/logging/LogToastHost';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
 
@@ -302,5 +303,10 @@ export default function RootNavigator(): JSX.Element {
     };
   }, [clearToken, queryClient]);
 
-  return token === null ? <AuthStackNavigator /> : <RootStackNavigator />;
+  return (
+    <>
+      {token === null ? <AuthStackNavigator /> : <RootStackNavigator />}
+      <LogToastHost />
+    </>
+  );
 }

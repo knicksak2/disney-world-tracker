@@ -3,8 +3,8 @@
 // Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 5.3, 5.4, 5.7
 
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -575,5 +575,49 @@ describe('LogFoodItemModal — dark mode', () => {
     fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
     const banner = await screen.findByTestId('log-food-item-error');
     expect(StyleSheet.flatten(banner.props.style).backgroundColor).toBe(LOG_FOOD.dark.errorBannerBg);
+  });
+
+  it('uses undefined behavior on Android and lifts container when soft keyboard shows', async () => {
+    const originalPlatform = Platform.OS;
+    let keyboardShowCallback: ((e: unknown) => void) | undefined;
+    let keyboardHideCallback: (() => void) | undefined;
+
+    const addListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
+      if (event === 'keyboardDidShow') {
+        keyboardShowCallback = callback as (e: unknown) => void;
+      } else if (event === 'keyboardDidHide') {
+        keyboardHideCallback = callback as () => void;
+      }
+      return { remove: jest.fn() } as any;
+    });
+
+    try {
+      Platform.OS = 'android';
+      renderWithClient(<LogFoodItemModal foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />);
+      const modal = screen.getByTestId('log-food-item-modal');
+      const kav = modal.findByType(KeyboardAvoidingView);
+      expect(kav.props.behavior).toBeUndefined();
+
+      const initialBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(initialBackdropStyle.paddingBottom).toBeFalsy();
+
+      act(() => {
+        keyboardShowCallback?.({ endCoordinates: { height: 320, width: 400, screenX: 0, screenY: 480 } });
+      });
+
+      const activeBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(activeBackdropStyle.paddingBottom).toBe(320);
+
+      expect(screen.getByTestId('log-food-item-note-input')).toBeTruthy();
+
+      act(() => {
+        keyboardHideCallback?.();
+      });
+      const closedBackdropStyle = StyleSheet.flatten(kav.props.style);
+      expect(closedBackdropStyle.paddingBottom).toBeFalsy();
+    } finally {
+      addListenerSpy.mockRestore();
+      Platform.OS = originalPlatform;
+    }
   });
 });

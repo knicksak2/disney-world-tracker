@@ -1,0 +1,4050 @@
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+
+import {
+  type CrowdCalendarDayDTO,
+  type DayTouringHoursDTO,
+  type ExperienceDTO,
+  type MealPeriod,
+  type OptimizationStartMode,
+  type PlannedItemDTO,
+  type PlannedItemEditInput,
+  type ReservationKind,
+  type TouringStartMode,
+  type TripDTO,
+  type TripEditInput,
+  type TripOptimizationInput,
+  type TripOptimizationResult,
+  type WalkingSpeed,
+  type WalkWaitWeighting,
+  MEAL_WINDOWS,
+  MEAL_SERVICE_WINDOWS,
+  isMealPeriodServed,
+} from '@dwt/shared';
+
+import { ApiError, apiRequest } from '../../api/client';
+import type { TripsStackParamList } from '../../navigation/TripsStack';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  GradientHeader,
+  PrimaryButton,
+  SecondaryButton,
+  ScreenContainer,
+} from '../../theme/components';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { SCHEDULE } from './TripScheduleScreen.palette';
+import { tripPlannedListKeys } from './TripPlannedListScreen';
+import { tripDetailKeys } from './tripDetailQueryKeys';
+import { ExperiencePicker } from './ExperiencePicker';
+import { isKnownPark } from './experiencePickerFilters';
+import { useSetDayPark } from './TripDayParksSection';
+import { useAttachedExperienceListItems } from './useAttachedExperienceListItems';
+import { useFavoriteSourcedExperienceItems } from '../catalog/useFavoriteSourcedExperienceItems';
+import { reservationKindPresentation } from './reservations';
+import { TimeWheelPicker } from '../../components/TimeWheelPicker';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
+
+/**
+ * Timeline badge label for a Reservation (trip-reservations R4.3). Carries the
+ * kind as words, not just an icon or a color, so a real booking is
+ * distinguishable from a self-pinned time for every user.
+ */
+function reservationBadgeLabel(kind: ReservationKind): string {
+  return `🎟️ ${reservationKindPresentation(kind).label}`;
+}
+
+export type { TouringStartMode, OptimizationStartMode };
+
+export type ClientDayTouringHours = Omit<DayTouringHoursDTO, 'startMode'> & {
+  startMode?: OptimizationStartMode;
+};
+
+type Props = NativeStackScreenProps<TripsStackParamList, 'TripSchedule'>;
+
+import { WDW_TIME_ZONE, getTodayWDW, getWDWNowMinutes } from './wdwDate';
+export { WDW_TIME_ZONE, getTodayWDW, getWDWNowMinutes };
+
+function getETOffsetMinutes(dateString: string): number {
+  const d = new Date(`${dateString}T12:00:00Z`);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: WDW_TIME_ZONE,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(d);
+  let y = 0, mo = 0, day = 0, h = 0, m = 0, s = 0;
+  for (const part of parts) {
+    if (part.type === 'year') y = parseInt(part.value, 10);
+    if (part.type === 'month') mo = parseInt(part.value, 10);
+    if (part.type === 'day') day = parseInt(part.value, 10);
+    if (part.type === 'hour') h = parseInt(part.value, 10);
+    if (part.type === 'minute') m = parseInt(part.value, 10);
+    if (part.type === 'second') s = parseInt(part.value, 10);
+  }
+  if (h === 24) h = 0;
+  const localDate = Date.UTC(y, mo - 1, day, h, m, s);
+  return Math.round((localDate - d.getTime()) / 60000);
+}
+
+function formatTimeDisplay(isoString: string | null | undefined): string {
+  if (!isoString) return '--:--';
+  if (isoString.includes('T')) {
+    try {
+      const d = new Date(isoString);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat('en-US', {
+          timeZone: WDW_TIME_ZONE,
+          hour: 'numeric',
+          minute: '2-digit',
+        }).format(d);
+      }
+    } catch {
+      // fallback below
+    }
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(isoString)) {
+    const [hStr, mStr] = isoString.split(':');
+    const h = parseInt(hStr!, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12}:${mStr} ${ampm}`;
+  }
+  return isoString;
+}
+
+export function formatMinutesToTime(mins: number | null | undefined): string {
+  if (mins == null) return '';
+  const h24 = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const mStr = String(m).padStart(2, '0');
+  return `${h12}:${mStr} ${ampm}`;
+}
+
+/** Parse 'H:MM AM/PM' string into minutes from midnight (0..1439). */
+export function parseTimeToMinutes(timeStr: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(timeStr.trim());
+  if (!match) return null;
+  let hours = Number.parseInt(match[1]!, 10);
+  const minutes = Number.parseInt(match[2]!, 10);
+  const meridiem = match[3]!.toUpperCase();
+  if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+  if (meridiem === 'PM' && hours < 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+/** Format an `optimized_at` ISO timestamp as a short ET date + time (R8.2). */
+function formatLastOptimized(isoString: string | null | undefined): string | null {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: WDW_TIME_ZONE,
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(d);
+  } catch {
+    return null;
+  }
+}
+
+function formatDatePill(dateStr: string): string {
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (y && m && d) {
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+  } catch {
+    // fallback below
+  }
+  return dateStr;
+}
+
+function generateDateRange(startDateStr?: string, endDateStr?: string, filterPastDates = false): string[] {
+  if (!startDateStr) return [];
+  if (!endDateStr || endDateStr === startDateStr) {
+    if (filterPastDates && startDateStr < getTodayWDW()) return [];
+    return [startDateStr];
+  }
+  try {
+    const dates: string[] = [];
+    const curr = new Date(startDateStr + 'T00:00:00');
+    const end = new Date(endDateStr + 'T00:00:00');
+    const todayStr = filterPastDates ? getTodayWDW() : '';
+    while (curr <= end && dates.length < 14) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, '0');
+      const d = String(curr.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      if (!filterPastDates || dateStr >= todayStr) {
+        dates.push(dateStr);
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+    return dates;
+  } catch {
+    return filterPastDates && startDateStr < getTodayWDW() ? [] : [startDateStr];
+  }
+}
+
+function normalizeDateStr(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  if (dateStr.includes('T')) return dateStr.split('T')[0] ?? null;
+  return dateStr;
+}
+
+function parseTimeInputToIso(inputStr: string, baseDateStr: string): string | null {
+  const trimmed = inputStr.trim().toUpperCase();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  if (!match) return null;
+
+  let hours = parseInt(match[1]!, 10);
+  const minutes = parseInt(match[2]!, 10);
+  const ampm = match[3];
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  if (ampm === 'PM' && hours < 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+
+  const normDate = normalizeDateStr(baseDateStr);
+  const datePart = normDate && /^\d{4}-\d{2}-\d{2}$/.test(normDate) ? normDate : '2026-08-20';
+
+  const offsetMins = getETOffsetMinutes(datePart);
+  const midnightET_UTC = new Date(`${datePart}T00:00:00Z`).getTime() - offsetMins * 60000;
+  const targetUTC = midnightET_UTC + (hours * 60 + minutes) * 60000;
+
+  return new Date(targetUTC).toISOString();
+}
+
+function getLLWindowInfo(passTimeText: string, activeDate: string): { windowStr: string; graceStr: string } | null {
+  if (!passTimeText.trim()) return null;
+  const iso = parseTimeInputToIso(passTimeText, activeDate);
+  if (!iso) return null;
+
+  const normDate = normalizeDateStr(activeDate) ?? '2026-08-20';
+  const targetTime = new Date(iso).getTime();
+  const offsetMins = getETOffsetMinutes(normDate);
+  const midnightET_UTC = new Date(`${normDate}T00:00:00Z`).getTime() - offsetMins * 60000;
+  const startMins = Math.round((targetTime - midnightET_UTC) / 60000);
+
+  const formatMins = (m: number) => {
+    const norm = (m + 1440) % 1440;
+    let h = Math.floor(norm / 60);
+    const min = norm % 60;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${String(min).padStart(2, '0')} ${ampm}`;
+  };
+
+  return {
+    windowStr: `${formatMins(startMins)} – ${formatMins(startMins + 60)}`,
+    graceStr: `${formatMins(startMins - 5)} – ${formatMins(startMins + 75)}`,
+  };
+}
+
+export function getMealWindowLabel(period: MealPeriod): string {
+  const w = MEAL_WINDOWS[period];
+  if (!w) return '';
+  return `${formatMinutesToTime(w.startMinutes)} – ${formatMinutesToTime(w.endMinutes)}`;
+}
+
+export function getMealServiceWindowLabel(period: MealPeriod): string {
+  const w = MEAL_SERVICE_WINDOWS[period];
+  if (!w) return '';
+  return `${formatMinutesToTime(w.startMinutes)} – ${formatMinutesToTime(w.endMinutes)}`;
+}
+
+// The hour / minute / AM-PM wheel and its value parsing now live in the shared
+// `TimeWheelPicker` component (trip-reservations task 8.1), so this screen and
+// the Reservations screen cannot drift apart.
+
+function formatOptimizationWarning(warningKey: string, items: readonly PlannedItemDTO[]): string {
+  if (warningKey === 'infeasible_fixed_gap') {
+    return 'Fixed reservation times are tight or overlap with travel time.';
+  }
+  if (warningKey === 'expired_lightning_lane') {
+    return 'A Lightning Lane return window expired before arrival.';
+  }
+  if (warningKey === 'over_constrained') {
+    return 'Some lower-priority items could not be fitted into today’s timeline.';
+  }
+  if (warningKey.startsWith('lightning_lane:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `⚡ ${item.experienceName} planned via Lightning Lane` : '⚡ Planned via Lightning Lane';
+  }
+  if (warningKey.startsWith('single_rider:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `👤 ${item.experienceName} planned via Single Rider line` : '👤 Planned via Single Rider line';
+  }
+  if (warningKey.startsWith('virtual_queue:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `🎟️ ${item.experienceName} uses Virtual Queue (join at 7 AM / 1 PM)` : '🎟️ Virtual Queue item';
+  }
+  if (warningKey.startsWith('show:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `🎭 ${item.customTitle || item.experienceName} scheduled for showtime` : '🎭 Scheduled for showtime';
+  }
+  if (warningKey.startsWith('typical_showtimes:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item
+      ? `🎭 Estimated showtime based on past schedule for ${item.customTitle || item.experienceName}`
+      : '🎭 Estimated showtime based on past schedule';
+  }
+  if (warningKey.startsWith('outside_window:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `⚠️ ${item.customTitle || item.experienceName} scheduled outside target time window` : '⚠️ Item scheduled outside target time window';
+  }
+  if (warningKey.startsWith('showtimes_unavailable:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `⚠️ No available showtimes remaining today for ${item.customTitle || item.experienceName}` : '⚠️ No available showtimes remaining today for show';
+  }
+  if (warningKey.startsWith('show_missed:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item ? `⚠️ Missed all available showtimes for ${item.customTitle || item.experienceName}` : '⚠️ Missed all available showtimes for show';
+  }
+  return warningKey;
+}
+
+export interface ParkHoursDetails {
+  openTimeText: string;
+  earlyEntryTimeText: string | null;
+  hasEarlyEntry: boolean;
+}
+
+export function getParkHoursDetails(parkName: string): ParkHoursDetails {
+  switch (parkName) {
+    case 'Magic Kingdom':
+      return {
+        openTimeText: '9:00 AM - 10:00 PM',
+        earlyEntryTimeText: '8:30 AM',
+        hasEarlyEntry: true,
+      };
+    case 'EPCOT':
+    case 'Epcot':
+      return {
+        openTimeText: '9:00 AM - 9:00 PM',
+        earlyEntryTimeText: '8:30 AM',
+        hasEarlyEntry: true,
+      };
+    case 'Hollywood Studios':
+      return {
+        openTimeText: '9:00 AM - 9:00 PM',
+        earlyEntryTimeText: '8:30 AM',
+        hasEarlyEntry: true,
+      };
+    case 'Animal Kingdom':
+      return {
+        openTimeText: '8:00 AM - 6:00 PM',
+        earlyEntryTimeText: '7:30 AM',
+        hasEarlyEntry: true,
+      };
+    case 'Typhoon Lagoon':
+      return {
+        openTimeText: '10:00 AM - 5:00 PM',
+        earlyEntryTimeText: null,
+        hasEarlyEntry: false,
+      };
+    case 'Blizzard Beach':
+      return {
+        openTimeText: '10:00 AM - 5:00 PM',
+        earlyEntryTimeText: null,
+        hasEarlyEntry: false,
+      };
+    case 'Disney Springs':
+      return {
+        openTimeText: '10:00 AM - 11:00 PM',
+        earlyEntryTimeText: null,
+        hasEarlyEntry: false,
+      };
+    default:
+      return {
+        openTimeText: '9:00 AM - 9:00 PM',
+        earlyEntryTimeText: '8:30 AM',
+        hasEarlyEntry: true,
+      };
+  }
+}
+
+export default function TripScheduleScreen({ navigation, route }: Props): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const pal = usePalette(SCHEDULE);
+  const { tripId } = route.params;
+  const queryClient = useQueryClient();
+
+  const tripQuery = useQuery<TripDTO, ApiError>({
+    queryKey: tripDetailKeys.detail(tripId),
+    queryFn: () => apiRequest<TripDTO>('GET', `/trips/${tripId}`),
+  });
+
+  const itemsQuery = useQuery<readonly PlannedItemDTO[], ApiError>({
+    queryKey: tripPlannedListKeys.items(tripId),
+    queryFn: () => apiRequest<readonly PlannedItemDTO[]>('GET', `/trips/${tripId}/planned-items`),
+  });
+
+  const catalogQuery = useQuery<{ experiences: readonly ExperienceDTO[] }, ApiError>({
+    queryKey: ['catalog', 'all'],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest<{ experiences: readonly ExperienceDTO[] }>('GET', '/catalog');
+        return res ?? { experiences: [] };
+      } catch {
+        return { experiences: [] };
+      }
+    },
+  });
+
+  const catalogMap = new Map<string, ExperienceDTO>(
+    (catalogQuery.data?.experiences ?? []).map((exp) => [exp.id, exp])
+  );
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<PlannedItemDTO | null>(null);
+  const [draftItem, setDraftItem] = useState<PlannedItemDTO | null>(null);
+  const {
+    keyboardInset: editItemKeyboardInset,
+    getAvailableModalHeight: getEditItemModalHeight,
+  } = useKeyboardBottomInset(editingItem !== null);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+
+  // Schedule Builder / Planned List Picker Integration (Requirement 15):
+  // merges every attached Experience_List's contents into one flat,
+  // deduplicated candidate set for ExperiencePicker's "My Lists" tab. Only
+  // fetched while the add-item modal is open, mirroring showAddModal-gated
+  // queries elsewhere in this screen.
+  // ExperiencePicker "Favorites" Tab (experience-favorites Requirement 6,
+  // amended): resolves the User's Favorited_Set into full ExperienceDTO rows.
+  // Shares the ['catalog', 'all'] query key with this screen's own
+  // catalogQuery above, so no second GET /catalog is issued. Only fetched
+  // while the add-item modal is open, mirroring attachedListItems' gating.
+  const favoriteItems = useFavoriteSourcedExperienceItems(showAddModal);
+
+  const attachedListItems = useAttachedExperienceListItems(
+    tripQuery.data?.experienceLists,
+    showAddModal,
+  );
+  const [addedScheduleCounts, setAddedScheduleCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+
+  const [walkingSpeed, setWalkingSpeed] = useState<WalkingSpeed>('moderate');
+  const [walkWaitWeighting, setWalkWaitWeighting] = useState<WalkWaitWeighting>('balanced');
+  const [earlyEntryEligible, setEarlyEntryEligible] = useState<boolean>(false);
+  const [dayHoursMap, setDayHoursMap] = useState<Record<string, ClientDayTouringHours>>({});
+
+  const [passTimeText, setPassTimeText] = useState<string>('');
+  const [timeError, setTimeError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (tripQuery.data) {
+      if (tripQuery.data.walkingSpeed) setWalkingSpeed(tripQuery.data.walkingSpeed);
+      if (tripQuery.data.walkWaitWeighting) setWalkWaitWeighting(tripQuery.data.walkWaitWeighting);
+      if (tripQuery.data.earlyEntryEligible !== undefined) setEarlyEntryEligible(tripQuery.data.earlyEntryEligible);
+      if (tripQuery.data.dayTouringHours !== undefined) {
+        setDayHoursMap((prev) => {
+          const serverDays = (tripQuery.data!.dayTouringHours as Record<string, ClientDayTouringHours> | null | undefined) ?? {};
+          const next: Record<string, ClientDayTouringHours> = {};
+
+          for (const [d, sVal] of Object.entries(serverDays)) {
+            next[d] = { ...sVal };
+          }
+
+          for (const [d, prevSetting] of Object.entries(prev)) {
+            const serverSetting = serverDays[d];
+            next[d] = {
+              ...prevSetting,
+              ...(serverSetting ?? {}),
+              ...(prevSetting.startMode === 'now' ? { startMode: 'now' } : {}),
+            };
+            if (serverSetting?.startingPark) {
+              next[d]!.startingPark = serverSetting.startingPark;
+            } else {
+              delete next[d]!.startingPark;
+            }
+          }
+          return next;
+        });
+      }
+    }
+  }, [tripQuery.data]);
+
+  React.useEffect(() => {
+    if (selectedDate === null && tripQuery.data?.startDate) {
+      const futureDates = generateDateRange(tripQuery.data.startDate, tripQuery.data.endDate, true);
+      setSelectedDate(futureDates.length > 0 ? futureDates[0]! : tripQuery.data.startDate);
+    }
+  }, [selectedDate, tripQuery.data?.startDate, tripQuery.data?.endDate]);
+
+  const tripPatchMutation = useMutation<TripDTO, ApiError, TripEditInput>({
+    mutationFn: (body) => apiRequest<TripDTO>('PATCH', `/trips/${tripId}`, body),
+    onSuccess: (updated) => {
+      if (updated.walkingSpeed) setWalkingSpeed(updated.walkingSpeed);
+      if (updated.walkWaitWeighting) setWalkWaitWeighting(updated.walkWaitWeighting);
+      if (updated.earlyEntryEligible !== undefined) setEarlyEntryEligible(updated.earlyEntryEligible);
+      if (updated.dayTouringHours) {
+        setDayHoursMap((prev) => {
+          const next: Record<string, ClientDayTouringHours> = {
+            ...(updated.dayTouringHours as Record<string, ClientDayTouringHours>),
+          };
+          for (const [d, prevSetting] of Object.entries(prev)) {
+            if (prevSetting.startMode === 'now') {
+              next[d] = { ...next[d], startMode: 'now' };
+            }
+          }
+          return next;
+        });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: tripDetailKeys.detail(tripId),
+      });
+    },
+  });
+
+  const addMutation = useMutation<
+    PlannedItemDTO,
+    ApiError,
+    | { experienceId: string; plannedDate?: string }
+    | { itemType: 'break'; customTitle?: string; durationMinutes?: number; plannedDate?: string }
+  >({
+    mutationFn: (body) => apiRequest<PlannedItemDTO>('POST', `/trips/${tripId}/planned-items`, body),
+    onSuccess: (_data, variables) => {
+      if ('experienceId' in variables && variables.experienceId) {
+        setAddedScheduleCounts((prev) => {
+          const next = new Map(prev);
+          next.set(variables.experienceId, (next.get(variables.experienceId) ?? 0) + 1);
+          return next;
+        });
+      }
+      optimizeMutation.reset();
+      void queryClient.invalidateQueries({
+        queryKey: tripPlannedListKeys.items(tripId),
+      });
+    },
+  });
+
+  const handleOpenAddModal = () => {
+    setAddedScheduleCounts(new Map());
+    setShowAddModal(true);
+  };
+
+  const handleCloseAddModal = () => {
+    setShowAddModal(false);
+    setAddedScheduleCounts(new Map());
+  };
+
+  const editMutation = useMutation<void, ApiError, { itemId: string; body: PlannedItemEditInput }>({
+    mutationFn: async ({ itemId, body }) => {
+      await apiRequest('PATCH', `/trips/${tripId}/planned-items/${itemId}`, body);
+    },
+    onSuccess: () => {
+      setEditingItem(null);
+      setDraftItem(null);
+      optimizeMutation.reset();
+      void queryClient.invalidateQueries({
+        queryKey: tripPlannedListKeys.items(tripId),
+      });
+    },
+    onError: (err) => {
+      setTimeError(err.message || 'Failed to save changes');
+    },
+  });
+
+  const deleteMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (itemId) => {
+      await apiRequest('DELETE', `/trips/${tripId}/planned-items/${itemId}`);
+    },
+    onSuccess: () => {
+      setEditingItem(null);
+      setDraftItem(null);
+      optimizeMutation.reset();
+      void queryClient.invalidateQueries({
+        queryKey: tripPlannedListKeys.items(tripId),
+      });
+    },
+  });
+
+  const optimizeMutation = useMutation<TripOptimizationResult, ApiError, TripOptimizationInput | string>({
+    mutationFn: async (input) => {
+      const body = typeof input === 'string' ? { date: input } : input;
+      return apiRequest<TripOptimizationResult>('POST', `/trips/${tripId}/schedule/optimize`, body);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: tripPlannedListKeys.items(tripId),
+      });
+    },
+  });
+
+  const items = itemsQuery.data ?? [];
+
+  // Requirement 15.5: Trip-wide (any date) set of Experience ids already on
+  // the Planned_List, for the ExperiencePicker's "Already added" tag —
+  // reusing the same experienceId-matching approach
+  // planned-list-completion-sync established (a `break`-type item has
+  // `experienceId: null`, so it is filtered out here).
+  const existingExperienceIds = React.useMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        items
+          .map((item) => item.experienceId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    [items],
+  );
+
+  const activeDate = selectedDate ?? tripQuery.data?.startDate ?? 'No Date';
+  const isToday = activeDate === getTodayWDW();
+  const tripDates = generateDateRange(tripQuery.data?.startDate, tripQuery.data?.endDate, true);
+
+  const activeDateNorm = normalizeDateStr(activeDate);
+  const dayItems = items.filter((i) => normalizeDateStr(i.plannedDate) === activeDateNorm);
+  const unassignedItems = items.filter((i) => !i.plannedDate);
+  const scheduledDayItems = dayItems
+    .filter((i) => i.plannedTime)
+    .sort((a, b) => (a.plannedTime ?? '').localeCompare(b.plannedTime ?? ''));
+  const unscheduledDayItems = dayItems.filter((i) => !i.plannedTime);
+
+  const activeDayParks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
+
+  const setDayParkMutation = useSetDayPark(tripId);
+
+  const activeDaySettings: ClientDayTouringHours = (activeDate !== 'No Date' && dayHoursMap[activeDate]) || {};
+  const primaryParkName = activeDaySettings.startingPark || activeDayParks[0];
+  const primaryParkInfo = primaryParkName ? getParkHoursDetails(primaryParkName) : null;
+  const primaryParkOpenHour = primaryParkInfo ? parseInt(primaryParkInfo.openTimeText.split(':')[0]!, 10) : 9;
+
+  const isParkMismatch = React.useMemo(() => {
+    if (activeDate === 'No Date') return false;
+    const assignedPark = activeDaySettings.startingPark;
+    if (!isKnownPark(assignedPark)) return false;
+    if (activeDayParks.length !== 1) return false;
+    return activeDayParks[0] !== assignedPark;
+  }, [activeDate, activeDaySettings.startingPark, activeDayParks]);
+
+  const mismatchTargetPark = isParkMismatch ? activeDayParks[0] : null;
+
+  const handleSwitchDayPark = () => {
+    if (!mismatchTargetPark || activeDate === 'No Date') return;
+    const target = mismatchTargetPark;
+    setDaySetting({ startingPark: target });
+    setDayParkMutation.mutate({ date: activeDate, park: target });
+  };
+
+  const nowMinutesWDW = getWDWNowMinutes();
+  const currentUseEarlyEntry = activeDaySettings.useEarlyEntry ?? earlyEntryEligible;
+  const currentUseExtendedEvening = activeDaySettings.useExtendedEvening ?? false;
+  const currentHasAfterHoursTicket = activeDaySettings.hasAfterHoursTicket ?? false;
+
+  const parkOpenMinutes = primaryParkOpenHour * 60;
+  const parkArrivalMinutes = parkOpenMinutes - (currentUseEarlyEntry ? 30 : 0);
+  const roundedNowMinutes = Math.min(Math.ceil(nowMinutesWDW / 15) * 15, 1439);
+  const isParkAlreadyOpen = isToday && nowMinutesWDW >= parkArrivalMinutes;
+  const isPartyMixInPassed = isToday && nowMinutesWDW >= 16 * 60;
+
+  // On Today, if the park is already open and no explicit startMode was saved, default to 'now'.
+  const defaultStartMode: OptimizationStartMode =
+    isToday && isParkAlreadyOpen ? 'now' : 'park_open';
+  const currentStartMode: OptimizationStartMode = activeDaySettings.startMode ?? defaultStartMode;
+
+  const fallbackStartMinutes = activeDaySettings.startHour !== undefined ? activeDaySettings.startHour * 60 : parkOpenMinutes;
+  const currentStartMinutes =
+    currentStartMode === 'now'
+      ? roundedNowMinutes
+      : currentStartMode === 'party_mix_in'
+      ? (isToday ? Math.max(16 * 60, roundedNowMinutes) : 16 * 60)
+      : currentStartMode === 'custom'
+      ? (isToday
+          ? Math.max(activeDaySettings.startMinutes ?? fallbackStartMinutes, roundedNowMinutes)
+          : (activeDaySettings.startMinutes ?? fallbackStartMinutes))
+      : (isToday && isParkAlreadyOpen
+          ? roundedNowMinutes
+          : (activeDaySettings.startMinutes ?? fallbackStartMinutes));
+  const currentStartHour =
+    currentStartMode === 'now'
+      ? Math.floor(roundedNowMinutes / 60)
+      : currentStartMode === 'party_mix_in'
+      ? 16
+      : (activeDaySettings.startHour ?? Math.floor(currentStartMinutes / 60));
+  const currentEndHour = activeDaySettings.endHour ?? 21;
+
+  const setDaySetting = (updates: Partial<ClientDayTouringHours>) => {
+    if (activeDate === 'No Date') return;
+    setDayHoursMap((prev) => ({
+      ...prev,
+      [activeDate]: {
+        startHour: currentStartHour,
+        endHour: currentEndHour,
+        startMinutes: currentStartMinutes,
+        startMode: currentStartMode,
+        useEarlyEntry: currentUseEarlyEntry,
+        useExtendedEvening: currentUseExtendedEvening,
+        hasAfterHoursTicket: currentHasAfterHoursTicket,
+        ...(activeDaySettings.startingPark ? { startingPark: activeDaySettings.startingPark } : {}),
+        ...prev[activeDate],
+        ...updates,
+      },
+    }));
+  };
+
+  const handleSaveScheduleSettings = () => {
+    const serverDayHours = (tripQuery.data?.dayTouringHours as Record<string, ClientDayTouringHours> | undefined) ?? {};
+
+    const updatedDaySetting: ClientDayTouringHours = {
+      startHour: currentStartHour,
+      endHour: currentEndHour,
+      useEarlyEntry: currentUseEarlyEntry,
+      useExtendedEvening: currentUseExtendedEvening,
+      hasAfterHoursTicket: currentHasAfterHoursTicket,
+      ...(activeDaySettings.startingPark ? { startingPark: activeDaySettings.startingPark } : {}),
+      ...(activeDaySettings.startMinutes !== undefined ? { startMinutes: activeDaySettings.startMinutes } : {}),
+      ...(activeDaySettings.startMode ? { startMode: activeDaySettings.startMode } : {}),
+    };
+
+    const updatedMap: Record<string, ClientDayTouringHours> = {
+      ...dayHoursMap,
+      ...(activeDate !== 'No Date' ? { [activeDate]: updatedDaySetting } : {}),
+    };
+
+    for (const [d, sVal] of Object.entries(serverDayHours)) {
+      if (!updatedMap[d]) {
+        updatedMap[d] = { ...sVal };
+      }
+    }
+
+    setDayHoursMap(updatedMap);
+
+    // Sanitize for DB persistence: exclude ephemeral 'now' from dayTouringHoursSchema
+    const persistedDayTouringHours: Record<string, DayTouringHoursDTO> = {};
+    for (const [d, settings] of Object.entries(updatedMap)) {
+      const { startMode, ...rest } = settings;
+      persistedDayTouringHours[d] = {
+        ...rest,
+        ...(startMode && startMode !== 'now' ? { startMode } : {}),
+      };
+    }
+
+    tripPatchMutation.mutate({
+      walkingSpeed,
+      walkWaitWeighting,
+      earlyEntryEligible,
+      dayTouringHours: persistedDayTouringHours,
+    });
+    setShowSettingsModal(false);
+  };
+
+  // Only trust a fresh optimize result while it's still for the active date —
+  // otherwise a stale result from a previously optimized date would bleed
+  // into every subsequently selected date (it matches optimized item ids
+  // against the whole trip's `items`, not just the active day's).
+  const optimizeMutationDate =
+    optimizeMutation.variables != null
+      ? typeof optimizeMutation.variables === 'string'
+        ? optimizeMutation.variables
+        : optimizeMutation.variables.date
+      : null;
+  const optResult =
+    optimizeMutation.data && optimizeMutationDate === activeDate ? optimizeMutation.data : undefined;
+
+  // R8.2 / R8.3: a day is "optimized" if it was just optimized this session
+  // (`optResult`) or its scheduled items carry a persisted optimization result
+  // (`optimizedAt`). When it has never been optimized we show a notice and omit
+  // wait pills rather than fabricating placeholder numbers.
+  const persistedOptimizedAt = scheduledDayItems
+    .map((i) => i.optimizedAt)
+    .filter((t): t is string => t != null);
+  const dayIsOptimized = Boolean(optResult) || persistedOptimizedAt.length > 0;
+  const lastOptimizedAt =
+    persistedOptimizedAt.length > 0
+      ? persistedOptimizedAt.reduce((a, b) => (a > b ? a : b))
+      : null;
+
+  const editingExpInfo = draftItem?.experienceId ? catalogMap.get(draftItem.experienceId) : undefined;
+  const isEditingShowOrParade = Boolean(
+    editingExpInfo?.category === 'Show' || editingExpInfo?.category === 'Parade'
+  );
+  const isEditingRideOrMeet = Boolean(
+    editingExpInfo?.category === 'Ride' || editingExpInfo?.category === 'Character_Meet'
+  );
+  const isAttraction = Boolean(
+    isEditingShowOrParade ||
+      isEditingRideOrMeet ||
+      (!editingExpInfo && draftItem?.itemType !== 'break' && !draftItem?.servedMealPeriods?.length && draftItem?.mealPeriod == null)
+  );
+
+  const isEditingRestaurant = Boolean(
+    editingExpInfo?.category === 'Restaurant' ||
+      (draftItem?.servedMealPeriods && draftItem.servedMealPeriods.length > 0) ||
+      (!isAttraction && (draftItem?.itemType === 'break' || draftItem?.mealPeriod != null))
+  );
+
+  const isEditingBreak = Boolean(draftItem?.itemType === 'break');
+  const isEditingRideLike = Boolean(
+    draftItem && !isEditingBreak && (editingExpInfo?.category === 'Ride' || editingExpInfo?.category === 'Character_Meet')
+  );
+  const isEligibleForLightningLane = Boolean(
+    draftItem &&
+      !isEditingBreak &&
+      !isEditingRestaurant &&
+      (isAttraction || !editingExpInfo?.category)
+  );
+  const isEligibleForSingleRider = Boolean(
+    draftItem &&
+      !isEditingBreak &&
+      (editingExpInfo?.category === 'Ride' || (!editingExpInfo?.category && isEditingRideLike))
+  );
+  const targetDateForModal = normalizeDateStr(draftItem?.plannedDate) ?? normalizeDateStr(activeDate);
+  const targetParkForModal = draftItem?.park ?? editingExpInfo?.park ?? 'Magic Kingdom';
+
+  // `GET /crowd-calendar` responds with `{ days: [...] }`, not a bare array — see
+  // `CrowdCalendarScreen`, which consumes the same endpoint. Unwrapping `days` is
+  // required; indexing the envelope directly yields `undefined` and silently
+  // renders as "showtimes not published yet" even when patterns exist.
+  const crowdCalendarQuery = useQuery<readonly CrowdCalendarDayDTO[], ApiError>({
+    queryKey: ['crowd-calendar', targetParkForModal, targetDateForModal],
+    queryFn: async () => {
+      if (!targetDateForModal) return [];
+      const res = await apiRequest<{ readonly days: readonly CrowdCalendarDayDTO[] }>(
+        'GET',
+        `/crowd-calendar?park=${encodeURIComponent(targetParkForModal)}&from=${targetDateForModal}&to=${targetDateForModal}`
+      );
+      return res?.days ?? [];
+    },
+    enabled: Boolean(editingItem && isEditingShowOrParade && targetDateForModal),
+  });
+
+  const showtimesList: readonly string[] = React.useMemo(() => {
+    if (!isEditingShowOrParade || !crowdCalendarQuery.data || crowdCalendarQuery.data.length === 0) {
+      return [];
+    }
+    const day = crowdCalendarQuery.data[0];
+    const sig = day?.rideSignals?.find((r) => r.experienceId === draftItem?.experienceId);
+    return sig?.showtimes ?? [];
+  }, [isEditingShowOrParade, crowdCalendarQuery.data, draftItem?.experienceId]);
+
+  const handleQuickEdit = (item: PlannedItemDTO, partial: Partial<PlannedItemEditInput>) => {
+    const rawDate = partial.plannedDate !== undefined ? partial.plannedDate : item.plannedDate;
+    const normDate = normalizeDateStr(rawDate);
+    const body: PlannedItemEditInput = {
+      ...(normDate ? { plannedDate: normDate } : {}),
+      ...(item.plannedTime ? { plannedTime: item.plannedTime } : {}),
+      isFixed: item.isFixed ?? false,
+      isLightningLane: item.isLightningLane ?? false,
+      useSingleRider: item.useSingleRider ?? false,
+      priority: item.priority ?? 2,
+      itemType: item.itemType ?? 'experience',
+      ...(item.durationMinutes ? { durationMinutes: item.durationMinutes } : {}),
+      ...partial,
+    };
+    if (partial.plannedDate === null) {
+      body.plannedDate = null;
+    }
+    editMutation.mutate({
+      itemId: item.id,
+      body,
+    });
+  };
+
+  function getEffectiveDefaultDuration(item: PlannedItemDTO | null, exp: ExperienceDTO | undefined): number {
+    if (!item) return 15;
+    if (item.durationMinutes != null) return item.durationMinutes;
+    if (item.itemType === 'break') return 60;
+    if (exp?.category === 'Restaurant') {
+      const sub = (exp.subType ?? '').toLowerCase();
+      if (sub.includes('quick service') || sub.includes('counter')) return 30;
+      if (sub.includes('signature') || sub.includes('fine')) return 90;
+      return 60;
+    }
+    if (exp?.category === 'Show' || exp?.category === 'Parade') {
+      return 30;
+    }
+    if (
+      exp?.category === 'Resort' ||
+      exp?.category === 'Recreation' ||
+      exp?.category === 'Spa' ||
+      exp?.category === 'Tour' ||
+      exp?.category === 'Event'
+    ) {
+      return 60;
+    }
+    return 15;
+  }
+
+  type TimingMode = 'any_time' | 'soft_window' | 'exact_time';
+  const [timingMode, setTimingMode] = useState<TimingMode>('any_time');
+  const [selectedMealPeriod, setSelectedMealPeriod] = useState<MealPeriod | null>(null);
+  const [windowStartMins, setWindowStartMins] = useState<number | null>(null);
+  const [windowEndMins, setWindowEndMins] = useState<number | null>(null);
+  const [draftCustomTitle, setDraftCustomTitle] = useState<string>('');
+  const [draftDuration, setDraftDuration] = useState<number | null>(null);
+
+  const openEditModal = (item: PlannedItemDTO) => {
+    setEditingItem(item);
+    setDraftItem({ ...item });
+    setDraftCustomTitle(item.customTitle ?? '');
+    setDraftDuration(item.durationMinutes ?? null);
+    if (item.isFixed || item.isLightningLane) {
+      setTimingMode('exact_time');
+      setSelectedMealPeriod(null);
+      setWindowStartMins(null);
+      setWindowEndMins(null);
+      setPassTimeText(item.plannedTime ? formatTimeDisplay(item.plannedTime) : '');
+    } else if (item.mealPeriod || item.windowStartMinutes != null || item.windowEndMinutes != null) {
+      setTimingMode('soft_window');
+      setSelectedMealPeriod(item.mealPeriod ?? null);
+      setWindowStartMins(item.windowStartMinutes ?? null);
+      setWindowEndMins(item.windowEndMinutes ?? null);
+      setPassTimeText('');
+    } else {
+      setTimingMode('any_time');
+      setSelectedMealPeriod(null);
+      setWindowStartMins(null);
+      setWindowEndMins(null);
+      setPassTimeText('');
+    }
+    setTimeError(null);
+  };
+
+  const handleSaveModal = () => {
+    if (!draftItem || !editingItem) {
+      setEditingItem(null);
+      setDraftItem(null);
+      return;
+    }
+
+    const expInfo = draftItem.experienceId ? catalogMap.get(draftItem.experienceId) : undefined;
+    const isShowOrParade = Boolean(
+      expInfo?.category === 'Show' || expInfo?.category === 'Parade'
+    );
+    const isRideOrMeet = Boolean(
+      expInfo?.category === 'Ride' || expInfo?.category === 'Character_Meet'
+    );
+    const isAttractionExp = Boolean(
+      isShowOrParade ||
+        isRideOrMeet ||
+        (!expInfo && draftItem.itemType !== 'break' && !draftItem.servedMealPeriods?.length && draftItem.mealPeriod == null)
+    );
+    const isRestaurant = Boolean(
+      expInfo?.category === 'Restaurant' ||
+        (draftItem?.servedMealPeriods && draftItem.servedMealPeriods.length > 0) ||
+        (!isAttractionExp && (draftItem?.itemType === 'break' || draftItem?.mealPeriod != null))
+    );
+    const isBreak = draftItem.itemType === 'break';
+    const isLLAllowed = !isBreak && !isRestaurant;
+    const isSingleRiderAllowed = !isBreak && (expInfo?.category === 'Ride' || (!expInfo?.category && (draftItem.useSingleRider ?? false)));
+
+    const origTimingMode: TimingMode =
+      editingItem.isFixed || editingItem.isLightningLane
+        ? 'exact_time'
+        : editingItem.mealPeriod || editingItem.windowStartMinutes != null || editingItem.windowEndMinutes != null
+        ? 'soft_window'
+        : 'any_time';
+
+    const targetDate = normalizeDateStr(draftItem.plannedDate) ?? normalizeDateStr(activeDate) ?? '2026-08-20';
+    let exactTimeIso: string | null = null;
+    if (timingMode === 'exact_time' && passTimeText.trim()) {
+      exactTimeIso = parseTimeInputToIso(passTimeText, targetDate);
+      if (!exactTimeIso) {
+        setTimeError('Enter time as HH:MM AM/PM (e.g. 10:30 AM)');
+        return;
+      }
+    }
+
+    // Check if any fields changed compared to the original item before modal opened
+    let hasTimingChanged = false;
+    if (timingMode !== origTimingMode) {
+      hasTimingChanged = true;
+    } else if (timingMode === 'exact_time') {
+      const origLL = Boolean(editingItem.isLightningLane);
+      const newLL = isLLAllowed ? Boolean(draftItem.isLightningLane) : false;
+      const origIsoTimeStr = editingItem.plannedTime ? formatTimeDisplay(editingItem.plannedTime) : '';
+      const newIsoTimeStr = passTimeText.trim() ? formatTimeDisplay(exactTimeIso) : '';
+      if (origLL !== newLL || origIsoTimeStr !== newIsoTimeStr) {
+        hasTimingChanged = true;
+      }
+    } else if (timingMode === 'soft_window') {
+      const origMeal = editingItem.mealPeriod ?? null;
+      const newMeal = isRestaurant ? (selectedMealPeriod ?? null) : null;
+      const origStart = editingItem.windowStartMinutes ?? null;
+      const origEnd = editingItem.windowEndMinutes ?? null;
+      const newStart = windowStartMins ?? null;
+      const newEnd = windowEndMins ?? null;
+      if (origMeal !== newMeal || origStart !== newStart || origEnd !== newEnd) {
+        hasTimingChanged = true;
+      }
+    }
+
+    const normDate = normalizeDateStr(draftItem.plannedDate);
+    const origDate = normalizeDateStr(editingItem.plannedDate);
+    const hasDateChanged = normDate !== origDate;
+
+    const newPriority = draftItem.priority ?? 2;
+    const origPriority = editingItem.priority ?? 2;
+    const hasPriorityChanged = newPriority !== origPriority;
+
+    const newSingleRider = isSingleRiderAllowed ? Boolean(draftItem.useSingleRider) : false;
+    const origSingleRider = Boolean(editingItem.useSingleRider);
+    const hasSingleRiderChanged = newSingleRider !== origSingleRider;
+
+    const newCustomTitle = draftItem.itemType === 'break' ? (draftCustomTitle.trim() || null) : null;
+    const origCustomTitle = editingItem.customTitle || null;
+    const hasCustomTitleChanged = newCustomTitle !== origCustomTitle;
+
+    const newDuration = !isAttractionExp && draftDuration != null ? draftDuration : null;
+    const origDuration = editingItem.durationMinutes ?? null;
+    const hasDurationChanged = newDuration !== origDuration;
+
+    const origReservationKind = editingItem.reservationKind ?? null;
+    const targetReservationKind =
+      timingMode === 'exact_time' && isRestaurant
+        ? 'dining'
+        : timingMode === 'any_time' || timingMode === 'soft_window'
+        ? null
+        : origReservationKind;
+    const hasReservationChanged = targetReservationKind !== origReservationKind;
+
+    const hasAnyChange =
+      hasTimingChanged ||
+      hasReservationChanged ||
+      hasDateChanged ||
+      hasPriorityChanged ||
+      hasSingleRiderChanged ||
+      hasCustomTitleChanged ||
+      hasDurationChanged;
+
+    if (!hasAnyChange) {
+      setEditingItem(null);
+      setDraftItem(null);
+      return;
+    }
+
+    const body: PlannedItemEditInput = {
+      ...(draftItem.plannedDate !== undefined ? { plannedDate: normDate } : {}),
+      useSingleRider: newSingleRider,
+      priority: newPriority,
+      itemType: draftItem.itemType ?? 'experience',
+      ...(!isAttractionExp && draftDuration != null ? { durationMinutes: draftDuration } : {}),
+      ...(draftItem.itemType === 'break' ? { customTitle: draftCustomTitle.trim() || null } : {}),
+    };
+
+    if (timingMode === 'any_time') {
+      if (origTimingMode !== 'any_time') {
+        body.plannedTime = null;
+        body.isFixed = false;
+        body.isLightningLane = false;
+        body.windowStartMinutes = null;
+        body.windowEndMinutes = null;
+        body.mealPeriod = null;
+      }
+      if (editingItem.reservationKind != null) {
+        body.reservationKind = null;
+      }
+    } else if (timingMode === 'soft_window') {
+      body.plannedTime = null;
+      body.isFixed = false;
+      body.isLightningLane = false;
+      body.mealPeriod = isRestaurant ? selectedMealPeriod : null;
+      body.windowStartMinutes = windowStartMins;
+      body.windowEndMinutes = windowEndMins;
+      if (editingItem.reservationKind != null) {
+        body.reservationKind = null;
+      }
+    } else if (timingMode === 'exact_time') {
+      body.plannedTime = exactTimeIso;
+      body.isLightningLane = isLLAllowed ? (draftItem.isLightningLane ?? false) : false;
+      body.isFixed = !body.isLightningLane;
+      body.windowStartMinutes = null;
+      body.windowEndMinutes = null;
+      body.mealPeriod = null;
+      if (isRestaurant) {
+        body.reservationKind = 'dining';
+      }
+    }
+
+    editMutation.mutate({
+      itemId: draftItem.id,
+      body,
+    });
+  };
+
+  const handleSelectExperience = (exp: ExperienceDTO) => {
+    addMutation.mutate({
+      experienceId: exp.id,
+      ...(activeDate !== 'No Date' ? { plannedDate: activeDate } : {}),
+    });
+  };
+
+  const handleSelectUnlocatedBreak = (customTitle: string, durationMinutes: number, experienceId?: string | null) => {
+    addMutation.mutate({
+      itemType: 'break',
+      customTitle,
+      durationMinutes,
+      ...(experienceId ? { experienceId } : {}),
+      ...(activeDate !== 'No Date' ? { plannedDate: activeDate } : {}),
+    });
+  };
+
+  const backToHub = (): void => {
+    const state = navigation.getState?.();
+    const routes = state?.routes;
+    const currentIndex = typeof state?.index === 'number' ? state.index : (routes ? routes.length - 1 : -1);
+    const prevRoute = routes && currentIndex > 0 ? routes[currentIndex - 1] : null;
+
+    if (
+      prevRoute &&
+      (prevRoute.name === 'TripDetail' || prevRoute.name === 'TripReservations') &&
+      (prevRoute.params as { tripId?: string })?.tripId === tripId
+    ) {
+      navigation.goBack();
+      return;
+    }
+
+    if (typeof navigation.replace === 'function') {
+      navigation.replace('TripDetail', { tripId });
+      return;
+    }
+
+    if (typeof navigation.navigate === 'function') {
+      navigation.navigate('TripDetail', { tripId });
+      return;
+    }
+
+    navigation.goBack();
+  };
+
+  return (
+    <ScreenContainer>
+      <GradientHeader
+        title="Schedule Builder"
+        {...(tripQuery.data?.name ? { subtitle: tripQuery.data.name } : {})}
+        icon="calendar"
+        compact
+        onBack={backToHub}
+        backAccessibilityLabel={
+          tripQuery.data?.name
+            ? `Back to ${tripQuery.data.name}`
+            : 'Back to trip'
+        }
+        right={
+          <Pressable
+            testID="schedule-settings-btn"
+            onPress={() => setShowSettingsModal(true)}
+            style={styles.headerSettingsBtn}
+          >
+            <Ionicons name="settings-outline" size={22} color={t.color.textOnPrimary} />
+          </Pressable>
+        }
+      />
+
+      {(tripQuery.isLoading || itemsQuery.isLoading) ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={t.color.primaryFg} />
+        </View>
+      ) : (tripQuery.isError || itemsQuery.isError) ? (
+        <View style={styles.center}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="We couldn't load the schedule"
+            body="There was a problem loading your trip details."
+          />
+          <PrimaryButton
+            label="Retry"
+            icon="refresh-outline"
+            onPress={() => {
+              void tripQuery.refetch();
+              void itemsQuery.refetch();
+            }}
+          />
+        </View>
+      ) : (
+        <>
+          <View style={styles.dateSelectorContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateSelector}>
+              {tripDates.map((dateStr) => {
+                const isSelected = dateStr === activeDate;
+                const startingPark =
+                  dayHoursMap[dateStr]?.startingPark ??
+                  tripQuery.data?.dayTouringHours?.[dateStr]?.startingPark;
+                const hasPark = isKnownPark(startingPark);
+                return (
+                  <Pressable
+                    key={dateStr}
+                    testID={`date-pill-${dateStr}`}
+                    style={[styles.datePill, isSelected && styles.datePillActive]}
+                    onPress={() => setSelectedDate(dateStr)}
+                  >
+                    <Text style={[styles.datePillText, isSelected && styles.datePillTextActive]}>
+                      {formatDatePill(dateStr)}
+                    </Text>
+                    {hasPark ? (
+                      <Text
+                        style={[
+                          styles.datePillParkText,
+                          isSelected && styles.datePillParkTextActive,
+                        ]}
+                      >
+                        {startingPark}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <View style={styles.actionBar}>
+            <SecondaryButton
+              label={`+ Add to ${formatDatePill(activeDate)}`}
+              icon="add-circle-outline"
+              onPress={handleOpenAddModal}
+            />
+            <PrimaryButton
+              label={optimizeMutation.isPending ? 'Optimizing...' : '✨ Optimize'}
+              onPress={() => {
+                if (activeDate !== 'No Date') {
+                  const effStartMins = isToday
+                    ? Math.max(currentStartMinutes ?? roundedNowMinutes, roundedNowMinutes)
+                    : currentStartMinutes;
+                  const effStartHour = isToday
+                    ? Math.floor(effStartMins / 60)
+                    : currentStartHour;
+                  const effStartMode = isToday && currentStartMode === 'park_open' && isParkAlreadyOpen
+                    ? 'now'
+                    : currentStartMode;
+                  optimizeMutation.mutate({
+                    date: activeDate,
+                    startHour: effStartHour,
+                    endHour: currentEndHour,
+                    startMode: effStartMode,
+                    ...(effStartMins !== undefined ? { startMinutes: effStartMins } : {}),
+                  });
+                }
+              }}
+              disabled={optimizeMutation.isPending}
+            />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.content}>
+            {/* Park Mismatch Banner (Requirement 24.12) */}
+            {isParkMismatch && mismatchTargetPark && (
+              <View style={styles.mismatchBanner} testID="day-park-mismatch-banner">
+                <View style={styles.mismatchBannerTextCol}>
+                  <View style={styles.mismatchBannerTitleRow}>
+                    <Ionicons name="swap-horizontal" size={16} color={t.color.primaryFg} style={styles.mismatchIcon} />
+                    <Text style={styles.mismatchBannerTitle}>Park Mismatch</Text>
+                  </View>
+                  <Text style={styles.mismatchBannerText}>
+                    All items are in <Text style={styles.boldText}>{mismatchTargetPark}</Text>, but Day Park is set to{' '}
+                    <Text style={styles.boldText}>{activeDaySettings.startingPark}</Text>.
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.mismatchSwitchBtn}
+                  onPress={handleSwitchDayPark}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch Day Park to ${mismatchTargetPark}`}
+                  testID="day-park-mismatch-switch-btn"
+                >
+                  <Text style={styles.mismatchSwitchBtnText}>Switch to {mismatchTargetPark}</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Park Operating Hours Horizontal Scroll Row */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.parkHoursRowScroll}>
+              {(activeDayParks.length > 0 ? activeDayParks : ['Animal Kingdom', 'Epcot']).map((parkName, pIdx) => {
+                const accentColors = [pal.parkStripeGreen, pal.parkStripeSky, pal.parkStripeViolet, pal.parkStripeOrange];
+                const accentColor = accentColors[pIdx % accentColors.length]!;
+                const parkDetails = getParkHoursDetails(parkName);
+                const showEarlyEntry = (currentUseEarlyEntry || (tripQuery.data?.earlyEntryEligible ?? false)) && parkDetails.hasEarlyEntry;
+                return (
+                  <View key={parkName} style={[styles.parkHoursCardHorizontal, { borderLeftColor: accentColor }]}>
+                    <Text style={styles.parkHoursTitleHoriz}>{parkName}</Text>
+                    <Text style={styles.parkHoursTimeHoriz}>
+                      {parkDetails.openTimeText}
+                    </Text>
+                    <View style={styles.parkTagRowHoriz}>
+                      {showEarlyEntry && parkDetails.earlyEntryTimeText && (
+                        <View style={styles.earlyEntryBadge}>
+                          <Text style={styles.earlyEntryBadgeText}>Early Entry {parkDetails.earlyEntryTimeText}</Text>
+                        </View>
+                      )}
+                      {currentUseExtendedEvening && (
+                        <View style={styles.extendedHoursBadge}>
+                          <Text style={styles.extendedHoursBadgeText}>Extended Hours 11 PM</Text>
+                        </View>
+                      )}
+                      {currentHasAfterHoursTicket && (
+                        <View style={styles.afterHoursBadge}>
+                          <Text style={styles.afterHoursBadgeText}>After-Hours Event</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {/* Today Touring Start Mode Indicator */}
+            {isToday && (
+              <View style={styles.touringStartBadgeContainer}>
+                <Pressable
+                  style={styles.touringStartBadge}
+                  testID="touring-start-indicator"
+                  onPress={() => setShowSettingsModal(true)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.touringStartBadgeText}>
+                    {currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')
+                      ? `📍 Touring: Right Now (${formatMinutesToTime(roundedNowMinutes)})`
+                      : currentStartMode === 'party_mix_in'
+                      ? (isPartyMixInPassed
+                          ? `📍 Touring: Right Now (${formatMinutesToTime(roundedNowMinutes)})`
+                          : '🎟️ Touring: Party Mix-in (4 PM)')
+                      : currentStartMode === 'custom'
+                      ? `⏰ Touring: ${formatMinutesToTime(currentStartMinutes)}`
+                      : `🏰 Touring: Park Open (${formatMinutesToTime(parkOpenMinutes)})`}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={pal.touringChevron} style={{ marginLeft: 4 }} />
+                </Pressable>
+              </View>
+            )}
+
+            {/* Optimized / Scheduled Itinerary Timeline */}
+            {(optResult || scheduledDayItems.length > 0) ? (
+              <View style={styles.timelineSectionContainer}>
+                <Text style={styles.sectionTitle}>{formatDatePill(activeDate)} Itinerary</Text>
+
+                {/* R8.2 / R8.3: show when the day was last optimized, or a
+                    notice that it has not been optimized yet (no fake waits). */}
+                {dayIsOptimized ? (
+                  lastOptimizedAt && (
+                    <Text style={styles.lastOptimizedHint} testID="last-optimized-hint">
+                      Last optimized {formatLastOptimized(lastOptimizedAt)}
+                    </Text>
+                  )
+                ) : (
+                  <Text style={styles.notOptimizedNotice} testID="not-optimized-notice">
+                    Not optimized yet — tap Optimize Day to build your plan and see predicted waits.
+                  </Text>
+                )}
+
+                {optResult && optResult.warnings.length > 0 && (
+                  <View style={styles.warnings}>
+                    {optResult.warnings.map((w: string, i: number) => (
+                      <Text key={i} style={styles.warningText}>
+                        • {formatOptimizationWarning(w, items)}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.timelineWrapper}>
+                  {/* Thin Vertical Track Line */}
+                  <View style={styles.verticalTrackLine} />
+
+                  {(optResult ? optResult.items.map((optItem) => {
+                    const matched = items.find((d) => d.id === optItem.plannedItemId);
+                    return matched ? { item: matched, suggestedArrival: optItem.suggestedArrival, predictedWaitMinutes: optItem.predictedWaitMinutes, travelFromPrev: optItem.travelFromPrev } : null;
+                  }).filter(Boolean) : scheduledDayItems.map((item) => {
+                    // R8.2/R8.3: render the persisted optimization result; never
+                    // fabricate placeholder wait/travel. Null means "not optimized".
+                    return {
+                      item,
+                      suggestedArrival: item.plannedTime,
+                      predictedWaitMinutes: item.predictedWaitMinutes,
+                      travelFromPrev: item.travelFromPrev,
+                    };
+                  })).map((entry, idx) => {
+                    if (!entry) return null;
+                    const { item, suggestedArrival, predictedWaitMinutes, travelFromPrev } = entry;
+                    const expInfo = item.experienceId ? catalogMap.get(item.experienceId) : undefined;
+                    const isParkHop = travelFromPrev?.kind === 'park_hop';
+                    const travelMins = travelFromPrev?.minutes ?? 0;
+                    const timeText = formatTimeDisplay(suggestedArrival);
+
+                    return (
+                      <View key={item.id} style={styles.timelineStepContainer}>
+                        {/* Travel Connector / Park Hop Dashed Box (only when the
+                            optimizer produced a travel leg for this item) */}
+                        {travelFromPrev && (
+                          <View style={styles.connectorRowContainer}>
+                            {isParkHop ? (
+                              <View style={styles.parkHopRow}>
+                                <View style={styles.busNodeCircle}>
+                                  <Ionicons name="bus" size={18} color={t.color.textOnPrimary} />
+                                </View>
+                                <View style={styles.dashedParkHopBox}>
+                                  <Text style={styles.dashedParkHopText}>
+                                    <Text style={styles.boldMins}>+{travelMins}m </Text>
+                                    {item.park ? (
+                                      <>
+                                        Park Hop to {item.park}
+                                        {getParkHoursDetails(item.park ?? '').openTimeText.includes(' - ')
+                                          ? ` (Open til ${getParkHoursDetails(item.park ?? '').openTimeText.split(' - ')[1] ?? '9:00 PM'})`
+                                          : ''}
+                                      </>
+                                    ) : (
+                                      `Transit to ${item.experienceName || item.customTitle || 'Break'}`
+                                    )}
+                                  </Text>
+                                </View>
+                              </View>
+                            ) : (
+                              <View style={styles.walkTextRow}>
+                                <Ionicons name="walk-outline" size={16} color={pal.slate700Text} />
+                                <Text style={styles.inlineWalkText}>
+                                  <Text style={styles.boldMins}>+{travelMins}m </Text>
+                                  walk{expInfo?.land ? ` to ${expInfo.land}` : ''}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Speech Bubble Top Node (Item 1 only) */}
+                        {idx === 0 && (
+                          <View style={styles.topSpeechNodeRow}>
+                            <View style={styles.purpleCircleNode} />
+                            <View style={styles.speechBubbleWrapper}>
+                              <View style={styles.speechBubbleTriangle} />
+                              <View style={styles.speechPillPointer}>
+                                <Text style={styles.speechPillText}>{timeText}</Text>
+                              </View>
+                            </View>
+                          </View>
+                        )}
+
+                        <View style={styles.timelineCardRow}>
+                          {/* Vertical Time Digits for Item 2+ */}
+                          {idx > 0 && (
+                            <View style={styles.verticalTimeBox}>
+                              <Text style={styles.vertTimeDigits}>{timeText.replace(/\s*(AM|PM)/i, '')}</Text>
+                              <Text style={styles.vertTimeAmpm}>{timeText.includes('PM') ? 'PM' : 'AM'}</Text>
+                            </View>
+                          )}
+
+                          {/* Attraction Card (Starts flush at X = 72px) */}
+                          <Pressable
+                            onPress={() => openEditModal(item)}
+                            style={styles.mockupAttractionCard}
+                          >
+                            {expInfo?.imageUrl ? (
+                              <Image source={{ uri: expInfo.imageUrl }} style={styles.mockupThumbnail} />
+                            ) : (
+                              <View style={styles.mockupThumbnailFallback}>
+                                <Ionicons
+                                  name={item.itemType === 'break' ? 'restaurant-outline' : 'compass-outline'}
+                                  size={28}
+                                  color={pal.slate600Text}
+                                />
+                              </View>
+                            )}
+
+                            <View style={styles.mockupCardBody}>
+                              <Text style={styles.mockupCardTitle}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                              {item.customTitle && (item.experienceName || expInfo?.name) ? (
+                                <View style={styles.mockupCardLocationRow} testID={`item-location-${item.id}`}>
+                                  <Ionicons name="location-sharp" size={12} color={pal.slate500Text} />
+                                  <Text style={styles.mockupCardLocationText} numberOfLines={1}>
+                                    {item.experienceName || expInfo?.name}{expInfo?.land ? ` • ${expInfo.land}` : ''}
+                                  </Text>
+                                </View>
+                              ) : null}
+
+                              {/* Badges Row */}
+                              <View style={styles.mockupBadgeRow}>
+                                {predictedWaitMinutes != null &&
+                                  item.itemType !== 'break' &&
+                                  expInfo?.category !== 'Restaurant' &&
+                                  expInfo?.category !== 'Resort' &&
+                                  expInfo?.category !== 'Spa' &&
+                                  expInfo?.category !== 'Recreation' && (
+                                    <View style={styles.waitPillGray}>
+                                      <Text style={styles.waitPillText}>Wait: {predictedWaitMinutes} min</Text>
+                                    </View>
+                                  )}
+                                {/* A Reservation is badged by its kind so a real
+                                    booking is distinguishable from a time the
+                                    member pinned themselves (trip-reservations
+                                    R4.3). */}
+                                {item.reservationKind != null && (
+                                  <View style={styles.reservationPill}>
+                                    <Text
+                                      style={styles.reservationPillText}
+                                      testID={`item-reservation-badge-${item.id}`}
+                                    >
+                                      {reservationBadgeLabel(item.reservationKind)}
+                                    </Text>
+                                  </View>
+                                )}
+                                <View style={styles.durationPillGray}>
+                                  <Text style={styles.durationPillText}>
+                                    {/* An off-property booking is stored as a break,
+                                        but must never be presented as one (R5.2). */}
+                                    {item.reservationKind === 'dining'
+                                      ? `🍽️ ${item.durationMinutes || 60}m dining`
+                                      : item.itemType === 'break' && item.reservationKind != null
+                                      ? `🎟️ ${item.durationMinutes || 60}m reserved`
+                                      : item.itemType === 'break'
+                                      ? `☕ ${item.durationMinutes || 45}m break`
+                                      : expInfo?.category === 'Restaurant'
+                                      ? `🍽️ ${item.durationMinutes || 60}m dining`
+                                      : `🎢 ${item.durationMinutes ?? item.catalogDurationMinutes ?? 15}m duration`}
+                                  </Text>
+                                </View>
+                                {item.mealPeriod === 'breakfast' && (
+                                  <View style={styles.windowPillOrange}>
+                                    <Text style={styles.windowPillText}>🍳 Breakfast ({getMealWindowLabel('breakfast')})</Text>
+                                  </View>
+                                )}
+                                {item.mealPeriod === 'lunch' && (
+                                  <View style={styles.windowPillOrange}>
+                                    <Text style={styles.windowPillText}>🥗 Lunch ({getMealWindowLabel('lunch')})</Text>
+                                  </View>
+                                )}
+                                {item.mealPeriod === 'dinner' && (
+                                  <View style={styles.windowPillOrange}>
+                                    <Text style={styles.windowPillText}>🍽️ Dinner ({getMealWindowLabel('dinner')})</Text>
+                                  </View>
+                                )}
+                                {item.mealPeriod === 'snack' && (
+                                  <View style={styles.windowPillOrange}>
+                                    <Text style={styles.windowPillText}>
+                                      🍿 Snack{item.windowStartMinutes != null && item.windowEndMinutes != null ? ` (${formatMinutesToTime(item.windowStartMinutes)} – ${formatMinutesToTime(item.windowEndMinutes)})` : ''}
+                                    </Text>
+                                  </View>
+                                )}
+                                {item.windowStartMinutes != null && item.windowEndMinutes != null && !item.mealPeriod && (
+                                  <View style={styles.windowPillOrange}>
+                                    <Text style={styles.windowPillText}>
+                                      ⏱️ {formatMinutesToTime(item.windowStartMinutes)} – {formatMinutesToTime(item.windowEndMinutes)}
+                                    </Text>
+                                  </View>
+                                )}
+                                {item.isLightningLane && (
+                                  <View style={styles.llPillGold}>
+                                    <Text style={styles.llPillText}>LIGHTNING LANE</Text>
+                                  </View>
+                                )}
+                                {currentUseEarlyEntry && idx === 0 && (
+                                  <View style={styles.earlyEntryPillCyan}>
+                                    <Text style={styles.earlyEntryPillText}>EARLY ENTRY</Text>
+                                  </View>
+                                )}
+                                {item.useSingleRider && (
+                                  <View style={styles.singleRiderPillSky}>
+                                    <Text style={styles.singleRiderPillText}>SINGLE RIDER</Text>
+                                  </View>
+                                )}
+                                {item.isFixed && (
+                                  <View style={styles.fixedTimePillPurple}>
+                                    <Text style={styles.fixedTimePillText}>FIXED TIME</Text>
+                                  </View>
+                                )}
+                                {optResult?.warnings?.includes(`typical_showtimes:${item.id}`) && (
+                                  <View style={styles.typicalShowtimeNotice} testID={`typical-showtime-notice-${item.id}`}>
+                                    <Text style={styles.typicalShowtimeNoticeText}>
+                                      🎭 Estimated showtime based on past schedule
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : unscheduledDayItems.length > 0 ? (
+              <View style={styles.resultContainer}>
+                <Text style={styles.sectionTitle}>{formatDatePill(activeDate)} Planned Items</Text>
+                {unscheduledDayItems.map((item) => (
+                  <Card key={item.id} style={styles.itemCard}>
+                    <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                    {item.customTitle && item.experienceName ? (
+                      <Text style={styles.itemMeta} testID={`unscheduled-item-location-${item.id}`}>
+                        📍 {item.experienceName}
+                      </Text>
+                    ) : null}
+                    <View style={styles.itemProps}>
+                      {item.reservationKind != null && (
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
+                      )}
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
+                    </View>
+                    <View style={styles.itemActions}>
+                      <SecondaryButton
+                        label="Unassign"
+                        onPress={() => handleQuickEdit(item, { plannedDate: undefined, plannedTime: undefined })}
+                      />
+                      <SecondaryButton label="Edit Settings" onPress={() => openEditModal(item)} />
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyDayContainer}>
+                <EmptyState
+                  icon="calendar-outline"
+                  title={`No plans for ${formatDatePill(activeDate)} yet`}
+                  body="Tap + Add to build your schedule."
+                />
+              </View>
+            )}
+
+            {/* Unscheduled Items for Day */}
+            {!optResult && scheduledDayItems.length > 0 && unscheduledDayItems.length > 0 && (
+              <View style={styles.resultContainer}>
+                <Text style={styles.sectionTitle}>Unscheduled for {formatDatePill(activeDate)}</Text>
+                {unscheduledDayItems.map((item) => (
+                  <Card key={item.id} style={styles.itemCard}>
+                    <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                    {item.customTitle && item.experienceName ? (
+                      <Text style={styles.itemMeta} testID={`unscheduled-day-item-location-${item.id}`}>
+                        📍 {item.experienceName}
+                      </Text>
+                    ) : null}
+                    <View style={styles.itemProps}>
+                      {item.reservationKind != null && (
+                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
+                      )}
+                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
+                    </View>
+                    <View style={styles.itemActions}>
+                      <SecondaryButton
+                        label="Unassign"
+                        onPress={() => handleQuickEdit(item, { plannedDate: undefined, plannedTime: undefined })}
+                      />
+                      <SecondaryButton label="Edit Settings" onPress={() => openEditModal(item)} />
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.sectionTitle}>Unassigned Experiences</Text>
+            {unassignedItems.length === 0 ? (
+              <Text style={styles.emptyText}>All trip experiences are assigned!</Text>
+            ) : (
+              unassignedItems.map((item) => (
+                <Card key={item.id} style={styles.itemCard}>
+                  <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
+                  {item.customTitle && item.experienceName ? (
+                    <Text style={styles.itemMeta} testID={`unassigned-item-location-${item.id}`}>
+                      📍 {item.experienceName}
+                    </Text>
+                  ) : null}
+                  <View style={styles.itemProps}>
+                    {item.reservationKind != null && (
+                      <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
+                    )}
+                    {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
+                    {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
+                    {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
+                    {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
+                    {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
+                    <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
+                  </View>
+                  <View style={styles.itemActions}>
+                    <SecondaryButton
+                      label={`Assign to ${formatDatePill(activeDate)}`}
+                      onPress={() => handleQuickEdit(item, { plannedDate: activeDate })}
+                    />
+                    <SecondaryButton label="Edit Settings" onPress={() => openEditModal(item)} />
+                  </View>
+                </Card>
+              ))
+            )}
+          </ScrollView>
+
+          <Modal visible={showAddModal} animationType="slide" onRequestClose={handleCloseAddModal}>
+            <ScreenContainer>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
+              >
+                <GradientHeader
+                  title={`Add to ${formatDatePill(activeDate)}`}
+                  icon="search"
+                  compact
+                  onBack={handleCloseAddModal}
+                  right={
+                    <SecondaryButton
+                      label="Done"
+                      onPress={handleCloseAddModal}
+                      testID="schedule-add-done-btn"
+                    />
+                  }
+                />
+                <View style={styles.modalBody}>
+                  <ExperiencePicker
+                    enabled={showAddModal}
+                    onSelect={handleSelectExperience}
+                    onSelectUnlocatedBreak={handleSelectUnlocatedBreak}
+                    pendingId={
+                      addMutation.isPending && addMutation.variables && 'experienceId' in addMutation.variables
+                        ? addMutation.variables.experienceId
+                        : null
+                    }
+                    addedCounts={addedScheduleCounts}
+                    busy={addMutation.isPending}
+                    testIDPrefix="schedule-picker"
+                    showParkFilter={true}
+                    defaultPark={isKnownPark(activeDaySettings.startingPark) ? activeDaySettings.startingPark : null}
+                    fillContainer
+                    listSourcedItems={attachedListItems.items}
+                    listSourcedLoading={attachedListItems.isLoading}
+                    favoriteSourcedItems={favoriteItems.items}
+                    favoriteSourcedLoading={favoriteItems.isLoading}
+                    alreadyPlannedIds={existingExperienceIds}
+                  />
+                </View>
+              </KeyboardAvoidingView>
+            </ScreenContainer>
+          </Modal>
+
+          {/* Item Settings Modal */}
+          <Modal
+            visible={editingItem !== null}
+            transparent
+            animationType="slide"
+            onRequestClose={() => {
+              setEditingItem(null);
+              setDraftItem(null);
+            }}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={[
+                styles.modalBg,
+                Platform.OS === 'android' && editItemKeyboardInset > 0
+                  ? { paddingBottom: editItemKeyboardInset }
+                  : null,
+              ]}
+            >
+              <View
+                style={[
+                  styles.modalContent,
+                  Platform.OS === 'android' && editItemKeyboardInset > 0
+                    ? { maxHeight: getEditItemModalHeight(40) }
+                    : null,
+                ]}
+              >
+                {draftItem && (
+                  <ScrollView keyboardShouldPersistTaps="handled">
+                    <Text style={styles.modalTitle}>
+                      {draftItem.customTitle || draftItem.experienceName || 'Item Settings'}
+                    </Text>
+
+                    {draftItem.itemType === 'break' && (
+                      <View style={styles.fieldSection}>
+                        <Text style={styles.label}>Break Description</Text>
+                        <TextInput
+                          style={styles.customTitleInput}
+                          value={draftCustomTitle}
+                          onChangeText={setDraftCustomTitle}
+                          placeholder="e.g. Midday Hotel Nap, Pool Time"
+                          placeholderTextColor={t.color.textSecondary}
+                          keyboardAppearance={t.scheme}
+                          testID="item-custom-title-input"
+                        />
+                        {(draftItem.experienceName || editingExpInfo?.name) && (
+                          <View style={styles.modalLocationBox} testID="item-modal-location">
+                            <Ionicons name="location-sharp" size={14} color={t.color.textSecondary} />
+                            <Text style={styles.modalLocationText} numberOfLines={1}>
+                              {draftItem.experienceName || editingExpInfo?.name}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Performance Showtimes for Shows & Parades (crowd-calendar R12 / day-planning R13.4) */}
+                    {isEditingShowOrParade && (
+                      <View style={styles.showtimesSection} testID="showtimes-section">
+                        <Text style={styles.label}>Performance Showtimes</Text>
+                        <Text style={styles.showtimesSubLabel}>
+                          Select a showtime to lock this performance, or choose Auto-fit to let the optimizer pick the best slot.
+                        </Text>
+
+                        {crowdCalendarQuery.isLoading ? (
+                          <Text style={styles.showtimesLoadingText}>Loading showtimes...</Text>
+                        ) : crowdCalendarQuery.isError ? (
+                          <View style={styles.emptyShowtimesBox} testID="showtimes-error-state">
+                            <Text style={styles.emptyShowtimesText}>
+                              We couldn&apos;t load showtimes right now. Please try again.
+                            </Text>
+                          </View>
+                        ) : showtimesList.length === 0 ? (
+                          <View style={styles.emptyShowtimesBox} testID="showtimes-empty-state">
+                            <Text style={styles.emptyShowtimesText}>
+                              Showtimes are not published yet for this date.
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.showtimePillsContainer}>
+                            <Pressable
+                              style={[
+                                styles.showtimePill,
+                                (timingMode === 'any_time' || (!draftItem?.isFixed && !draftItem?.plannedTime)) &&
+                                  styles.showtimePillActive,
+                              ]}
+                              onPress={() => {
+                                setTimingMode('any_time');
+                                setPassTimeText('');
+                                setDraftItem((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        plannedTime: null,
+                                        isFixed: false,
+                                        isLightningLane: false,
+                                      }
+                                    : null,
+                                );
+                                setTimeError(null);
+                              }}
+                              testID="showtime-autofit-pill"
+                            >
+                              <Text
+                                style={[
+                                  styles.showtimePillText,
+                                  (timingMode === 'any_time' || (!draftItem?.isFixed && !draftItem?.isLightningLane)) &&
+                                    styles.showtimePillTextActive,
+                                ]}
+                              >
+                                ✨ Auto-fit best showtime
+                              </Text>
+                            </Pressable>
+
+                            {showtimesList.map((isoStr) => {
+                              const display = formatTimeDisplay(isoStr);
+                              const isSelected =
+                                timingMode === 'exact_time' &&
+                                (draftItem?.plannedTime === isoStr ||
+                                  passTimeText.trim().toUpperCase() === display.toUpperCase());
+
+                              return (
+                                <Pressable
+                                  key={isoStr}
+                                  style={[styles.showtimePill, isSelected && styles.showtimePillActive]}
+                                  onPress={() => {
+                                    setTimingMode('exact_time');
+                                    setPassTimeText(display);
+                                    setDraftItem((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            plannedTime: isoStr,
+                                            isFixed: true,
+                                            isLightningLane: false,
+                                          }
+                                        : null,
+                                    );
+                                    setTimeError(null);
+                                  }}
+                                  testID={`showtime-pill-${display.replace(/\s+/g, '-').toLowerCase()}`}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.showtimePillText,
+                                      isSelected && styles.showtimePillTextActive,
+                                    ]}
+                                  >
+                                    🎭 {display}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Timing & Scheduling Mode</Text>
+                    <View style={styles.timingModeRow}>
+                      <Pressable
+                        style={[styles.timingModeBtn, timingMode === 'any_time' && styles.timingModeBtnActive]}
+                        onPress={() => setTimingMode('any_time')}
+                        testID="timing-mode-any_time"
+                      >
+                        <Ionicons
+                          name="sparkles"
+                          size={16}
+                          color={timingMode === 'any_time' ? t.color.primaryFg : t.color.textSecondary}
+                        />
+                        <Text style={[styles.timingModeText, timingMode === 'any_time' && styles.timingModeTextActive]}>
+                          Any Time
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.timingModeBtn, timingMode === 'soft_window' && styles.timingModeBtnActive]}
+                        onPress={() => setTimingMode('soft_window')}
+                        testID="timing-mode-soft_window"
+                      >
+                        <Ionicons
+                          name="time"
+                          size={16}
+                          color={timingMode === 'soft_window' ? t.color.primaryFg : t.color.textSecondary}
+                        />
+                        <Text style={[styles.timingModeText, timingMode === 'soft_window' && styles.timingModeTextActive]}>
+                          Time Window
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.timingModeBtn, timingMode === 'exact_time' && styles.timingModeBtnActive]}
+                        onPress={() => {
+                          setTimingMode('exact_time');
+                          if (!passTimeText.trim()) {
+                            if (draftItem?.plannedTime) {
+                              setPassTimeText(formatTimeDisplay(draftItem.plannedTime));
+                            } else {
+                              setPassTimeText('10:00 AM');
+                            }
+                          }
+                        }}
+                        testID="timing-mode-exact_time"
+                      >
+                        <Ionicons
+                          name={draftItem?.isLightningLane ? 'flash' : 'lock-closed'}
+                          size={16}
+                          color={
+                            timingMode === 'exact_time'
+                              ? draftItem?.isLightningLane
+                                ? t.color.accent
+                                : t.color.primaryFg
+                              : t.color.textSecondary
+                          }
+                        />
+                        <Text style={[styles.timingModeText, timingMode === 'exact_time' && styles.timingModeTextActive]}>
+                          {draftItem?.isLightningLane ? '⚡ LL Pass' : 'Exact Time'}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {timingMode === 'any_time' && (
+                      <View style={styles.modeInfoBox}>
+                        <Text style={styles.modeInfoText}>
+                          ✨ The optimizer will automatically place this item at the optimal time to minimize waits and walking.
+                        </Text>
+                      </View>
+                    )}
+
+                    {timingMode === 'soft_window' && (
+                      <View style={styles.timeSection}>
+                        {isEditingRestaurant && (
+                          <>
+                            {selectedMealPeriod &&
+                              !isMealPeriodServed(draftItem.servedMealPeriods, selectedMealPeriod) && (
+                                <View style={styles.unservedWarningBox} testID="unserved-meal-warning">
+                                  <Text style={styles.unservedWarningText}>
+                                    ⚠️ {selectedMealPeriod.charAt(0).toUpperCase() + selectedMealPeriod.slice(1)} is not listed as a served meal period for this restaurant.
+                                  </Text>
+                                </View>
+                              )}
+
+                            <Text style={styles.subLabel}>Meal Preference Presets</Text>
+                            <View style={styles.windowPresetsGrid}>
+                              {[
+                                {
+                                  key: 'breakfast' as MealPeriod,
+                                  label: '🍳 Breakfast',
+                                  time: getMealWindowLabel('breakfast'),
+                                  start: MEAL_WINDOWS.breakfast?.startMinutes ?? 480,
+                                  end: MEAL_WINDOWS.breakfast?.endMinutes ?? 630,
+                                },
+                                {
+                                  key: 'lunch' as MealPeriod,
+                                  label: '🥗 Lunch',
+                                  time: getMealWindowLabel('lunch'),
+                                  start: MEAL_WINDOWS.lunch?.startMinutes ?? 690,
+                                  end: MEAL_WINDOWS.lunch?.endMinutes ?? 840,
+                                },
+                                {
+                                  key: 'dinner' as MealPeriod,
+                                  label: '🍽️ Dinner',
+                                  time: getMealWindowLabel('dinner'),
+                                  start: MEAL_WINDOWS.dinner?.startMinutes ?? 1020,
+                                  end: MEAL_WINDOWS.dinner?.endMinutes ?? 1200,
+                                },
+                                {
+                                  key: 'snack' as MealPeriod,
+                                  label: '🍿 Snack',
+                                  time: 'Flexible / All Day',
+                                  start: null,
+                                  end: null,
+                                },
+                              ].map((mp) => {
+                                const isSel =
+                                  selectedMealPeriod === mp.key &&
+                                  (mp.key === 'snack' ||
+                                    (windowStartMins === mp.start && windowEndMins === mp.end));
+                                return (
+                                  <Pressable
+                                    key={mp.key}
+                                    style={[styles.windowPresetCard, isSel && styles.windowPresetCardActive]}
+                                    onPress={() => {
+                                      setSelectedMealPeriod(mp.key);
+                                      setWindowStartMins(mp.start);
+                                      setWindowEndMins(mp.end);
+                                    }}
+                                    testID={`meal-period-${mp.key}`}
+                                  >
+                                    <Text style={[styles.windowPresetTitle, isSel && styles.windowPresetTitleActive]}>
+                                      {mp.label}
+                                    </Text>
+                                    <Text style={[styles.windowPresetSubtitle, isSel && styles.windowPresetSubtitleActive]}>
+                                      {mp.time}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+
+                            <Text style={styles.subLabel}>Full Service Window Presets</Text>
+                            <View style={styles.windowPresetsGrid}>
+                              {[
+                                {
+                                  key: 'breakfast' as MealPeriod,
+                                  label: '🍳 Breakfast Service',
+                                  time: getMealServiceWindowLabel('breakfast'),
+                                  start: MEAL_SERVICE_WINDOWS.breakfast?.startMinutes ?? 420,
+                                  end: MEAL_SERVICE_WINDOWS.breakfast?.endMinutes ?? 660,
+                                },
+                                {
+                                  key: 'lunch' as MealPeriod,
+                                  label: '🥗 Lunch Service',
+                                  time: getMealServiceWindowLabel('lunch'),
+                                  start: MEAL_SERVICE_WINDOWS.lunch?.startMinutes ?? 660,
+                                  end: MEAL_SERVICE_WINDOWS.lunch?.endMinutes ?? 930,
+                                },
+                                {
+                                  key: 'dinner' as MealPeriod,
+                                  label: '🍽️ Dinner Service',
+                                  time: getMealServiceWindowLabel('dinner'),
+                                  start: MEAL_SERVICE_WINDOWS.dinner?.startMinutes ?? 960,
+                                  end: MEAL_SERVICE_WINDOWS.dinner?.endMinutes ?? 1260,
+                                },
+                              ].map((sp) => {
+                                const isSel =
+                                  selectedMealPeriod === sp.key &&
+                                  windowStartMins === sp.start &&
+                                  windowEndMins === sp.end;
+                                return (
+                                  <Pressable
+                                    key={`service-${sp.key}`}
+                                    style={[styles.windowPresetCard, isSel && styles.windowPresetCardActive]}
+                                    onPress={() => {
+                                      setSelectedMealPeriod(sp.key);
+                                      setWindowStartMins(sp.start);
+                                      setWindowEndMins(sp.end);
+                                    }}
+                                    testID={`meal-service-${sp.key}`}
+                                  >
+                                    <Text style={[styles.windowPresetTitle, isSel && styles.windowPresetTitleActive]}>
+                                      {sp.label}
+                                    </Text>
+                                    <Text style={[styles.windowPresetSubtitle, isSel && styles.windowPresetSubtitleActive]}>
+                                      {sp.time}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </>
+                        )}
+
+                        <Text style={styles.subLabel}>Time of Day Presets{isEditingRestaurant ? ' (Any Item)' : ''}</Text>
+                        <View style={styles.presetRow}>
+                          {[
+                            { label: 'Morning (9-12)', start: 540, end: 720 },
+                            { label: 'Midday (11-2)', start: 660, end: 840 },
+                            { label: 'Afternoon (1-4)', start: 780, end: 960 },
+                            { label: 'Evening (5-8)', start: 1020, end: 1200 },
+                          ].map((preset) => {
+                            const isSel =
+                              selectedMealPeriod === null &&
+                              windowStartMins === preset.start &&
+                              windowEndMins === preset.end;
+                            return (
+                              <Pressable
+                                key={preset.label}
+                                style={[styles.presetChip, isSel && styles.presetChipActive]}
+                                onPress={() => {
+                                  setSelectedMealPeriod(null);
+                                  setWindowStartMins(preset.start);
+                                  setWindowEndMins(preset.end);
+                                }}
+                                testID={`time-of-day-${preset.start}`}
+                              >
+                                <Text style={[styles.presetChipText, isSel && styles.presetChipTextActive]}>
+                                  {preset.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+
+                        {/* Custom Window Range with Clamping */}
+                        {(() => {
+                          const clampMin =
+                            selectedMealPeriod && selectedMealPeriod !== 'snack' && MEAL_SERVICE_WINDOWS[selectedMealPeriod]
+                              ? MEAL_SERVICE_WINDOWS[selectedMealPeriod]!.startMinutes
+                              : currentStartHour * 60;
+                          const clampMax =
+                            selectedMealPeriod && selectedMealPeriod !== 'snack' && MEAL_SERVICE_WINDOWS[selectedMealPeriod]
+                              ? MEAL_SERVICE_WINDOWS[selectedMealPeriod]!.endMinutes
+                              : currentEndHour * 60;
+
+                          const currentStart = windowStartMins ?? clampMin;
+                          const currentEnd = windowEndMins ?? Math.min(clampMax, currentStart + 120);
+
+                          return (
+                            <View style={styles.customWindowBox}>
+                              <Text style={styles.subLabel}>Custom Target Range</Text>
+                              <View style={styles.stepperRow}>
+                                <Text style={styles.stepperLabel}>Start Time:</Text>
+                                <View style={styles.stepperControls}>
+                                  <Pressable
+                                    style={styles.stepperBtn}
+                                    onPress={() => {
+                                      const next = Math.max(clampMin, currentStart - 30);
+                                      setWindowStartMins(next);
+                                      if (windowEndMins == null || windowEndMins < next) {
+                                        setWindowEndMins(Math.min(clampMax, next + 60));
+                                      }
+                                    }}
+                                    testID="stepper-start-minus"
+                                  >
+                                    <Text style={styles.stepperBtnText}>-30m</Text>
+                                  </Pressable>
+                                  <Text style={styles.stepperValue} testID="custom-start-val">
+                                    {formatMinutesToTime(currentStart)}
+                                  </Text>
+                                  <Pressable
+                                    style={styles.stepperBtn}
+                                    onPress={() => {
+                                      const next = Math.min(clampMax - 15, currentStart + 30);
+                                      setWindowStartMins(next);
+                                      if (windowEndMins == null || windowEndMins < next) {
+                                        setWindowEndMins(Math.min(clampMax, next + 30));
+                                      }
+                                    }}
+                                    testID="stepper-start-plus"
+                                  >
+                                    <Text style={styles.stepperBtnText}>+30m</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+
+                              <View style={styles.stepperRow}>
+                                <Text style={styles.stepperLabel}>End Time:</Text>
+                                <View style={styles.stepperControls}>
+                                  <Pressable
+                                    style={styles.stepperBtn}
+                                    onPress={() => {
+                                      const next = Math.max(currentStart + 15, currentEnd - 30);
+                                      setWindowEndMins(next);
+                                      if (windowStartMins == null) {
+                                        setWindowStartMins(currentStart);
+                                      }
+                                    }}
+                                    testID="stepper-end-minus"
+                                  >
+                                    <Text style={styles.stepperBtnText}>-30m</Text>
+                                  </Pressable>
+                                  <Text style={styles.stepperValue} testID="custom-end-val">
+                                    {formatMinutesToTime(currentEnd)}
+                                  </Text>
+                                  <Pressable
+                                    style={styles.stepperBtn}
+                                    onPress={() => {
+                                      const next = Math.min(clampMax, currentEnd + 30);
+                                      setWindowEndMins(next);
+                                      if (windowStartMins == null) {
+                                        setWindowStartMins(currentStart);
+                                      }
+                                    }}
+                                    testID="stepper-end-plus"
+                                  >
+                                    <Text style={styles.stepperBtnText}>+30m</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })()}
+
+                        {windowStartMins != null && windowEndMins != null && (
+                          <View style={styles.selectedWindowNotice}>
+                            <Text style={styles.selectedWindowText}>
+                              Active Window: {formatMinutesToTime(windowStartMins)} – {formatMinutesToTime(windowEndMins)}
+                            </Text>
+                          </View>
+                        )}
+                        {selectedMealPeriod === 'snack' && windowStartMins == null && windowEndMins == null && (
+                          <View style={styles.selectedWindowNotice}>
+                            <Text style={styles.selectedWindowText}>
+                              Active Window: Flexible Snack (All Day)
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {timingMode === 'exact_time' && (
+                      <View style={styles.timeSection}>
+                        {isEligibleForLightningLane && (
+                          <View style={styles.exactModeToggleRow}>
+                            <Pressable
+                              style={[styles.exactModeBtn, !draftItem.isLightningLane && styles.exactModeBtnActive]}
+                              onPress={() =>
+                                setDraftItem((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        isLightningLane: false,
+                                        isFixed: true,
+                                      }
+                                    : null,
+                                )
+                              }
+                              testID="timing-mode-fixed-lock"
+                            >
+                              <Ionicons
+                                name="lock-closed"
+                                size={14}
+                                color={!draftItem.isLightningLane ? t.color.primaryFg : t.color.textSecondary}
+                              />
+                              <Text style={[styles.exactModeBtnText, !draftItem.isLightningLane && styles.exactModeBtnTextActive]}>
+                                🔒 Fixed Time / Lock
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.exactModeBtn, draftItem.isLightningLane && styles.exactModeBtnActive]}
+                              onPress={() =>
+                                setDraftItem((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        isLightningLane: true,
+                                        isFixed: false,
+                                      }
+                                    : null,
+                                )
+                              }
+                              testID="timing-mode-lightning-lane"
+                            >
+                              <Ionicons
+                                name="flash"
+                                size={14}
+                                color={draftItem.isLightningLane ? t.color.accent : t.color.textSecondary}
+                              />
+                              <Text style={[styles.exactModeBtnText, draftItem.isLightningLane && styles.exactModeBtnTextActive]}>
+                                ⚡ Lightning Lane (1h Window)
+                              </Text>
+                            </Pressable>
+                          </View>
+                        )}
+
+                        <Text style={styles.label}>
+                          {draftItem.isLightningLane ? '⚡ Lightning Lane Window Start Time' : '🔒 Reservation / Exact Time'}
+                        </Text>
+
+                        {(() => {
+                          return (
+                            <View style={styles.wheelCard}>
+                              <Text style={styles.subLabel}>Quick Presets</Text>
+                              <View style={styles.presetRow}>
+                                {['9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM'].map((preset) => {
+                                  const isSelected = passTimeText.trim().toUpperCase() === preset;
+                                  return (
+                                    <Pressable
+                                      key={preset}
+                                      style={[styles.presetChip, isSelected && styles.presetChipActive]}
+                                      onPress={() => {
+                                        setPassTimeText(preset);
+                                        setTimeError(null);
+                                      }}
+                                    >
+                                      <Text style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
+                                        {preset}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+
+                              {/* Shared wheel (trip-reservations task 8.1). The
+                                  Schedule Builder keeps 15-minute granularity:
+                                  it is choosing a touring preference, not
+                                  recording a booking. */}
+                              <TimeWheelPicker
+                                value={passTimeText}
+                                minuteStep={15}
+                                onChange={(next) => {
+                                  setPassTimeText(next);
+                                  setTimeError(null);
+                                }}
+                                testIDPrefix="schedule-time"
+                              />
+                            </View>
+                          );
+                        })()}
+                        <View style={styles.timeRow}>
+                          <TextInput
+                            style={styles.timeInput}
+                            placeholder="Custom time (e.g. 10:30 AM)"
+                            placeholderTextColor={t.color.textSecondary}
+                            keyboardAppearance={t.scheme}
+                            value={passTimeText}
+                            onChangeText={(txt: string) => {
+                              setPassTimeText(txt);
+                              setTimeError(null);
+                            }}
+                          />
+                          {passTimeText.trim() !== '' && (
+                            <Pressable
+                              style={styles.clearTimeButton}
+                              onPress={() => {
+                                setPassTimeText('');
+                                setTimeError(null);
+                              }}
+                            >
+                              <Ionicons name="close-circle" size={20} color={t.color.textSecondary} />
+                            </Pressable>
+                          )}
+                        </View>
+                        {timeError && <Text style={styles.errorText}>{timeError}</Text>}
+
+                        {draftItem.isLightningLane && passTimeText.trim() !== '' && (
+                          (() => {
+                            const info = getLLWindowInfo(passTimeText, activeDate);
+                            if (!info) return null;
+                            return (
+                              <View style={styles.llWindowBox} testID="ll-window-info">
+                                <Text style={styles.llWindowText}>Return Window: {info.windowStr}</Text>
+                                <Text style={styles.llGraceText}>Valid Entry: {info.graceStr} (5m early / 15m late grace)</Text>
+                              </View>
+                            );
+                          })()
+                        )}
+                      </View>
+                    )}
+
+                    {!isAttraction && (
+                      <>
+                        <Text style={styles.label}>Duration</Text>
+                        <View style={styles.chipRow}>
+                          {[15, 30, 45, 60, 90, 120].map((d) => {
+                            const effectiveDur = draftDuration ?? getEffectiveDefaultDuration(draftItem, editingExpInfo);
+                            const isChipActive = effectiveDur === d;
+                            return (
+                              <Pressable
+                                key={d}
+                                style={[styles.optionChip, isChipActive && styles.optionChipActive]}
+                                onPress={() => setDraftDuration(d)}
+                                testID={`duration-chip-${d}`}
+                              >
+                                <Text style={[styles.optionChipText, isChipActive && styles.optionChipTextActive]}>
+                                  {d} min
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
+
+                    {(isEligibleForLightningLane || isEligibleForSingleRider) && (
+                      <>
+                        <Text style={styles.label}>Options</Text>
+                        <View style={styles.modalActions}>
+                          {isEligibleForLightningLane && (
+                            <SecondaryButton
+                              label={draftItem.isLightningLane ? '⚡ Lightning Lane Pass: Active' : '⚡ Lightning Lane Pass: Off'}
+                              onPress={() => {
+                                const nextLL = !draftItem.isLightningLane;
+                                setDraftItem((prev) => {
+                                  if (!prev) return null;
+                                  return {
+                                    ...prev,
+                                    isLightningLane: nextLL,
+                                    isFixed: nextLL ? false : (timingMode === 'exact_time'),
+                                  };
+                                });
+                                if (nextLL && timingMode !== 'exact_time') {
+                                  setTimingMode('exact_time');
+                                  if (!passTimeText.trim()) {
+                                    setPassTimeText('10:00 AM');
+                                  }
+                                }
+                              }}
+                              testID="ll-option-toggle"
+                            />
+                          )}
+                          {isEligibleForSingleRider && (
+                            <SecondaryButton
+                              label={draftItem.useSingleRider ? '👤 Single Rider Line: Active' : '👤 Single Rider Line: Off'}
+                              onPress={() => setDraftItem((prev) => (prev ? { ...prev, useSingleRider: !prev.useSingleRider } : null))}
+                              testID="single-rider-toggle"
+                            />
+                          )}
+                        </View>
+                      </>
+                    )}
+
+                    <Text style={styles.label}>Priority Level</Text>
+                    <View style={styles.chipRow}>
+                      {[1, 2, 3].map((p) => (
+                        <Pressable
+                          key={p}
+                          style={[styles.optionChip, draftItem.priority === p && styles.optionChipActive]}
+                          onPress={() => setDraftItem((prev) => (prev ? { ...prev, priority: p } : null))}
+                        >
+                          <Text style={[styles.optionChipText, draftItem.priority === p && styles.optionChipTextActive]}>
+                            {p === 1 ? 'Must Do (1)' : p === 2 ? 'Standard (2)' : 'Optional (3)'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={styles.modalFooter}>
+                      <SecondaryButton
+                        label="Remove from Trip"
+                        onPress={() => deleteMutation.mutate(draftItem.id)}
+                        disabled={deleteMutation.isPending}
+                      />
+                      <PrimaryButton
+                        label="Done"
+                        onPress={handleSaveModal}
+                        loading={editMutation.isPending}
+                        disabled={editMutation.isPending}
+                      />
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+
+          {/* Schedule Settings Modal (Touring Hours, Pace, Early Entry, Parties) */}
+          <Modal
+            visible={showSettingsModal}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setShowSettingsModal(false)}
+            testID="schedule-settings-modal"
+          >
+            <View style={styles.modalBg}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Settings: {formatDatePill(activeDate)}</Text>
+                  <Pressable
+                    testID="close-schedule-settings-modal"
+                    onPress={() => setShowSettingsModal(false)}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={24} color={t.color.textSecondary} />
+                  </Pressable>
+                </View>
+
+                <ScrollView contentContainerStyle={{ gap: t.spacing.md, paddingVertical: t.spacing.sm }} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.label}>Walking Pace</Text>
+                  <View style={styles.chipRow}>
+                    {[
+                      { label: '🐢 Slow (50m/min)', val: 'slow' as const },
+                      { label: '🚶 Moderate (80m/min)', val: 'moderate' as const },
+                      { label: '⚡ Fast (100m/min)', val: 'fast' as const },
+                    ].map((p) => (
+                      <Pressable
+                        key={p.val}
+                        testID={`walking-pace-${p.val}`}
+                        style={[styles.optionChip, walkingSpeed === p.val && styles.optionChipActive]}
+                        onPress={() => setWalkingSpeed(p.val)}
+                      >
+                        <Text style={[styles.optionChipText, walkingSpeed === p.val && styles.optionChipTextActive]}>
+                          {p.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Walk/Wait Priority</Text>
+                  <View style={styles.chipRow}>
+                    {[
+                      { label: '⚖️ Balanced', val: 'balanced' as const },
+                      { label: '🚶 Minimize Walking', val: 'minimize_walking' as const },
+                      { label: '⏱️ Minimize Waits', val: 'minimize_waits' as const },
+                    ].map((w) => (
+                      <Pressable
+                        key={w.val}
+                        testID={`walk-wait-weighting-${w.val}`}
+                        style={[styles.optionChip, walkWaitWeighting === w.val && styles.optionChipActive]}
+                        onPress={() => setWalkWaitWeighting(w.val)}
+                      >
+                        <Text style={[styles.optionChipText, walkWaitWeighting === w.val && styles.optionChipTextActive]}>
+                          {w.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Special Park Hours & Tickets ({formatDatePill(activeDate)})</Text>
+                  <View style={styles.chipRow}>
+                    <Pressable
+                      testID="toggle-early-entry"
+                      style={[styles.optionChip, currentUseEarlyEntry && styles.optionChipActive]}
+                      onPress={() => {
+                        const nextVal = !currentUseEarlyEntry;
+                        setEarlyEntryEligible(nextVal);
+                        setDaySetting({ useEarlyEntry: nextVal });
+                      }}
+                    >
+                      <Text style={[styles.optionChipText, currentUseEarlyEntry && styles.optionChipTextActive]}>
+                        ⚡ Early Entry (30m Early)
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="toggle-extended-evening"
+                      style={[styles.optionChip, currentUseExtendedEvening && styles.optionChipActive]}
+                      onPress={() => setDaySetting({ useExtendedEvening: !currentUseExtendedEvening })}
+                    >
+                      <Text style={[styles.optionChipText, currentUseExtendedEvening && styles.optionChipTextActive]}>
+                        🌙 Extended Evening (+2 Hours)
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID="toggle-after-hours"
+                      style={[styles.optionChip, currentHasAfterHoursTicket && styles.optionChipActive]}
+                      onPress={() => setDaySetting({ hasAfterHoursTicket: !currentHasAfterHoursTicket })}
+                    >
+                      <Text style={[styles.optionChipText, currentHasAfterHoursTicket && styles.optionChipTextActive]}>
+                        🎟️ After-Hours Event Ticket
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Starting Park</Text>
+                  <View style={styles.chipRow}>
+                    {[
+                      { label: 'Auto-detect', val: undefined },
+                      { label: 'Magic Kingdom', val: 'Magic Kingdom' },
+                      { label: 'EPCOT', val: 'EPCOT' },
+                      { label: 'Hollywood Studios', val: 'Hollywood Studios' },
+                      { label: 'Animal Kingdom', val: 'Animal Kingdom' },
+                    ].map((parkOpt) => {
+                      const isSelected = (activeDaySettings.startingPark === parkOpt.val) || (!activeDaySettings.startingPark && parkOpt.val === undefined);
+                      return (
+                        <Pressable
+                          key={parkOpt.label}
+                          testID={`starting-park-${parkOpt.label.toLowerCase().replace(/\s+/g, '-')}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                          style={[styles.optionChip, isSelected && styles.optionChipActive]}
+                          onPress={() => {
+                            const newPark = parkOpt.val;
+                            const parkInfo = newPark ? getParkHoursDetails(newPark) : null;
+                            const newStartHour = parkInfo ? parseInt(parkInfo.openTimeText.split(':')[0]!, 10) : undefined;
+                            setDaySetting({
+                              startingPark: newPark,
+                              ...(newStartHour !== undefined ? { startHour: newStartHour, startMinutes: newStartHour * 60 } : {}),
+                            });
+                          }}
+                        >
+                          <Text style={[styles.optionChipText, isSelected && styles.optionChipTextActive]}>
+                            {parkOpt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {(() => {
+                    const primaryParkName = activeDaySettings.startingPark || activeDayParks[0];
+                    const primaryParkInfo = primaryParkName ? getParkHoursDetails(primaryParkName) : null;
+                    const primaryParkOpenHour = primaryParkInfo ? parseInt(primaryParkInfo.openTimeText.split(':')[0]!, 10) : 9;
+                    const closeHourRaw = primaryParkInfo ? parseInt(primaryParkInfo.openTimeText.split(' - ')[1]?.split(':')[0]!, 10) : 9;
+                    const primaryParkCloseHour = closeHourRaw === 12 ? 12 : closeHourRaw + 12;
+
+                    return (
+                      <>
+                        <Text style={styles.label}>Arrival Intent</Text>
+                        <View style={styles.chipRow}>
+                          <Pressable
+                            testID="arrival-mode-park-open"
+                            disabled={isParkAlreadyOpen}
+                            style={[
+                              styles.optionChip,
+                              currentStartMode === 'park_open' && !isParkAlreadyOpen && styles.optionChipActive,
+                              isParkAlreadyOpen && { opacity: 0.45 },
+                            ]}
+                            onPress={() =>
+                              setDaySetting({
+                                startMode: 'park_open',
+                                startHour: primaryParkOpenHour,
+                                startMinutes: parkOpenMinutes,
+                              })
+                            }
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'park_open' && !isParkAlreadyOpen && styles.optionChipTextActive]}>
+                              🏰 Park Open ({formatMinutesToTime(parkOpenMinutes)}){isParkAlreadyOpen ? ' (Passed)' : ''}
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            testID="arrival-mode-party-mix-in"
+                            disabled={isPartyMixInPassed}
+                            style={[
+                              styles.optionChip,
+                              currentStartMode === 'party_mix_in' && !isPartyMixInPassed && styles.optionChipActive,
+                              isPartyMixInPassed && { opacity: 0.45 },
+                            ]}
+                            onPress={() =>
+                              setDaySetting({
+                                startMode: 'party_mix_in',
+                                startHour: 16,
+                                startMinutes: 960,
+                              })
+                            }
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'party_mix_in' && !isPartyMixInPassed && styles.optionChipTextActive]}>
+                              🎟️ Party Mix-in (4 PM){isPartyMixInPassed ? ' (Passed)' : ''}
+                            </Text>
+                          </Pressable>
+
+                          {isToday && (
+                            <Pressable
+                              testID="arrival-mode-now"
+                              style={[
+                                styles.optionChip,
+                                (currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')) && styles.optionChipActive,
+                              ]}
+                              onPress={() =>
+                                setDaySetting({
+                                  startMode: 'now',
+                                  startMinutes: roundedNowMinutes,
+                                  startHour: Math.floor(roundedNowMinutes / 60),
+                                })
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.optionChipText,
+                                  (currentStartMode === 'now' || (isParkAlreadyOpen && currentStartMode === 'park_open')) && styles.optionChipTextActive,
+                                ]}
+                              >
+                                📍 Right Now ({formatMinutesToTime(roundedNowMinutes)})
+                              </Text>
+                            </Pressable>
+                          )}
+
+                          <Pressable
+                            testID="arrival-mode-custom"
+                            style={[styles.optionChip, currentStartMode === 'custom' && styles.optionChipActive]}
+                            onPress={() => {
+                              const nextMinutes = isToday
+                                ? Math.max(activeDaySettings.startMinutes ?? roundedNowMinutes, roundedNowMinutes)
+                                : (activeDaySettings.startMinutes ?? parkOpenMinutes);
+                              setDaySetting({
+                                startMode: 'custom',
+                                startMinutes: nextMinutes,
+                                startHour: Math.floor(nextMinutes / 60),
+                              });
+                            }}
+                          >
+                            <Text style={[styles.optionChipText, currentStartMode === 'custom' && styles.optionChipTextActive]}>
+                              ⏰ Custom Time
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {currentStartMode === 'custom' && (
+                          <View style={{ marginTop: t.spacing.xs }} testID="custom-start-time-picker-container">
+                            <Text style={[styles.label, { fontSize: t.typography.meta.fontSize, color: t.color.textSecondary }]}>
+                              Selected Arrival: {formatMinutesToTime(currentStartMinutes)}
+                            </Text>
+                            <TimeWheelPicker
+                              value={formatMinutesToTime(currentStartMinutes)}
+                              minuteStep={15}
+                              onChange={(nextTime) => {
+                                const mins = parseTimeToMinutes(nextTime);
+                                if (mins != null) {
+                                  const clampedMins = isToday ? Math.max(mins, roundedNowMinutes) : mins;
+                                  setDaySetting({
+                                    startMinutes: clampedMins,
+                                    startHour: Math.floor(clampedMins / 60),
+                                    startMode: 'custom',
+                                  });
+                                }
+                              }}
+                              testIDPrefix="custom-start-time"
+                            />
+                            {isToday && (
+                              <Text style={{ fontSize: 12, color: t.color.textSecondary, marginTop: 4 }}>
+                                Earliest arrival today is Right Now ({formatMinutesToTime(roundedNowMinutes)}). Past times are clamped.
+                              </Text>
+                            )}
+                          </View>
+                        )}
+
+                        <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Quick Presets</Text>
+                        <View style={styles.chipRow}>
+                          <Pressable
+                            testID="preset-park-open-close"
+                            style={[
+                              styles.optionChip,
+                              currentStartHour === primaryParkOpenHour && currentEndHour === primaryParkCloseHour && styles.optionChipActive,
+                            ]}
+                            onPress={() => {
+                              if (isToday && isParkAlreadyOpen) {
+                                setDaySetting({
+                                  startHour: Math.floor(roundedNowMinutes / 60),
+                                  endHour: primaryParkCloseHour,
+                                  startMinutes: roundedNowMinutes,
+                                  startMode: 'now',
+                                });
+                              } else {
+                                setDaySetting({
+                                  startHour: primaryParkOpenHour,
+                                  endHour: primaryParkCloseHour,
+                                  startMinutes: parkOpenMinutes,
+                                  startMode: 'park_open',
+                                });
+                              }
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.optionChipText,
+                                currentStartHour === primaryParkOpenHour && currentEndHour === primaryParkCloseHour && styles.optionChipTextActive,
+                              ]}
+                            >
+                              🏰 Park Open to Close
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            testID="preset-morning"
+                            style={[
+                              styles.optionChip,
+                              currentStartHour === primaryParkOpenHour && currentEndHour === 13 && styles.optionChipActive,
+                            ]}
+                            onPress={() => {
+                              const effStart = isToday && isParkAlreadyOpen ? roundedNowMinutes : parkOpenMinutes;
+                              setDaySetting({
+                                startHour: Math.floor(effStart / 60),
+                                endHour: 13,
+                                startMinutes: effStart,
+                                startMode: isToday && isParkAlreadyOpen ? 'now' : 'park_open',
+                              });
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.optionChipText,
+                                currentStartHour === primaryParkOpenHour && currentEndHour === 13 && styles.optionChipTextActive,
+                              ]}
+                            >
+                              ☀️ Morning
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            testID="preset-evening"
+                            style={[
+                              styles.optionChip,
+                              currentStartHour === 16 && currentEndHour === primaryParkCloseHour && styles.optionChipActive,
+                            ]}
+                            onPress={() => {
+                              const effStart = isToday && isPartyMixInPassed ? roundedNowMinutes : 960;
+                              setDaySetting({
+                                startHour: Math.floor(effStart / 60),
+                                endHour: primaryParkCloseHour,
+                                startMinutes: effStart,
+                                startMode: isToday && isPartyMixInPassed ? 'now' : 'party_mix_in',
+                              });
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.optionChipText,
+                                currentStartHour === 16 && currentEndHour === primaryParkCloseHour && styles.optionChipTextActive,
+                              ]}
+                            >
+                              🌙 Evening
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        <Text style={[styles.label, { marginTop: t.spacing.xs }]}>Day End Time</Text>
+                        <View style={styles.chipRow}>
+                          {[
+                            { label: '1:00 PM', val: 13 },
+                            { label: '5:00 PM', val: 17 },
+                            { label: '7:00 PM', val: 19 },
+                            { label: '9:00 PM', val: 21 },
+                            { label: '10:00 PM', val: 22 },
+                            { label: '11:00 PM', val: 23 },
+                          ].map((opt) => {
+                            const displayLabel = opt.val === primaryParkCloseHour ? `${opt.label} (Close)` : opt.label;
+                            return (
+                              <Pressable
+                                key={opt.val}
+                                testID={`end-hour-${opt.val}`}
+                                style={[styles.optionChip, currentEndHour === opt.val && styles.optionChipActive]}
+                                onPress={() => setDaySetting({ endHour: opt.val })}
+                              >
+                                <Text style={[styles.optionChipText, currentEndHour === opt.val && styles.optionChipTextActive]}>
+                                  {displayLabel}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </>
+                    );
+                  })()}
+                </ScrollView>
+
+                <View style={[styles.modalFooter, { marginTop: t.spacing.md }]}>
+                  <PrimaryButton
+                    testID="save-schedule-settings-btn"
+                    label="Done"
+                    onPress={handleSaveScheduleSettings}
+                    loading={tripPatchMutation.isPending}
+                    disabled={tripPatchMutation.isPending}
+                  />
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
+      )}
+    </ScreenContainer>
+  );
+}
+
+const useStyles = makeStyles((t) => ({
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: t.spacing.xl,
+  },
+  content: {
+    padding: t.spacing.lg,
+    paddingBottom: t.spacing.xl * 2,
+  },
+  mismatchBanner: {
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    padding: 12,
+    marginBottom: t.spacing.md,
+    gap: 8,
+  },
+  mismatchBannerTextCol: {
+    gap: 4,
+  },
+  mismatchBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mismatchIcon: {
+    marginRight: 2,
+  },
+  mismatchBannerTitle: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mismatchBannerText: {
+    ...t.typography.body,
+    fontSize: 13,
+    color: t.color.textSecondary,
+    lineHeight: 18,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  mismatchSwitchBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: t.color.primary,
+    borderRadius: t.radius.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 2,
+  },
+  mismatchSwitchBtnText: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.textOnPrimary,
+  },
+  dateSelectorContainer: {
+    backgroundColor: t.color.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
+    paddingVertical: t.spacing.sm,
+  },
+  dateSelector: {
+    paddingHorizontal: t.spacing.md,
+    gap: t.spacing.xs,
+  },
+  datePill: {
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.lg,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePillActive: {
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+  },
+  datePillText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontWeight: '600',
+  },
+  datePillTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  datePillParkText: {
+    ...t.typography.meta,
+    fontSize: 11,
+    color: t.color.textSecondary,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  datePillParkTextActive: {
+    color: t.color.textOnPrimary,
+    opacity: 0.9,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: t.spacing.lg,
+    paddingVertical: t.spacing.md,
+    backgroundColor: t.color.surface,
+    gap: t.spacing.sm,
+  },
+  touringStartBadgeContainer: {
+    paddingHorizontal: t.spacing.lg,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.xs,
+  },
+  touringStartBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: t.color.surface,
+    borderColor: t.color.primaryFg,
+    borderWidth: 1,
+    borderRadius: t.radius.pill,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: 4,
+  },
+  touringStartBadgeText: {
+    fontSize: t.typography.meta.fontSize,
+    fontWeight: '600',
+    color: t.color.primaryFg,
+  },
+  parkHoursRow: {
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.md,
+  },
+  parkHoursCard: {
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.md,
+    padding: t.spacing.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  parkHoursHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  parkHoursTitle: {
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    fontWeight: '700',
+  },
+  parkHoursTime: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+  },
+  parkTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
+  },
+  sectionTitle: {
+    ...t.typography.title,
+    color: t.color.textPrimary,
+    marginVertical: t.spacing.md,
+  },
+  lastOptimizedHint: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.sm,
+    fontWeight: '400',
+  },
+  notOptimizedNotice: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.sm,
+    fontWeight: '400',
+  },
+  resultContainer: {
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    marginBottom: t.spacing.lg,
+    ...t.outline.card,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: t.spacing.xs,
+    gap: t.spacing.sm,
+    zIndex: 2,
+  },
+  speechBubble: {
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    minWidth: 78,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  speechBubbleText: {
+    ...t.typography.meta,
+    color: t.color.textOnPrimary,
+    fontWeight: '700',
+  },
+  timelineCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    padding: t.spacing.sm,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    gap: t.spacing.md,
+  },
+  squareThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
+  },
+  thumbnailFallback: {
+    width: 56,
+    height: 56,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineName: {
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    fontWeight: '600',
+  },
+  timelineSub: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  timelineWait: {
+    ...t.typography.meta,
+    color: t.color.primaryFg,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
+  },
+  parkHoursRowScroll: {
+    gap: 12,
+    paddingVertical: t.spacing.xs,
+    paddingHorizontal: t.spacing.xs,
+    marginBottom: t.spacing.md,
+  },
+  parkHoursCardHorizontal: {
+    width: 190,
+    backgroundColor: t.color.surface,
+    ...t.outline.card,
+    borderRadius: 16,
+    padding: 12,
+    borderLeftWidth: 5,
+    borderLeftColor: SCHEDULE[t.scheme].parkStripeGreen,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  parkHoursTitleHoriz: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].inkText,
+  },
+  parkHoursTimeHoriz: {
+    fontSize: 12,
+    color: SCHEDULE[t.scheme].slate600Text,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  parkTagRowHoriz: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  earlyEntryBadge: {
+    backgroundColor: SCHEDULE[t.scheme].earlyEntryBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  earlyEntryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].earlyEntryText,
+  },
+  extendedHoursBadge: {
+    backgroundColor: SCHEDULE[t.scheme].extendedBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  extendedHoursBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].extendedText,
+  },
+  afterHoursBadge: {
+    backgroundColor: SCHEDULE[t.scheme].afterHoursBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  afterHoursBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].afterHoursText,
+  },
+  timelineSectionContainer: {
+    marginBottom: t.spacing.lg,
+  },
+  timelineWrapper: {
+    position: 'relative',
+  },
+  timelineStepContainer: {
+    marginVertical: 4,
+  },
+  verticalTrackLine: {
+    position: 'absolute',
+    left: 20,
+    top: 10,
+    bottom: 10,
+    width: 2,
+    backgroundColor: SCHEDULE[t.scheme].trackLine,
+  },
+  connectorRowContainer: {
+    marginVertical: 4,
+    position: 'relative',
+    minHeight: 26,
+    justifyContent: 'center',
+  },
+  parkHopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  busNodeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    borderWidth: 2,
+    borderColor: t.color.surface,
+    position: 'absolute',
+    left: 2,
+    zIndex: 2,
+  },
+  dashedParkHopBox: {
+    flex: 1,
+    marginLeft: 52,
+    borderWidth: 1.5,
+    borderColor: SCHEDULE[t.scheme].dashedBorder,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: t.color.surface,
+  },
+  dashedParkHopText: {
+    fontSize: 13,
+    color: SCHEDULE[t.scheme].slate700Text,
+  },
+  boldMins: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].inkText,
+  },
+  walkTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 52,
+    gap: 6,
+  },
+  inlineWalkText: {
+    fontSize: 13,
+    color: SCHEDULE[t.scheme].slate600Text,
+  },
+  topSpeechNodeRow: {
+    height: 34,
+    justifyContent: 'center',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  purpleCircleNode: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: SCHEDULE[t.scheme].nodeFill,
+    borderWidth: 2,
+    borderColor: t.color.surface,
+    position: 'absolute',
+    left: 12,
+    zIndex: 3,
+  },
+  speechBubbleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    left: 23,
+    zIndex: 4,
+  },
+  speechBubbleTriangle: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 5,
+    borderBottomWidth: 5,
+    borderRightWidth: 6,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderRightColor: SCHEDULE[t.scheme].speechFill,
+  },
+  speechPillPointer: {
+    backgroundColor: SCHEDULE[t.scheme].speechFill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  speechPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textOnPrimary,
+  },
+  timelineCardRow: {
+    position: 'relative',
+    marginVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verticalTimeBox: {
+    position: 'absolute',
+    left: -6,
+    width: 52,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SCHEDULE[t.scheme].timeBoxBg,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 5,
+  },
+  vertTimeDigits: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].inkText,
+    lineHeight: 17,
+  },
+  vertTimeAmpm: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].slate500Text,
+    textTransform: 'uppercase',
+    marginTop: -1,
+  },
+  mockupAttractionCard: {
+    marginLeft: 52,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: t.color.surface,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: SCHEDULE[t.scheme].cardHairline,
+    gap: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  mockupThumbnail: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
+  },
+  mockupThumbnailFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mockupCardBody: {
+    flex: 1,
+  },
+  cardIndexLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].slate500Text,
+  },
+  mockupCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].inkText,
+    marginTop: 1,
+  },
+  mockupCardLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  mockupCardLocationText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: SCHEDULE[t.scheme].slate500Text,
+    flexShrink: 1,
+  },
+  mockupBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  waitPillGray: {
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  waitPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].slate700Text,
+  },
+  llPillGold: {
+    backgroundColor: SCHEDULE[t.scheme].llPillBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  llPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].llPillText,
+  },
+  // Reservation kind pill (trip-reservations R4.3). Distinct fill from the
+  // Lightning-Lane pill, and always accompanied by its kind in words so the
+  // distinction is never carried by color alone.
+  reservationPill: {
+    backgroundColor: SCHEDULE[t.scheme].reservationBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  reservationPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].reservationText,
+  },
+  earlyEntryPillCyan: {
+    backgroundColor: SCHEDULE[t.scheme].earlyPillBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  earlyEntryPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].earlyPillText,
+  },
+  singleRiderPillSky: {
+    backgroundColor: SCHEDULE[t.scheme].singleRiderBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  singleRiderPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].singleRiderText,
+  },
+  fixedTimePillPurple: {
+    backgroundColor: SCHEDULE[t.scheme].fixedBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  fixedTimePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].fixedText,
+  },
+  durationPillGray: {
+    backgroundColor: SCHEDULE[t.scheme].greyPillBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  durationPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].slate600Text,
+  },
+  itemCard: {
+    marginBottom: t.spacing.sm,
+    padding: t.spacing.md,
+  },
+  itemName: {
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    marginBottom: t.spacing.xs,
+  },
+  itemMeta: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
+  },
+  itemProps: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    gap: t.spacing.sm,
+  },
+  emptyDayContainer: {
+    paddingVertical: t.spacing.lg,
+  },
+  emptyText: {
+    ...t.typography.body,
+    color: t.color.textSecondary,
+    fontStyle: 'italic',
+    marginBottom: t.spacing.md,
+  },
+  warnings: {
+    backgroundColor: t.color.warningSurface,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.md,
+  },
+  warningText: {
+    color: t.color.warningText,
+    ...t.typography.meta,
+  },
+  modalBody: {
+    flex: 1,
+    padding: t.spacing.lg,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: t.color.background,
+    padding: t.spacing.xl,
+    borderTopLeftRadius: t.radius.xl,
+    borderTopRightRadius: t.radius.xl,
+    maxHeight: '80%',
+  },
+  headerSettingsBtn: {
+    padding: t.spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: t.spacing.sm,
+  },
+  modalTitle: {
+    ...t.typography.title,
+    color: t.color.textPrimary,
+  },
+  label: {
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
+    marginTop: t.spacing.md,
+    marginBottom: t.spacing.xs,
+  },
+  modalActions: {
+    gap: t.spacing.sm,
+  },
+  optionChip: {
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  optionChipActive: {
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+  },
+  optionChipText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+  },
+  optionChipTextActive: {
+    color: t.color.textOnPrimary,
+    fontWeight: '600',
+  },
+  modalFooter: {
+    marginTop: t.spacing.xl,
+    gap: t.spacing.md,
+  },
+  timeSection: {
+    marginTop: t.spacing.sm,
+    backgroundColor: t.color.surface,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.md,
+    marginTop: t.spacing.xs,
+  },
+  timeInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    color: t.color.textPrimary,
+    fontSize: 15,
+  },
+  errorText: {
+    ...t.typography.meta,
+    color: t.color.danger,
+    marginTop: t.spacing.xs,
+  },
+  llWindowBox: {
+    marginTop: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: t.color.accent,
+  },
+  llWindowText: {
+    ...t.typography.body,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  llGraceText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginTop: 2,
+  },
+  wheelCard: {
+    marginTop: t.spacing.xs,
+    marginBottom: t.spacing.xs,
+  },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.color.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.xs,
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: t.spacing.xs,
+    paddingHorizontal: t.spacing.xs,
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    alignItems: 'center',
+  },
+  presetChipActive: {
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  presetChipTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  wheelGrid: {
+    flexDirection: 'row',
+    gap: t.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.xs,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    height: 140,
+  },
+  wheelColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  wheelColHeader: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: t.color.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  wheelScroll: {
+    width: '100%',
+  },
+  wheelItem: {
+    paddingVertical: t.spacing.xs,
+    alignItems: 'center',
+    borderRadius: t.radius.sm,
+    marginVertical: 1,
+  },
+  wheelItemActive: {
+    backgroundColor: t.color.primary,
+  },
+  wheelItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  wheelItemTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  ampmBox: {
+    width: '100%',
+    gap: t.spacing.xs,
+    marginTop: 4,
+  },
+  ampmBtn: {
+    paddingVertical: t.spacing.xs + 2,
+    alignItems: 'center',
+    borderRadius: t.radius.sm,
+    backgroundColor: t.color.surface,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  ampmBtnActive: {
+    backgroundColor: t.color.primary,
+    borderColor: t.color.primary,
+  },
+  ampmText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  ampmTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  clearTimeButton: {
+    padding: t.spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  windowPillOrange: {
+    backgroundColor: SCHEDULE[t.scheme].windowPillBg,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  windowPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: SCHEDULE[t.scheme].windowPillText,
+  },
+  fieldSection: {
+    marginBottom: t.spacing.sm,
+  },
+  customTitleInput: {
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    fontSize: 15,
+    color: t.color.textPrimary,
+    marginTop: 4,
+  },
+  modalLocationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: t.color.surfaceAlt,
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginTop: t.spacing.xs,
+  },
+  modalLocationText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    flexShrink: 1,
+  },
+  timingModeRow: {
+    flexDirection: 'row',
+    gap: t.spacing.xs,
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.xs,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.sm,
+  },
+  exactModeToggleRow: {
+    flexDirection: 'row',
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
+  },
+  exactModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: t.spacing.sm,
+    paddingHorizontal: t.spacing.xs,
+    borderRadius: t.radius.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  exactModeBtnActive: {
+    backgroundColor: t.color.surface,
+    borderColor: t.color.primaryFg,
+    ...t.shadow.card,
+  },
+  exactModeBtnText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontWeight: '500',
+    fontSize: 12,
+  },
+  exactModeBtnTextActive: {
+    color: t.color.textPrimary,
+    fontWeight: '700',
+  },
+  timingModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: t.spacing.sm,
+    borderRadius: t.radius.sm,
+  },
+  timingModeBtnActive: {
+    // Dark: lighter than the `surfaceAlt` track so it reads raised (Requirement 9.12).
+    backgroundColor: t.scheme === 'dark' ? t.color.borderStrong : t.color.surface,
+    ...t.shadow.card,
+  },
+  timingModeText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontWeight: '500',
+  },
+  timingModeTextActive: {
+    color: t.color.primaryFg,
+    fontWeight: '700',
+  },
+  modeInfoBox: {
+    backgroundColor: t.color.surfaceAlt,
+    padding: t.spacing.md,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.sm,
+  },
+  modeInfoText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    lineHeight: 18,
+  },
+  windowPresetsGrid: {
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.sm,
+  },
+  windowPresetCard: {
+    backgroundColor: t.color.surfaceAlt,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    borderRadius: t.radius.md,
+    padding: t.spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  windowPresetCardActive: {
+    backgroundColor: SCHEDULE[t.scheme].presetActiveBg,
+    borderColor: SCHEDULE[t.scheme].presetActiveBorder,
+  },
+  windowPresetTitle: {
+    ...t.typography.body,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  windowPresetTitleActive: {
+    color: SCHEDULE[t.scheme].presetActiveTitle,
+    fontWeight: '700',
+  },
+  windowPresetSubtitle: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+  },
+  windowPresetSubtitleActive: {
+    color: SCHEDULE[t.scheme].presetActiveSubtitle,
+    fontWeight: '600',
+  },
+  selectedWindowNotice: {
+    backgroundColor: SCHEDULE[t.scheme].noticeBg,
+    padding: t.spacing.xs + 2,
+    borderRadius: t.radius.sm,
+    marginTop: t.spacing.xs,
+    alignItems: 'center',
+  },
+  selectedWindowText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].noticeText,
+  },
+  unservedWarningBox: {
+    backgroundColor: SCHEDULE[t.scheme].unservedBg,
+    borderWidth: 1,
+    borderColor: SCHEDULE[t.scheme].unservedBorder,
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    marginBottom: t.spacing.xs,
+  },
+  unservedWarningText: {
+    fontSize: 12,
+    color: SCHEDULE[t.scheme].unservedText,
+    fontWeight: '600',
+  },
+  customWindowBox: {
+    marginTop: t.spacing.xs,
+    padding: t.spacing.sm,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    gap: t.spacing.xs,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  stepperLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  stepperControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.xs,
+  },
+  stepperBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.sm,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  stepperBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  stepperValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+    minWidth: 70,
+    textAlign: 'center',
+  },
+  showtimesSection: {
+    marginBottom: t.spacing.md,
+    padding: t.spacing.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  showtimesSubLabel: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    marginBottom: t.spacing.xs,
+  },
+  showtimesLoadingText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontStyle: 'italic',
+    marginTop: t.spacing.xs,
+  },
+  emptyShowtimesBox: {
+    paddingVertical: t.spacing.sm,
+  },
+  emptyShowtimesText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    fontStyle: 'italic',
+  },
+  showtimePillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
+  },
+  showtimePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: t.color.surface,
+    borderWidth: 1.5,
+    borderColor: t.color.border,
+  },
+  showtimePillActive: {
+    backgroundColor: t.color.primary,
+    borderColor: SCHEDULE[t.scheme].showtimeActiveBorder,
+  },
+  showtimePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  showtimePillTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  typicalShowtimeNotice: {
+    backgroundColor: SCHEDULE[t.scheme].noticeBg,
+    borderRadius: t.radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  typicalShowtimeNoticeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: SCHEDULE[t.scheme].typicalShowtimeText,
+  },
+}));

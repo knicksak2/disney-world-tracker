@@ -2,7 +2,7 @@
 //
 // Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 5.3, 5.4, 5.7
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Image,
   Keyboard,
@@ -26,6 +26,7 @@ import { DatePickerField } from '../../components/DatePickerField';
 import { Badge, PrimaryButton, SecondaryButton } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { LOG_FOOD } from './LogFoodItemModal.palette';
 import { usePhotoConfig, useUploadPhotos } from '../../photos/api';
 import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
@@ -96,6 +97,9 @@ export default function LogFoodItemModal({
   const [pickerVisible, setPickerVisible] = useState<boolean>(false);
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   React.useEffect(() => {
     if (visible && initialPhotos && initialPhotos.length > 0) {
@@ -211,9 +215,19 @@ export default function LogFoodItemModal({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
+        style={[
+          styles.backdrop,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
-        <View style={styles.sheet}>
+        <View
+          style={[
+            styles.sheet,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitles}>
@@ -245,6 +259,7 @@ export default function LogFoodItemModal({
           )}
 
           <ScrollView
+            ref={scrollViewRef}
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -330,6 +345,11 @@ export default function LogFoodItemModal({
                 maxLength={MAX_NOTE_LENGTH}
                 style={styles.noteInput}
                 testID="log-food-item-note-input"
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 180, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 

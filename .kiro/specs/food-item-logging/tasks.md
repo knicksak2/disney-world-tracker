@@ -86,6 +86,14 @@
   - [x] 13.2 Add menu tab filtering, group section headers, and cross-menu search fallback to `FoodItemPickerModal.tsx` in `apps/mobile/src/screens/catalog/`
   - [x] 13.3 Add interaction unit tests in `apps/mobile/src/screens/catalog/__tests__/FoodItemPickerModal.test.tsx` verifying tab filtering, default tab selection, group rendering, tab switching, and cross-menu search fallback
 
+- [x] 14. Edit Food Item Log (Date, Rating, Notes, Photos) (R4.5, R4.7, R5.11, R8.11, R9.9, Property 14)
+  - [x] 14.1 Update `updateFoodItemLogInputSchema` in `packages/shared/src/schemas/FoodItemLog.ts` and `UpdateFoodItemLogInputDTO` in `packages/shared/src/dto/FoodItemLog.ts` to accept `visitedOn` and `userTz`; add schema unit tests in `packages/shared/src/schemas/__tests__/FoodItem.test.ts`
+  - [x] 14.2 Update `updateLog` in `FoodItemLogRepo` (`apps/api/src/services/foodLog/repo.ts`) and `PATCH /me/food-items/:foodItemId/logs/:logId` (`apps/api/src/services/foodLog/routes.ts`) to validate future dates against `clock` and update `visited_on` and `user_tz`; add unit/prop tests in `routes.test.ts` and `foodItemLogs.prop.test.ts`
+  - [x] 14.3 Create `EditFoodLogModal.tsx` in `apps/mobile/src/screens/catalog/`: support editing `visitedOn` via `DatePickerField` (capped at today in user timezone), rating (1–10 pills + clear), multiline note (up to 2000 chars), displaying attached photos with delete option, and selecting new photos via `PhotoPickerSheet` (up to `maxPerFoodLog`); save dispatches PATCH and photo upload/deletion mutations, invalidating associated queries
+  - [x] 14.4 Wire `EditFoodLogModal` into `MyFoodHistoryScreen.tsx`, `FoodItemLogHistorySheet.tsx`, and `RestaurantFoodLogsSheet.tsx` (edit button in card header and/or rating press triggers edit modal)
+  - [x] 14.5 Write unit and interaction tests for `EditFoodLogModal.test.tsx` and update tests in `MyFoodHistoryScreen.test.tsx`, `FoodItemLogHistorySheet.test.tsx`, and `RestaurantFoodLogsSheet.test.tsx`
+  - [x] 14.6 Verification gate: run `npm run verify` across all workspaces
+
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves.
@@ -109,7 +117,8 @@ Tasks within a wave can proceed in parallel; each wave depends only on earlier w
     { "id": 13, "tasks": ["10.7", "10.8"] },
     { "id": 14, "tasks": ["10.9"] },
     { "id": 15, "tasks": ["11.1"] },
-    { "id": 16, "tasks": ["13.1", "13.2", "13.3"] }
+    { "id": 16, "tasks": ["13.1", "13.2", "13.3"] },
+    { "id": 17, "tasks": ["14.1", "14.2", "14.3", "14.4", "14.5", "14.6"] }
   ]
 }
 ```

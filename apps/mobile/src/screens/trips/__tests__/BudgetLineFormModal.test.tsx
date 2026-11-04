@@ -1326,19 +1326,20 @@ describe('BudgetLineFormModal (Task 18.2, Requirements 2.1-2.7, 14.8, 14.12, 22.
       />
     );
 
-    // 1. 6-Category Grid without 'other'
+    // 1. 6-Category Grid plus spanning 'other' shelf
     expect(screen.getByLabelText('tickets')).toBeTruthy();
     expect(screen.getByLabelText('lightning_lane')).toBeTruthy();
     expect(screen.getByLabelText('dining')).toBeTruthy();
     expect(screen.getByLabelText('lodging')).toBeTruthy();
     expect(screen.getByLabelText('transportation')).toBeTruthy();
     expect(screen.getByLabelText('shopping')).toBeTruthy();
-    expect(screen.queryByLabelText('other')).toBeNull();
+    expect(screen.getByLabelText('other')).toBeTruthy();
 
     // Friendly category labels rendered in cards
     expect(screen.getByText('Hotel / Stay')).toBeTruthy();
     expect(screen.getByText('Travel / Rides')).toBeTruthy();
     expect(screen.getByText('Souvenirs')).toBeTruthy();
+    expect(screen.getByText('Other')).toBeTruthy();
 
     // 2. Ticket Calculator Card Header
     expect(screen.getByText('Disney Ticket Quote Calculator')).toBeTruthy();

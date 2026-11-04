@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import {
   foodListNameSchema,
+  isoDateSchema,
   isoTimestampSchema,
   ratingValueSchema,
   uuidSchema,
@@ -69,6 +70,8 @@ export const foodListItemSchema = z
     gotten: z.boolean().optional(),
     rating: ratingValueSchema.nullable().optional(),
     logId: uuidSchema.nullable().optional(),
+    visitedOn: isoDateSchema.nullable().optional(),
+    note: z.string().max(2000).nullable().optional(),
   })
   .strict();
 

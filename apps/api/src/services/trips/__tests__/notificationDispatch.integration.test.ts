@@ -156,6 +156,8 @@ const CREATED_INVITE: CreatedInvite = {
 
 /** A `LoggedCompletion` with two `pending` tags (two deep-link targets). */
 const LOGGED_COMPLETION: LoggedCompletion = {
+  logId: '99999999-9999-4999-8999-999999999999',
+  loggedAt: '2026-05-10T12:00:00.000Z',
   logEntryId: LOG_ENTRY_ID,
   pendingTags: [
     { tagId: TAG_ID_A, taggedMemberId: TAGGED_A },
@@ -505,7 +507,9 @@ describe('real Notification_Service driven through the dispatch seam (R13.2)', (
 
     // Single tag keeps the delivery assertion unambiguous.
     const logCompletion = vi.fn().mockResolvedValue({
-      logEntryId: LOG_ENTRY_ID,
+      logId: '99999999-9999-4999-8999-999999999999',
+  loggedAt: '2026-05-10T12:00:00.000Z',
+  logEntryId: LOG_ENTRY_ID,
       pendingTags: [{ tagId: TAG_ID_A, taggedMemberId: TAGGED_A }],
     });
     app = await buildApp('organizer', makeRepo({ logCompletion }), {

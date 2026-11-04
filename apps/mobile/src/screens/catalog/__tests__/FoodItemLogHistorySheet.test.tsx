@@ -205,6 +205,44 @@ describe('FoodItemLogHistorySheet', () => {
       expect(onLogDeleted).toHaveBeenCalled();
     });
   });
+
+  it('R5.11: tapping edit button opens edit food log modal', async () => {
+    apiRequestMock.mockResolvedValueOnce({
+      foodItemId: 'item-1',
+      repeatCount: 1,
+      logs: [
+        {
+          id: 'log-1',
+          userId: 'user-1',
+          foodItemId: 'item-1',
+          visitedOn: '2026-06-15',
+          userTz: 'America/New_York',
+          loggedAt: '2026-06-15T12:00:00.000Z',
+          rating: 8,
+          note: 'Tasty!',
+        },
+      ],
+    });
+
+    renderWithClient(
+      <FoodItemLogHistorySheet
+        foodItem={MOCK_ITEM}
+        visible={true}
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('food-item-edit-log-log-1')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('food-item-edit-log-log-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
+      expect(screen.getAllByText('Dole Whip Float').length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
 
 /** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */

@@ -26,7 +26,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  EXPENSE_CATEGORIES,
   EXPENSE_SPLIT_MODES,
   CHARGE_LINE_KINDS,
   uuidSchema,
@@ -54,6 +53,7 @@ import {
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { themedSwitchProps } from '../../theme/switchColors';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { AVATAR_FILL, FORM, FORM_SWITCH } from './ExpenseFormModal.palette';
 import { DatePickerField } from '../../components/DatePickerField';
 import { apiRequest } from '../../api/client';
@@ -68,7 +68,7 @@ import { ledgerSaveErrorMessage } from './tripPartyDeleted';
 import { ExperiencePicker } from './ExperiencePicker';
 import { ResortPickerModal, type ResortItem } from './ResortPickerModal';
 import { ReceiptReviewModal } from './ReceiptReviewModal';
-import { extractTierPriceSuggestions, SAMPLE_DISNEY_RECEIPT } from './receiptScan.pure';
+import { extractTierPriceSuggestions } from './receiptScan.pure';
 import { scanReceiptPhoto, type ReceiptImageSource } from './receiptScan.native';
 import { MenuItemPicker } from '../../components/MenuItemPicker';
 import {
@@ -124,6 +124,28 @@ function getAvatarColor(name: string, t: Pick<AppTheme, 'scheme'>): string {
   return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length]!;
 }
 
+const CORE_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
+  'tickets',
+  'lightning_lane',
+  'dining',
+  'hotel',
+  'transportation',
+  'shopping',
+];
+
+const EXPENSE_CATEGORY_META: Record<
+  ExpenseCategory,
+  { label: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  tickets: { label: 'Tickets', icon: 'ticket-outline' },
+  lightning_lane: { label: 'Lightning Lane', icon: 'flash-outline' },
+  dining: { label: 'Dining', icon: 'restaurant-outline' },
+  hotel: { label: 'Hotel / Stay', icon: 'bed-outline' },
+  transportation: { label: 'Travel / Rides', icon: 'car-outline' },
+  shopping: { label: 'Souvenirs', icon: 'bag-handle-outline' },
+  other: { label: 'Other', icon: 'ellipsis-horizontal-circle-outline' },
+};
+
 export function ExpenseFormModal({
   visible,
   tripId,
@@ -140,6 +162,7 @@ export function ExpenseFormModal({
   const pal = usePalette(FORM);
   const switchPal = usePalette(FORM_SWITCH);
   const queryClient = useQueryClient();
+  const { keyboardInset, getAvailableModalHeight } = useKeyboardBottomInset(visible);
 
   const guestsQuery = useQuery<readonly TripGuestDTO[]>({
     queryKey: tripExpenseKeys.guests(tripId),
@@ -430,13 +453,6 @@ export function ExpenseFormModal({
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to scan receipt');
     }
-  };
-
-  const handleLoadDemoReceipt = () => {
-    setErrorMessage(null);
-    setSplitMode('itemized');
-    setScannedRawText(SAMPLE_DISNEY_RECEIPT);
-    setShowReceiptReview(true);
   };
 
   // Live itemized amount calculation (Req 5.14)
@@ -763,9 +779,20 @@ export function ExpenseFormModal({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
+        style={[
+          styles.modalOverlay,
+          Platform.OS === 'android' && keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+        ]}
       >
-        <View style={styles.modalContent} testID="expense-form-modal">
+        <View
+          style={[
+            styles.modalContent,
+            Platform.OS === 'android' && keyboardInset > 0
+              ? { maxHeight: getAvailableModalHeight(40) }
+              : null,
+          ]}
+          testID="expense-form-modal"
+        >
           {/* Sheet Handle */}
           <View style={styles.sheetHandle} />
 
@@ -932,36 +959,102 @@ export function ExpenseFormModal({
             </View>
 
             {/* 2. CATEGORY SELECTOR */}
-            <SectionLabel style={styles.fieldLabel}>CATEGORY</SectionLabel>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-              {EXPENSE_CATEGORIES.map((cat) => {
+            <View style={styles.categoryHeaderRow}>
+              <SectionLabel style={styles.fieldLabel}>CATEGORY</SectionLabel>
+              <View testID="active-category-pill" style={[styles.activeCategoryPill, { backgroundColor: pal.categoryBadgeBg }]}>
+                <Ionicons
+                  name={EXPENSE_CATEGORY_META[category].icon}
+                  size={13}
+                  color={pal.categoryTagText}
+                />
+                <Text style={[styles.activeCategoryPillText, { color: pal.categoryTagText }]}>
+                  {EXPENSE_CATEGORY_META[category].label}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.categoryGrid}>
+              {CORE_EXPENSE_CATEGORIES.map((cat) => {
                 const isSelected = cat === category;
-                const catIcons: Record<ExpenseCategory, string> = {
-                  dining: '🍽️',
-                  hotel: '🏨',
-                  tickets: '🎟️',
-                  shopping: '🛍️',
-                  transportation: '🚗',
-                  other: '✨',
-                };
+                const meta = EXPENSE_CATEGORY_META[cat];
                 return (
                   <Pressable
                     key={cat}
-                    style={[styles.catChip, isSelected && styles.catChipSelected]}
+                    accessibilityRole="button"
+                    accessibilityLabel={cat}
+                    accessibilityState={{ selected: isSelected }}
+                    testID={`category-chip-${cat}`}
+                    style={[
+                      styles.categoryCard,
+                      {
+                        backgroundColor: isSelected ? pal.chipActiveBg : pal.chipInactiveBg,
+                        borderColor: isSelected ? pal.chipActiveBg : pal.chipBorder,
+                      },
+                    ]}
                     onPress={() => {
                       setCategory(cat);
                       if (cat !== 'dining') setExperienceId(null);
                       if (cat !== 'hotel') setResortId(null);
                     }}
-                    testID={`category-chip-${cat}`}
                   >
-                    <Text style={[styles.catChipText, isSelected && styles.catChipTextSelected]}>
-                      {catIcons[cat]} {cat}
+                    <Ionicons
+                      name={meta.icon}
+                      size={18}
+                      color={isSelected ? pal.chipActiveText : pal.chipHintText}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryCardText,
+                        {
+                          color: isSelected ? pal.chipActiveText : pal.chipInactiveText,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {meta.label}
                     </Text>
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </View>
+
+            {/* Spanning full-width shelf for Other */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="other"
+              accessibilityState={{ selected: category === 'other' }}
+              testID="category-chip-other"
+              style={[
+                styles.categoryCardOther,
+                {
+                  backgroundColor: category === 'other' ? pal.chipActiveBg : pal.chipInactiveBg,
+                  borderColor: category === 'other' ? pal.chipActiveBg : pal.chipBorder,
+                },
+              ]}
+              onPress={() => {
+                setCategory('other');
+                setExperienceId(null);
+                setResortId(null);
+              }}
+            >
+              <Ionicons
+                name={EXPENSE_CATEGORY_META.other.icon}
+                size={16}
+                color={category === 'other' ? pal.chipActiveText : pal.chipHintText}
+              />
+              <Text
+                style={[
+                  styles.categoryCardText,
+                  {
+                    color: category === 'other' ? pal.chipActiveText : pal.chipInactiveText,
+                    fontWeight: category === 'other' ? '700' : '500',
+                  },
+                ]}
+              >
+                {EXPENSE_CATEGORY_META.other.label}
+              </Text>
+            </Pressable>
 
             {/* 3. RECEIPT SCANNER TOOLBAR (Compact & Sleek) */}
             <Card style={styles.receiptScannerQuickBar} testID="receipt-scanner-hero-card">
@@ -991,16 +1084,6 @@ export function ExpenseFormModal({
                 >
                   <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
                   <Text style={styles.quickBarBtnPhotoText}>Photo</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.quickBarBtnSample}
-                  onPress={handleLoadDemoReceipt}
-                  testID="scan-receipt-demo-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Load sample Disney receipt"
-                >
-                  <Ionicons name="sparkles" size={12} color={t.color.primaryFg} />
-                  <Text style={styles.quickBarBtnSampleText}>Sample</Text>
                 </Pressable>
               </View>
             </Card>
@@ -2670,20 +2753,6 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11,
     fontWeight: '700',
   },
-  quickBarBtnSample: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: FORM[t.scheme].lavenderWell,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  quickBarBtnSampleText: {
-    color: t.color.primaryFg,
-    fontSize: 11,
-    fontWeight: '700',
-  },
   modeRow: {
     flexDirection: 'row',
     backgroundColor: FORM[t.scheme].lavenderWellAlt,
@@ -2757,6 +2826,57 @@ const useStyles = makeStyles((t) => ({
   payerChipTextSelected: {
     color: t.color.textOnPrimary,
     fontWeight: '700',
+  },
+  categoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: t.spacing.xs,
+  },
+  activeCategoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: t.radius.pill,
+  },
+  activeCategoryPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  categoryCard: {
+    width: '31.3%',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: t.radius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  categoryCardOther: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: t.radius.md,
+    borderWidth: 1.5,
+    marginTop: 8,
+    marginBottom: 14,
+    gap: 8,
+  },
+  categoryCardText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
   catChip: {
     paddingHorizontal: 12,

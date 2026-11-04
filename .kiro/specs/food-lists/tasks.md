@@ -248,6 +248,7 @@
   - [x] 22.1 Update `FoodListDetailScreen.tsx` with interactive visibility badge, "•••" options menu modal (with Make Public/Private, Rename, Delete), rename modal, and streamlined action pills
   - [x] 22.2 Update `FoodListDetailScreen.test.tsx` with unit and interaction test coverage
   - [x] 22.3 Checkpoint — run `npm run verify:mobile`
+
 ## Task Dependency Graph
 
 Tasks within a wave can proceed in parallel; each wave depends only on earlier waves. Assumes `food-item-logging`'s tasks 1-5 (through its own backend checkpoint) are already complete, since `food_lists_items.food_item_id` is a foreign key into `food_items`.
@@ -394,6 +395,15 @@ Wave 3 groups likes/saves/collection (task 4) with discovery (task 5) since both
     - _Requirements: 9.5c_
   - [x] 26.4 Add unit and interaction tests verifying that custom locations appear directly in the search results and tapping them routes into the location-scoped item picker
     - _Requirements: 9.5c_
+
+- [x] 27. Full Food Log Creation & Editing on Checklist Items (R13.15, R13.20, R13.23, Property 19, Property 21, Property 22)
+  - [x] 27.1 Extend `FoodListItemDTO` in `packages/shared/src/dto/FoodList.ts` and `foodListItemSchema` in `packages/shared/src/schemas/FoodList.ts` with `visitedOn` and `note` (populated when `gotten = true`); add schema test in `packages/shared/src/schemas/__tests__/FoodList.test.ts`
+  - [x] 27.2 Update `apps/api/src/services/foodLists/repo.ts` checklist items query to project `fil.visited_on` as `visitedOn` and `fil.note` as `note`; update property/unit tests in `foodListChecklist.prop.test.ts` and `routes.test.ts`
+  - [x] 27.3 Update `FoodListDetailScreen.tsx` to open `LogFoodItemModal` when activating "Check off" button on an uncompleted item, passing constructed `FoodItemDTO` and processing celebration and undo toasts on successful log creation
+  - [x] 27.4 Update `FoodListDetailScreen.tsx` to open `EditFoodLogModal` when activating the completion status badge (`food-list-item-gotten-badge-${foodItemId}`) on a completed item, supporting editing date, rating, notes, and photos
+  - [x] 27.5 Update unit and interaction tests in `FoodListDetailScreen.test.tsx`
+  - [x] 27.6 Run full verification gate `npm run verify` across all workspaces
+
 
 
 

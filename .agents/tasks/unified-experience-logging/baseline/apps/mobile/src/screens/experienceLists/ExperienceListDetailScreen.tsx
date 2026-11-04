@@ -1,0 +1,1742 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  NestableDraggableFlatList,
+  NestableScrollContainer,
+} from 'react-native-draggable-flatlist';
+import type { RenderItemParams } from 'react-native-draggable-flatlist';
+import type {
+  ExperienceCategory,
+  ExperienceDTO,
+  ExperienceListDetailDTO,
+  ExperienceListItemDTO,
+  VisitSummaryDTO,
+  VisitSummaryResponseDTO,
+} from '@dwt/shared';
+import { EXPERIENCE_CATEGORIES } from '@dwt/shared';
+
+import { ApiError, apiRequest } from '../../api/client';
+import { withAlpha } from '../../theme/theme';
+import { makeStyles } from '../../theme/makeStyles';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
+import { EXPERIENCE_LIST_DETAIL } from './ExperienceListDetailScreen.palette';
+import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
+import { useOpenExperience } from '../navigation/experienceNavigation';
+import LogVisitModal from '../catalog/LogVisitModal';
+import ManageExperienceListSharesSheet from './ManageExperienceListSharesSheet';
+import { useExperienceListNotice } from './experienceListNotice';
+
+// ---------------------------------------------------------------------------
+// "Add items" catalog search (Requirement 9.5, Entry Point 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every Experience_Category except `Restaurant` — Requirement 9.5 scopes
+ * Entry Point 2's catalog search to non-dining categories, mirroring the
+ * dining-exclusion rule already enforced server-side (Requirement 2.3) and
+ * client-side on Entry Point 1 (`ExperienceDetailScreen.tsx`'s
+ * `category !== 'Restaurant'` gate).
+ */
+const NON_RESTAURANT_CATEGORIES: readonly ExperienceCategory[] =
+  EXPERIENCE_CATEGORIES.filter((c) => c !== 'Restaurant');
+
+/** Minimum non-whitespace characters before a search fires — mirrors `ExperiencePicker`'s `SEARCH_MIN_CHARS`. */
+const ADD_ITEMS_SEARCH_MIN_CHARS = 2;
+
+/** Debounce applied to the search box — mirrors `ExperiencePicker`'s `SEARCH_DEBOUNCE_MS`. */
+const ADD_ITEMS_SEARCH_DEBOUNCE_MS = 300;
+
+/** Wire shape of `GET /catalog` — only the field this control reads. */
+interface AddItemsCatalogSearchResponse {
+  readonly experiences: readonly ExperienceDTO[];
+}
+
+/**
+ * The catalog search-and-add step rendered inside `ExperienceListDetailScreen`'s
+ * "Add items" modal. Unlike `ExperiencePicker` (which lets the caller choose
+ * among the Trip's own Planned_List categories via tabs), this control has a
+ * single, fixed scope — every category except `Restaurant` — and no tab UI,
+ * since Requirement 9.5 requires the target Experience_List to already be
+ * determined with no second list-selection (or category-selection) step.
+ *
+ * Tapping a result adds it directly to `experienceListId` via
+ * `POST /me/experience-lists/:id/items`, swallowing
+ * `experience_list_item_duplicate` (Requirement 9.4's pattern, reused here
+ * since Entry Point 2 can also target an Experience already on the list).
+ */
+function AddItemsCatalogSearch({
+  experienceListId,
+  existingExperienceIds,
+  onAdded,
+}: {
+  readonly experienceListId: string;
+  readonly existingExperienceIds: ReadonlySet<string>;
+  readonly onAdded: () => void;
+}): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    const handle = setTimeout(() => {
+      setDebouncedQuery(trimmed);
+    }, ADD_ITEMS_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  const searchActive = debouncedQuery.length >= ADD_ITEMS_SEARCH_MIN_CHARS;
+
+  const searchQuery = useQuery<AddItemsCatalogSearchResponse, ApiError>({
+    queryKey: ['catalog', 'search', 'experience-list-add-items', debouncedQuery] as const,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.append('categories', NON_RESTAURANT_CATEGORIES.join(','));
+      params.append('q', debouncedQuery);
+      return apiRequest<AddItemsCatalogSearchResponse>('GET', `/catalog?${params.toString()}`);
+    },
+    enabled: searchActive,
+  });
+
+  const results = searchQuery.data?.experiences ?? [];
+
+  async function handleAdd(experience: ExperienceDTO): Promise<void> {
+    if (pendingId) return;
+    Keyboard.dismiss();
+    setErrorNotice(null);
+    setPendingId(experience.id);
+    try {
+      await apiRequest('POST', `/me/experience-lists/${encodeURIComponent(experienceListId)}/items`, {
+        experienceId: experience.id,
+      });
+      setAddedIds((prev) => new Set(prev).add(experience.id));
+      onAdded();
+    } catch (err) {
+      // Requirement 9.4's swallow pattern: a duplicate add is treated as
+      // already-satisfied, not an error, and still reflected as "added" so
+      // the row shows the same disabled/added state either way.
+      if (err instanceof ApiError && err.code === 'experience_list_item_duplicate') {
+        setAddedIds((prev) => new Set(prev).add(experience.id));
+        onAdded();
+      } else {
+        setErrorNotice('Could not add that item. Please try again.');
+      }
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  return (
+    <View style={styles.addItemsSearchWrap} testID="experience-list-add-items-search">
+      <View style={styles.addItemsSearchInputWrap}>
+        <Ionicons name="search" size={18} color={t.color.textSecondary} />
+        <TextInput
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder="Search rides, shows, and more..."
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
+          style={styles.addItemsSearchInput}
+          testID="experience-list-add-items-search-input"
+        />
+        {searchInput.length > 0 ? (
+          <Pressable
+            onPress={() => {
+              Keyboard.dismiss();
+              setSearchInput('');
+              setDebouncedQuery('');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search text"
+            testID="experience-list-add-items-clear-btn"
+            style={styles.clearSearchBtn}
+          >
+            <Ionicons name="close-circle" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {errorNotice ? (
+        <Text style={styles.addItemsErrorText} testID="experience-list-add-items-error">
+          {errorNotice}
+        </Text>
+      ) : null}
+
+      {!searchActive ? (
+        <Text style={styles.addItemsHintText} testID="experience-list-add-items-hint">
+          Type at least {ADD_ITEMS_SEARCH_MIN_CHARS} characters to search rides, shows, and more
+          (restaurants aren&apos;t added here).
+        </Text>
+      ) : searchQuery.isLoading ? (
+        <ActivityIndicator color={t.color.primaryFg} style={styles.addItemsLoading} />
+      ) : results.length === 0 ? (
+        <Text style={styles.addItemsHintText} testID="experience-list-add-items-empty">
+          No matching experiences found.
+        </Text>
+      ) : (
+        <View testID="experience-list-add-items-results">
+          {results.map((experience) => {
+            const alreadyOnList = existingExperienceIds.has(experience.id) || addedIds.has(experience.id);
+            const visual =
+              experience.category in t.categoryVisual
+                ? t.categoryVisual[experience.category as keyof typeof t.categoryVisual]
+                : { label: experience.category, tint: t.color.textSecondary };
+            return (
+              <Pressable
+                key={experience.id}
+                onPress={() => void handleAdd(experience)}
+                disabled={alreadyOnList || pendingId !== null}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: alreadyOnList || pendingId !== null }}
+                accessibilityLabel={
+                  alreadyOnList ? `${experience.name}, already on list` : `Add ${experience.name}`
+                }
+                style={({ pressed }) => [
+                  styles.addItemsResultRow,
+                  pressed && !alreadyOnList && styles.addItemsResultRowPressed,
+                  alreadyOnList && styles.addItemsResultRowDisabled,
+                ]}
+                testID={`experience-list-add-items-result-${experience.id}`}
+              >
+                <View style={styles.addItemsResultText}>
+                  <Text style={styles.addItemsResultName} numberOfLines={2}>
+                    {experience.name}
+                  </Text>
+                  <View style={styles.addItemsResultBadges}>
+                    <Badge label={visual.label} color={visual.tint} />
+                    {experience.park !== null ? (
+                      <Badge label={experience.park} color={t.color.primaryFg} />
+                    ) : null}
+                  </View>
+                </View>
+                {pendingId === experience.id ? (
+                  <ActivityIndicator color={t.color.primaryFg} />
+                ) : alreadyOnList ? (
+                  <Text style={styles.addItemsAddedTag}>Added</Text>
+                ) : (
+                  <Ionicons name="add-circle-outline" size={22} color={t.color.primaryFg} />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+export interface ExperienceListDetailParams {
+  readonly experienceListId: string;
+}
+
+type ExperienceListDetailRouteProp = RouteProp<
+  { ExperienceListDetail: ExperienceListDetailParams },
+  'ExperienceListDetail'
+>;
+
+export default function ExperienceListDetailScreen(): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const route = useRoute<ExperienceListDetailRouteProp>();
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const openExperience = useOpenExperience();
+  const { experienceListId } = route.params;
+  const queryClient = useQueryClient();
+
+  const [isLiking, setIsLiking] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingPinned, setIsTogglingPinned] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
+  const [optionsMenuVisible, setOptionsMenuVisible] = useState(false);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
+  const [manageSharesVisible, setManageSharesVisible] = useState(false);
+  // Drives the "Add items" modal (Requirement 9.5, Entry Point 2), whose
+  // body is the `AddItemsCatalogSearch` catalog search step below.
+  const [addItemsModalVisible, setAddItemsModalVisible] = useState(false);
+  const {
+    keyboardInset: addItemsKeyboardInset,
+    getAvailableModalHeight: getAddItemsModalHeight,
+  } = useKeyboardBottomInset(addItemsModalVisible);
+  // Task 13.4: the experienceId currently targeted by the per-row "Log a
+  // visit" action, or null when no `LogVisitModal` should be shown. Mirrors
+  // `LiveWaitsScreen.tsx`'s `activeLogExperienceId` pattern — a single modal
+  // instance conditionally rendered per-id, rather than one modal per row.
+  const [loggingExperienceId, setLoggingExperienceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      Keyboard.dismiss();
+    };
+  }, []);
+
+  const transientNotice = useExperienceListNotice();
+
+  const listQuery = useQuery<ExperienceListDetailDTO>({
+    queryKey: ['experience-list-detail', experienceListId],
+    queryFn: () =>
+      apiRequest<ExperienceListDetailDTO>(
+        'GET',
+        `/experience-lists/${encodeURIComponent(experienceListId)}`,
+      ),
+  });
+
+  const list = listQuery.data;
+
+  // Task 13.1: batched visit-summary fetch for every currently-visible item,
+  // issued ONCE per render of the item set (not one request per item) via
+  // `GET /me/experiences/visit-summary?ids=<comma-joined experienceIds>`,
+  // mirroring `ParkPassportCard.tsx`'s call pattern onto the same endpoint.
+  // Keyed on `list.version` (bumped by both `addItem` and `removeItem`, per
+  // `experienceLists/repo.ts`) rather than a derived/sorted id string, so the
+  // query naturally refetches whenever the visible item set changes without
+  // needing to recompute a stable string key from the array on every render.
+  const visitSummaryQuery = useQuery<VisitSummaryResponseDTO>({
+    queryKey: ['experience-list-visit-summary', experienceListId, list?.version] as const,
+    queryFn: () => {
+      const ids = (list?.items ?? []).map((i) => i.experienceId).join(',');
+      return apiRequest<VisitSummaryResponseDTO>(
+        'GET',
+        `/me/experiences/visit-summary?ids=${encodeURIComponent(ids)}`,
+      );
+    },
+    enabled: (list?.items.length ?? 0) > 0,
+  });
+
+  // Enrichment only — never blocks or throws into row rendering. Rows render
+  // their existing content regardless of this query's loading/error state;
+  // tasks 13.2+ will consume this lookup for badges/sections.
+  const visitSummaryByExperienceId = useMemo<ReadonlyMap<string, VisitSummaryDTO>>(() => {
+    const data = visitSummaryQuery.data;
+    if (!data) return new Map();
+    return new Map(Object.entries(data));
+  }, [visitSummaryQuery.data]);
+  // Task 13.2: default used for any item absent from the lookup (e.g. while
+  // `visitSummaryQuery` is still loading), so the row renders the
+  // not-yet-done/no-badge state rather than flashing into an inconsistent
+  // one once data arrives — consistent with 13.1's enrichment-only,
+  // non-blocking contract.
+  const DEFAULT_VISIT_SUMMARY: VisitSummaryDTO = {
+    repeatCount: 0,
+    ratedCount: 0,
+    averageRating: null,
+  };
+
+  // Requirement 11.2: attribution label shown ONLY when the list has 2+
+  // distinct contributors among its items.
+  const showAttribution = useMemo(() => {
+    if (!list || !list.items) return false;
+    const contributorIds = new Set(
+      list.items.map((i) => i.addedByUserId).filter((id): id is string => Boolean(id)),
+    );
+    return contributorIds.size >= 2;
+  }, [list]);
+
+  // Requirement 9.5: ids already on this list, so the "Add items" catalog
+  // search can render them as disabled/already-added rather than letting the
+  // User attempt a needless re-add (the API's duplicate-swallow is a safety
+  // net, not the primary UX here).
+  const existingExperienceIds = useMemo(
+    () => new Set((list?.items ?? []).map((i) => i.experienceId)),
+    [list],
+  );
+
+  function handleItemAdded(): void {
+    void queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+  }
+
+  async function handleToggleLike(): Promise<void> {
+    if (!list || isLiking) return;
+    setIsLiking(true);
+    try {
+      if (list.liked) {
+        await apiRequest('DELETE', `/experience-lists/${encodeURIComponent(experienceListId)}/like`);
+      } else {
+        await apiRequest('POST', `/experience-lists/${encodeURIComponent(experienceListId)}/like`);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch {
+      // Ignore
+    } finally {
+      setIsLiking(false);
+    }
+  }
+
+  // No unsave endpoint exists (per task 6.1) — once saved, `list.saved`
+  // disables further taps rather than toggling off.
+  async function handleSave(): Promise<void> {
+    if (!list || isSaving || list.myRole === 'owner' || list.saved) return;
+    setIsSaving(true);
+    try {
+      await apiRequest('POST', `/experience-lists/${encodeURIComponent(experienceListId)}/save`);
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch {
+      // Ignore
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  // Requirement 19.6: owner can toggle list pin state from the detail screen
+  async function handleTogglePinned(): Promise<void> {
+    if (!list || isTogglingPinned || list.myRole !== 'owner') return;
+    setIsTogglingPinned(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        pinned: list.pinnedAt === null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'experience_list_pin_limit_reached') {
+        Alert.alert(
+          'Pin Limit Reached',
+          'You can pin up to 4 lists to your dashboard. Unpin a list first to pin this one.',
+        );
+      }
+    } finally {
+      setIsTogglingPinned(false);
+    }
+  }
+
+  // In-list visibility toggle (Requirement 3.5, Property 26)
+  async function handleToggleVisibility(): Promise<void> {
+    if (!list || isTogglingVisibility || list.myRole !== 'owner') return;
+    const nextVisibility = list.visibility === 'public' ? 'private' : 'public';
+    setIsTogglingVisibility(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        visibility: nextVisibility,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+    } catch {
+      Alert.alert('Error', 'Could not update list visibility. Please try again.');
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  }
+
+  // Rename list (Requirement 3.5, Property 26)
+  async function handleRenameList(): Promise<void> {
+    const trimmed = renameValue.trim();
+    if (!list || !trimmed || isRenaming || list.myRole !== 'owner') return;
+    Keyboard.dismiss();
+    setIsRenaming(true);
+    try {
+      await apiRequest('PATCH', `/me/experience-lists/${encodeURIComponent(experienceListId)}`, {
+        name: trimmed,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+      setRenameModalVisible(false);
+    } catch {
+      Alert.alert('Error', 'Could not rename list. Please try again.');
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
+  // Delete list (Requirement 3.5, Property 26)
+  function promptDeleteList(): void {
+    if (!list || list.myRole !== 'owner') return;
+    setOptionsMenuVisible(false);
+    Alert.alert(
+      'Delete List',
+      `Are you sure you want to delete "${list.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void executeDeleteList();
+          },
+        },
+      ],
+    );
+  }
+
+  async function executeDeleteList(): Promise<void> {
+    if (!list || isDeleting || list.myRole !== 'owner') return;
+    setIsDeleting(true);
+    try {
+      await apiRequest('DELETE', `/me/experience-lists/${encodeURIComponent(experienceListId)}`);
+      await queryClient.invalidateQueries({ queryKey: ['experience-lists-collection'] });
+      navigation.goBack();
+    } catch {
+      Alert.alert('Error', 'Could not delete list. Please try again.');
+      setIsDeleting(false);
+    }
+  }
+
+  async function handleDeleteItem(experienceId: string): Promise<void> {
+    try {
+      await apiRequest(
+        'DELETE',
+        `/me/experience-lists/${encodeURIComponent(experienceListId)}/items/${encodeURIComponent(experienceId)}`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Task 12.3: submit expectedVersion alongside experienceIds on every
+  // drag-reorder; on experience_list_stale_write, refetch and show a brief
+  // "list was updated" message (Requirement 11.3).
+  async function handleReorderItems(newItems: readonly ExperienceListItemDTO[]): Promise<void> {
+    if (!list) return;
+    setStaleWriteNotice(null);
+
+    const experienceIds = newItems.map((i) => i.experienceId);
+    try {
+      await apiRequest(
+        'PUT',
+        `/me/experience-lists/${encodeURIComponent(experienceListId)}/items/order`,
+        {
+          experienceIds,
+          expectedVersion: list.version,
+        },
+      );
+      await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'experience_list_stale_write') {
+        await queryClient.invalidateQueries({ queryKey: ['experience-list-detail', experienceListId] });
+        setStaleWriteNotice('List was updated by another collaborator. Refreshed.');
+      }
+    }
+  }
+
+  function handleDragEnd({ data }: { data: readonly ExperienceListItemDTO[] }): void {
+    void handleReorderItems(data);
+  }
+
+  // Task 13.3: "Not yet done" / "Done" sectioning, derived PURELY from
+  // `repeatCount > 0` (Requirement 13.4) — no stored flag, no manual toggle.
+  // This is a purely presentational split: `list.items` itself is never
+  // reordered or partitioned into two arrays. The single
+  // `NestableDraggableFlatList` below still renders the FULL `list.items`
+  // array in its existing `position` order, with the exact same `data`,
+  // `keyExtractor`, and `onDragEnd` → `handleReorderItems` contract as
+  // before (task 12.3) — so the full, correctly-ordered `experienceIds`
+  // array is always what gets submitted to
+  // `PUT /me/experience-lists/:id/items/order`, with no merge-of-partitions
+  // problem to solve. Instead, `renderDraggableItem` below detects, from
+  // each row's own index within the still-fully-ordered array, whether that
+  // row is the FIRST done item encountered in iteration order, and — if so —
+  // renders a "Done (n)" section heading immediately above that row's Card,
+  // mirroring `TripPlannedListScreen`'s `doneSection`/`doneHeading` visual
+  // pattern (testID/style names scoped to this screen, not reused verbatim).
+  const isItemDone = useCallback(
+    (item: ExperienceListItemDTO): boolean => {
+      const visitSummary =
+        visitSummaryByExperienceId.get(item.experienceId) ?? DEFAULT_VISIT_SUMMARY;
+      return visitSummary.repeatCount > 0;
+    },
+    [visitSummaryByExperienceId],
+  );
+
+  // Index of the first "done" item within `list.items`'s existing order, or
+  // -1 when there are none — used only to decide where to render the "Done"
+  // section heading; never used to reorder or split the underlying array.
+  const firstDoneIndex = useMemo(() => {
+    if (!list) return -1;
+    return list.items.findIndex((item) => isItemDone(item));
+  }, [list, isItemDone]);
+
+  const doneItemCount = useMemo(() => {
+    if (!list) return 0;
+    return list.items.reduce((count, item) => (isItemDone(item) ? count + 1 : count), 0);
+  }, [list, isItemDone]);
+
+  // Stable `renderItem` identity — see `FoodListDetailScreen.tsx`'s
+  // `renderDraggableItem` for why an inline arrow literal here would force
+  // unnecessary re-render/re-measure work on the visible rows.
+  const renderDraggableItem = useCallback(
+    (params: RenderItemParams<ExperienceListItemDTO>) => {
+      const { item, drag, isActive, getIndex } = params;
+      // `canEdit` is normally derived after the loading/unavailable early
+      // returns narrow `list` to non-null, but this callback must be
+      // declared before those early returns to satisfy the Rules of Hooks —
+      // so it re-derives from the raw, possibly-undefined `list` query data.
+      const canEdit = list?.myRole === 'owner' || list?.myRole === 'editor';
+      // Task 13.2: three badge states derived from the visit-summary lookup
+      // built in task 13.1 (Requirement 13.3). Defaults to the not-yet-done
+      // state for any item not yet present in the lookup (still loading).
+      const visitSummary =
+        visitSummaryByExperienceId.get(item.experienceId) ?? DEFAULT_VISIT_SUMMARY;
+      const { repeatCount, ratedCount, averageRating } = visitSummary;
+      const isDone = repeatCount > 0;
+      // Task 13.3: this row is the first "done" row in the array's existing
+      // order, so render the "Done (n)" heading immediately above it.
+      const showDoneHeading = isDone && getIndex() === firstDoneIndex;
+      return (
+        <View>
+          {showDoneHeading ? (
+            <View style={styles.doneSection} testID="experience-list-done-section">
+              <Text style={styles.doneHeading}>Done ({doneItemCount})</Text>
+            </View>
+          ) : null}
+          <Card
+            style={[styles.itemCard, isActive && styles.itemCardDragging]}
+            testID={`experience-list-item-row-${item.experienceId}`}
+          >
+            <View style={styles.itemCardMain}>
+              {canEdit ? (
+                <Pressable
+                  onLongPress={drag}
+                  disabled={isActive}
+                  style={styles.dragHandle}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Drag to reorder ${item.name}`}
+                  testID={`experience-list-item-drag-handle-${item.experienceId}`}
+                >
+                  <Ionicons
+                    name="reorder-three"
+                    size={22}
+                    color={t.color.textSecondary}
+                  />
+                </Pressable>
+              ) : null}
+
+              <Pressable
+                onPress={() => openExperience(item.experienceId)}
+                style={({ pressed }) => [
+                  styles.itemDetails,
+                  pressed && styles.itemDetailsPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`View details for ${item.name}`}
+                testID={`experience-list-item-details-${item.experienceId}`}
+              >
+                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemMeta}>
+                  {[item.park, item.category].filter(Boolean).join(' • ')}
+                </Text>
+
+                {/* Visit badge (Requirement 13.3, task 13.2) — no badge when
+                    never logged, visit-count-only when logged but unrated,
+                    visit-count-plus-rating when at least one log is rated. */}
+                {repeatCount > 0 ? (
+                  <Text
+                    style={styles.visitBadge}
+                    testID={`experience-list-item-visit-badge-${item.experienceId}`}
+                  >
+                    {repeatCount} {repeatCount === 1 ? 'visit' : 'visits'}
+                    {ratedCount > 0 ? ` · ★ ${averageRating!.toFixed(1)}` : ''}
+                  </Text>
+                ) : null}
+
+                {/* Attribution label (Requirement 11.2) */}
+                {showAttribution && item.addedByDisplayName ? (
+                  <Text
+                    style={styles.attributionLabel}
+                    testID={`experience-list-attribution-${item.experienceId}`}
+                  >
+                    added by {item.addedByDisplayName}
+                  </Text>
+                ) : null}
+              </Pressable>
+
+              {/* "Log a visit" action (Requirement 13.5) — a sibling of
+                  `itemDetails`/`itemDeleteBtn`, NOT nested inside the
+                  details `Pressable`, to avoid nested-touchable conflicts.
+                  Available to ANY viewer of the list, not gated on
+                  `canEdit`/`myRole` — Visit_Summary is per-viewing-User data
+                  (Requirement 13), so logging a personal visit to an item is
+                  independent of list edit permissions, mirroring
+                  `TripPlannedListScreen`'s "Log a completion" control being
+                  available on every item regardless of done-state or role. */}
+              <Pressable
+                onPress={() => setLoggingExperienceId(item.experienceId)}
+                style={styles.logVisitBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Log a visit to ${item.name}`}
+                testID={`experience-list-item-log-visit-${item.experienceId}`}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={t.color.primaryFg} />
+              </Pressable>
+
+              {/* Delete action (Requirement 9.7, 11.1) */}
+              {canEdit ? (
+                <Pressable
+                  onPress={() => void handleDeleteItem(item.experienceId)}
+                  style={styles.itemDeleteBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${item.name} from list`}
+                  testID={`experience-list-item-delete-${item.experienceId}`}
+                >
+                  <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+                </Pressable>
+              ) : null}
+            </View>
+          </Card>
+        </View>
+      );
+    },
+    [
+      list?.myRole,
+      openExperience,
+      showAttribution,
+      handleDeleteItem,
+      visitSummaryByExperienceId,
+      firstDoneIndex,
+      doneItemCount,
+      styles,
+      t,
+    ],
+  );
+
+  // Loading state
+  if (listQuery.isLoading) {
+    return (
+      <ScreenContainer style={styles.centerContainer}>
+        <ActivityIndicator color={t.color.primaryFg} size="large" />
+      </ScreenContainer>
+    );
+  }
+
+  // Requirement 10.2: Unavailable state (list not found / no longer accessible)
+  if (listQuery.isError || !list) {
+    return (
+      <ScreenContainer>
+        <GradientHeader
+          title="Experience List"
+          compact
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.unavailableWrap} testID="experience-list-unavailable-notice">
+          <Ionicons name="alert-circle-outline" size={48} color={t.color.danger} />
+          <Text style={styles.unavailableTitle}>No longer available</Text>
+          <Text style={styles.unavailableBody}>
+            {transientNotice ?? 'This experience list does not exist or is no longer shared with you.'}
+          </Text>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            testID="experience-list-unavailable-back-btn"
+          >
+            <Text style={styles.backBtnText}>Return to previous screen</Text>
+          </Pressable>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const canEdit = list.myRole === 'owner' || list.myRole === 'editor';
+  const isOwner = list.myRole === 'owner';
+
+  return (
+    <ScreenContainer>
+      <View style={{ flex: 1 }} testID="experience-list-detail-screen">
+        <GradientHeader
+          title={list.name}
+          subtitle={`by ${list.ownerDisplayName}`}
+          compact
+          onBack={() => navigation.goBack()}
+        />
+
+        <NestableScrollContainer
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {/* Stale write message (Requirement 11.3) */}
+          {staleWriteNotice ? (
+            <View style={styles.staleNotice} testID="experience-list-stale-write-message">
+              <Ionicons name="information-circle" size={18} color={t.color.primaryFg} />
+              <Text style={styles.staleNoticeText}>{staleWriteNotice}</Text>
+            </View>
+          ) : null}
+
+          {/* List Header Card */}
+          <Card style={styles.headerCard}>
+            <View style={styles.headerTop}>
+              <View style={styles.titleArea}>
+                <Text style={styles.listName} testID="experience-list-name">
+                  {list.name}
+                </Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaText}>Created by {list.ownerDisplayName} • </Text>
+                  {isOwner ? (
+                    <Pressable
+                      onPress={() => void handleToggleVisibility()}
+                      disabled={isTogglingVisibility}
+                      style={({ pressed }) => [
+                        styles.visibilityBadge,
+                        pressed && styles.visibilityBadgePressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`List is ${list.visibility}. Tap to make ${list.visibility === 'public' ? 'private' : 'public'}`}
+                      testID="experience-list-visibility-toggle-badge"
+                    >
+                      <Ionicons
+                        name={list.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
+                        size={12}
+                        color={t.color.primaryFg}
+                      />
+                      <Text style={styles.visibilityBadgeText}>
+                        {list.visibility === 'public' ? 'Public' : 'Private'}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.metaText}>
+                      {list.visibility === 'public' ? 'Public' : 'Private'}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Badges & Options Menu */}
+              <View style={styles.headerTopRight}>
+                <View style={styles.roleBadgeContainer}>
+                  <Badge
+                    label={list.myRole === 'owner' ? 'Owner' : list.myRole === 'editor' ? 'Editor' : 'Viewer'}
+                    color={list.myRole === 'editor' ? t.color.primaryFg : t.color.textSecondary}
+                  />
+                </View>
+                {isOwner ? (
+                  <Pressable
+                    onPress={() => setOptionsMenuVisible(true)}
+                    style={({ pressed }) => [
+                      styles.optionsMenuBtn,
+                      pressed && styles.optionsMenuBtnPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="List options"
+                    hitSlop={8}
+                    testID="experience-list-options-menu-btn"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={t.color.textSecondary} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.actionRow}>
+              {/* Like button */}
+              <Pressable
+                onPress={() => void handleToggleLike()}
+                disabled={isLiking}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  list.liked && styles.actionButtonLiked,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`${list.liked ? 'Unlike' : 'Like'} list, ${list.likeCount} likes`}
+                testID="experience-list-like-btn"
+              >
+                <Ionicons
+                  name={list.liked ? 'heart' : 'heart-outline'}
+                  size={16}
+                  color={list.liked ? t.color.danger : t.color.textSecondary}
+                />
+                <Text style={[styles.actionButtonText, list.liked && styles.actionButtonTextLiked]}>
+                  {list.likeCount}
+                </Text>
+              </Pressable>
+
+              {/* Save button (non-owners only; no unsave endpoint exists) */}
+              {!isOwner ? (
+                <Pressable
+                  onPress={() => void handleSave()}
+                  disabled={isSaving || list.saved}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    list.saved && styles.actionButtonSaved,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={list.saved ? 'List saved' : 'Save list'}
+                  testID="experience-list-save-btn"
+                >
+                  <Ionicons
+                    name={list.saved ? 'bookmark' : 'bookmark-outline'}
+                    size={16}
+                    color={list.saved ? t.color.primaryFg : t.color.textSecondary}
+                  />
+                  <Text style={[styles.actionButtonText, list.saved && styles.actionButtonTextSaved]}>
+                    {list.saved ? 'Saved' : 'Save'}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {/* Manage sharing button (owner of private list only, Requirement 9.8). */}
+              {isOwner && list.visibility === 'private' ? (
+                <Pressable
+                  onPress={() => setManageSharesVisible(true)}
+                  style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage sharing"
+                  testID="experience-list-manage-sharing-btn"
+                >
+                  <Ionicons name="people-outline" size={16} color={t.color.primaryFg} />
+                  <Text style={styles.actionButtonText}>Share</Text>
+                </Pressable>
+              ) : null}
+
+              {/* Pin button (owner only, Requirement 19.6) */}
+              {isOwner ? (
+                <Pressable
+                  onPress={() => void handleTogglePinned()}
+                  disabled={isTogglingPinned}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    list.pinnedAt !== null && styles.actionButtonPinnedActive,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={list.pinnedAt !== null ? 'Unpin list' : 'Pin list'}
+                  testID="experience-list-pin-btn"
+                >
+                  <Ionicons
+                    name={list.pinnedAt !== null ? 'pin' : 'pin-outline'}
+                    size={16}
+                    color={list.pinnedAt !== null ? t.color.primaryFg : t.color.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      list.pinnedAt !== null && styles.actionButtonTextPinned,
+                    ]}
+                  >
+                    {list.pinnedAt !== null ? 'Pinned' : 'Pin'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Card>
+
+          {/* Section Header — "Add items" entry point (Requirement 9.5, 11.1) */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Items ({list.items.length})</Text>
+
+            {canEdit ? (
+              <Pressable
+                onPress={() => setAddItemsModalVisible(true)}
+                style={[styles.actionButton, styles.addItemsBtn]}
+                accessibilityRole="button"
+                accessibilityLabel="Add items to this list"
+                testID="experience-list-add-items-btn"
+              >
+                <Ionicons name="add" size={20} color={t.color.textOnPrimary} />
+                <Text style={styles.addItemsBtnText}>Add items</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Items list — drag-reorder (owner/editor only) via
+              react-native-draggable-flatlist's drag handle. */}
+          {list.items.length === 0 ? (
+            <View style={styles.emptyItemsWrap}>
+              <Ionicons name="sparkles-outline" size={40} color={t.color.textSecondary} />
+              <Text style={styles.emptyItemsText}>No items in this list yet.</Text>
+              {canEdit ? (
+                <Pressable
+                  onPress={() => setAddItemsModalVisible(true)}
+                  style={styles.emptyAddBtn}
+                >
+                  <Text style={styles.emptyAddBtnText}>Add your first item</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <NestableDraggableFlatList
+              data={[...list.items]}
+              keyExtractor={(item) => item.experienceId}
+              scrollEnabled={false}
+              renderItem={renderDraggableItem}
+              extraData={t.scheme}
+              onDragEnd={handleDragEnd}
+            />
+          )}
+        </NestableScrollContainer>
+
+        {/* "Add items" entry point (Requirement 9.5) — a catalog search step
+            scoped to non-Restaurant categories, with the target
+            Experience_List (this screen's `experienceListId`) already
+            determined, so there is no second list-selection step. */}
+        <Modal
+          visible={addItemsModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setAddItemsModalVisible(false);
+          }}
+          testID="experience-list-add-items-modal"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={[
+              styles.modalBackdrop,
+              Platform.OS === 'android' && addItemsKeyboardInset > 0
+                ? { paddingBottom: addItemsKeyboardInset }
+                : null,
+            ]}
+          >
+            <View
+              style={[
+                styles.modalContainer,
+                Platform.OS === 'android' && addItemsKeyboardInset > 0
+                  ? { maxHeight: getAddItemsModalHeight(40) }
+                  : null,
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Items</Text>
+                <Pressable
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setAddItemsModalVisible(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close add items"
+                  testID="close-experience-list-add-items-btn"
+                >
+                  <Ionicons name="close" size={24} color={t.color.textSecondary} />
+                </Pressable>
+              </View>
+              {addItemsModalVisible ? (
+                <AddItemsCatalogSearch
+                  experienceListId={experienceListId}
+                  existingExperienceIds={existingExperienceIds}
+                  onAdded={handleItemAdded}
+                />
+              ) : null}
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {/* Manage sharing sheet (Requirement 9.8, 11.4) */}
+        <ManageExperienceListSharesSheet
+          experienceListId={experienceListId}
+          visible={manageSharesVisible}
+          onClose={() => setManageSharesVisible(false)}
+        />
+
+        {/* Options Menu Modal (Requirement 3.5, Property 26) */}
+        <Modal
+          visible={optionsMenuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setOptionsMenuVisible(false);
+          }}
+          testID="experience-list-options-menu-modal"
+        >
+          <Pressable
+            style={styles.optionsMenuBackdrop}
+            onPress={() => {
+              Keyboard.dismiss();
+              setOptionsMenuVisible(false);
+            }}
+          >
+            <View
+              style={styles.optionsMenuContainer}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.optionsMenuHeader}>
+                <Text style={styles.optionsMenuTitle}>List Options</Text>
+                <Text style={styles.optionsMenuSubtitle} numberOfLines={1}>{list.name}</Text>
+              </View>
+
+              <View style={styles.optionsMenuDivider} />
+
+              {/* Visibility Toggle Option */}
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                  void handleToggleVisibility();
+                }}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Make list ${list.visibility === 'public' ? 'private' : 'public'}`}
+                testID="experience-list-option-visibility-btn"
+              >
+                <Ionicons
+                  name={list.visibility === 'public' ? 'lock-closed-outline' : 'globe-outline'}
+                  size={20}
+                  color={t.color.textPrimary}
+                />
+                <Text style={styles.optionsMenuItemText}>
+                  Make {list.visibility === 'public' ? 'Private' : 'Public'}
+                </Text>
+              </Pressable>
+
+              {/* Rename Option */}
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                  setRenameValue(list.name);
+                  setRenameModalVisible(true);
+                }}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Rename list"
+                testID="experience-list-option-rename-btn"
+              >
+                <Ionicons name="pencil-outline" size={20} color={t.color.textPrimary} />
+                <Text style={styles.optionsMenuItemText}>Rename List</Text>
+              </Pressable>
+
+              {/* Delete Option */}
+              <Pressable
+                onPress={promptDeleteList}
+                style={({ pressed }) => [
+                  styles.optionsMenuItem,
+                  pressed && styles.optionsMenuItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Delete list"
+                testID="experience-list-option-delete-btn"
+              >
+                <Ionicons name="trash-outline" size={20} color={t.color.danger} />
+                <Text style={[styles.optionsMenuItemText, styles.optionsMenuItemDangerText]}>
+                  Delete List
+                </Text>
+              </Pressable>
+
+              <View style={styles.optionsMenuDivider} />
+
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setOptionsMenuVisible(false);
+                }}
+                style={styles.optionsMenuCancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.optionsMenuCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Rename Modal (Requirement 3.5, Property 26) */}
+        <Modal
+          visible={renameModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setRenameModalVisible(false);
+          }}
+          testID="rename-experience-list-modal"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.renameModalBackdrop}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => {
+                Keyboard.dismiss();
+                setRenameModalVisible(false);
+              }}
+            />
+            <View
+              style={styles.renameModalContainer}
+              onStartShouldSetResponder={() => true}
+            >
+              <Text style={styles.renameModalTitle}>Rename List</Text>
+              <TextInput
+                value={renameValue}
+                onChangeText={setRenameValue}
+                placeholder="List name"
+                placeholderTextColor={t.color.textSecondary}
+                keyboardAppearance={t.scheme}
+                style={styles.renameInput}
+                autoFocus
+                testID="rename-experience-list-input"
+              />
+              <View style={styles.renameModalActions}>
+                <Pressable
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setRenameModalVisible(false);
+                  }}
+                  style={styles.renameCancelBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel renaming"
+                  testID="cancel-rename-experience-list-btn"
+                >
+                  <Text style={styles.renameCancelBtnText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleRenameList()}
+                  disabled={isRenaming || !renameValue.trim()}
+                  style={[
+                    styles.renameSubmitBtn,
+                    (!renameValue.trim() || isRenaming) && styles.renameSubmitBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save new list name"
+                  testID="save-rename-experience-list-btn"
+                >
+                  <Text style={styles.renameSubmitBtnText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {/* "Log a visit" modal (Requirement 13.5, 13.6) — reuses the existing
+            `LogVisitModal` exactly as-is (no new props, no new endpoint); it
+            already defaults its own date field to today and submits
+            `POST /me/experiences/:id/logs` internally. Conditionally
+            rendered per `loggingExperienceId`, mirroring
+            `LiveWaitsScreen.tsx`'s `activeLogExperienceId` pattern — this
+            naturally mounts a fresh instance (and fresh internal
+            rating/note/date state) each time a different row's action is
+            tapped, rather than reusing one stale instance across rows. On
+            success, invalidates the EXACT query key `visitSummaryQuery`
+            uses above, so the item's done-state and rating badge refetch
+            and update without leaving this screen (Requirement 13.6). */}
+        {loggingExperienceId !== null ? (
+          <LogVisitModal
+            experienceId={loggingExperienceId}
+            visible={Boolean(loggingExperienceId)}
+            onClose={() => setLoggingExperienceId(null)}
+            onLogged={() => {
+              setLoggingExperienceId(null);
+              void queryClient.invalidateQueries({
+                queryKey: ['experience-list-visit-summary', experienceListId, list?.version] as const,
+              });
+            }}
+          />
+        ) : null}
+      </View>
+    </ScreenContainer>
+  );
+}
+
+const useStyles = makeStyles((t) => ({
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    padding: t.spacing.md,
+    gap: 12,
+  },
+  unavailableWrap: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 40,
+  },
+  unavailableTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  unavailableBody: {
+    fontSize: 15,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+  },
+  backBtn: {
+    marginTop: 12,
+    backgroundColor: t.color.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: t.radius.md,
+  },
+  backBtnText: {
+    color: t.color.textOnPrimary,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  staleNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: EXPERIENCE_LIST_DETAIL[t.scheme].staleNoticeBg,
+    padding: 10,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.primaryFg,
+  },
+  staleNoticeText: {
+    fontSize: 13,
+    color: t.color.primaryFg,
+    fontWeight: '500',
+    flex: 1,
+  },
+  headerCard: {
+    padding: t.spacing.md,
+    gap: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleArea: {
+    flex: 1,
+    marginRight: 8,
+  },
+  listName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  metaText: {
+    fontSize: 11,
+    color: t.color.textSecondary,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  visibilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: t.radius.pill,
+    backgroundColor: withAlpha(t.color.primary, 0.08),
+  },
+  visibilityBadgePressed: {
+    opacity: 0.7,
+  },
+  visibilityBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: t.color.primaryFg,
+  },
+  roleBadgeContainer: {
+    marginTop: 2,
+  },
+  headerTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionsMenuBtn: {
+    padding: 6,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsMenuBtnPressed: {
+    opacity: 0.7,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 5,
+    rowGap: 6,
+    marginTop: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: t.radius.pill,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  actionButtonPressed: {
+    opacity: 0.7,
+  },
+  actionButtonLiked: {
+    backgroundColor: EXPERIENCE_LIST_DETAIL[t.scheme].likedBg,
+  },
+  actionButtonSaved: {
+    backgroundColor: withAlpha(t.color.primary, 0.1),
+  },
+  actionButtonPinnedActive: {
+    backgroundColor: withAlpha(t.color.primary, 0.1),
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  actionButtonTextLiked: {
+    color: t.color.danger,
+  },
+  actionButtonTextSaved: {
+    color: t.color.primaryFg,
+  },
+  actionButtonTextPinned: {
+    color: t.color.primaryFg,
+  },
+  optionsMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: t.spacing.lg,
+  },
+  optionsMenuContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.md,
+    ...t.shadow.card,
+  },
+  optionsMenuHeader: {
+    paddingVertical: 4,
+    gap: 2,
+  },
+  optionsMenuTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  optionsMenuSubtitle: {
+    fontSize: 13,
+    color: t.color.textSecondary,
+  },
+  optionsMenuDivider: {
+    height: 1,
+    backgroundColor: t.color.border,
+    marginVertical: 8,
+  },
+  optionsMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: t.radius.md,
+  },
+  optionsMenuItemPressed: {
+    backgroundColor: t.color.surfaceAlt,
+  },
+  optionsMenuItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  optionsMenuItemDangerText: {
+    color: t.color.danger,
+  },
+  optionsMenuCancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: t.radius.md,
+  },
+  optionsMenuCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  renameModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: t.spacing.lg,
+  },
+  renameModalContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: t.color.surface,
+    borderRadius: t.radius.lg,
+    padding: t.spacing.lg,
+    gap: 14,
+    ...t.shadow.card,
+  },
+  renameModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  renameInput: {
+    fontSize: 15,
+    color: t.color.textPrimary,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  renameModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+  },
+  renameCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: t.radius.md,
+  },
+  renameCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  renameSubmitBtn: {
+    backgroundColor: t.color.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: t.radius.md,
+  },
+  renameSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  renameSubmitBtnText: {
+    color: t.color.textOnPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addItemsBtn: {
+    backgroundColor: t.color.primary,
+  },
+  addItemsBtnText: {
+    color: t.color.textOnPrimary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  emptyItemsWrap: {
+    padding: 36,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyItemsText: {
+    fontSize: 15,
+    color: t.color.textSecondary,
+  },
+  emptyAddBtn: {
+    marginTop: 8,
+    backgroundColor: t.color.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: t.radius.md,
+  },
+  emptyAddBtnText: {
+    color: t.color.textOnPrimary,
+    fontWeight: '600',
+  },
+  // Task 13.3: mirrors `TripPlannedListScreen`'s `doneSection`/`doneHeading`
+  // visual pattern (own testID/style names — not the same instance).
+  doneSection: {
+    marginTop: t.spacing.lg,
+    marginBottom: t.spacing.sm,
+  },
+  doneHeading: {
+    ...t.typography.subtitle,
+    color: t.color.textSecondary,
+  },
+  itemCard: {
+    padding: 12,
+    // `NestableDraggableFlatList` renders each row inside its own internal
+    // list, as ONE opaque child of `content` — the parent's `gap: 12`
+    // no longer reaches inside it. Space rows here instead.
+    marginBottom: 12,
+  },
+  itemCardDragging: {
+    opacity: 0.85,
+    ...t.shadow.card,
+  },
+  itemCardMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemDetails: {
+    flex: 1,
+  },
+  itemDetailsPressed: {
+    opacity: 0.7,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  itemMeta: {
+    fontSize: 11,
+    color: t.color.textSecondary,
+    marginTop: 2,
+  },
+  visitBadge: {
+    fontSize: 11,
+    color: t.color.textSecondary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  attributionLabel: {
+    fontSize: 11,
+    color: t.color.primaryFg,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  dragHandle: {
+    padding: 6,
+    marginRight: 4,
+  },
+  itemDeleteBtn: {
+    padding: 6,
+  },
+  logVisitBtn: {
+    padding: 6,
+    marginRight: 4,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: t.color.surface,
+    borderTopLeftRadius: t.radius.lg,
+    borderTopRightRadius: t.radius.lg,
+    maxHeight: '80%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: t.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  addItemsSearchWrap: {
+    paddingHorizontal: t.spacing.md,
+    paddingTop: t.spacing.sm,
+    paddingBottom: t.spacing.md,
+  },
+  addItemsSearchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  addItemsSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: t.color.textPrimary,
+  },
+  clearSearchBtn: {
+    padding: 4,
+  },
+  addItemsHintText: {
+    color: t.color.textSecondary,
+    fontSize: 13,
+    textAlign: 'center',
+    padding: 16,
+  },
+  addItemsErrorText: {
+    color: t.color.danger,
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  addItemsLoading: {
+    padding: 16,
+  },
+  addItemsResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
+  },
+  addItemsResultRowPressed: {
+    backgroundColor: t.color.surfaceAlt,
+  },
+  addItemsResultRowDisabled: {
+    opacity: 0.5,
+  },
+  addItemsResultText: {
+    flex: 1,
+  },
+  addItemsResultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  addItemsResultBadges: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  addItemsAddedTag: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+}));

@@ -113,7 +113,8 @@ import type {
   RodeWithTagCreatedNotice,
   TripInviteCreatedNotice,
 } from './events.js';
-import type { TripRepo } from './repo.js';
+import { DEFAULT_LOG_USER_TZ, type TripRepo } from './repo.js';
+import { validateNotFutureVisitDate } from '../tracking/logs/visitDate.js';
 import type { FeedPhotoPort, FeedPostPhotos } from '../photos/ports.js';
 import { postVisibleToNonAuthor } from '../photos/domain/accessPolicy.js';
 
@@ -219,6 +220,11 @@ export interface TripRoutesOptions {
    * Supplies photo slots and author identification for member_post feed items.
    */
   readonly feedPhotoPort?: FeedPhotoPort;
+  /**
+   * Optional clock for deterministic visit date validation in tests.
+   * Defaults to `() => new Date()`.
+   */
+  readonly clock?: () => Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +283,13 @@ const tripFoodListParamsSchema = z
  */
 const tripFeedPostParamsSchema = z
   .object({ id: uuidSchema, feedItemId: uuidSchema })
+  .strict();
+
+/**
+ * Path parameters for `DELETE /trips/:id/log-entries/:logEntryId`.
+ */
+const tripLogEntryParamsSchema = z
+  .object({ id: uuidSchema, logEntryId: uuidSchema })
   .strict();
 
 /**
@@ -391,6 +404,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
     awardPins,
     feedPhotoPort,
   } = options;
+  const clock = options.clock ?? (() => new Date());
 
   return async function tripRoutesPlugin(
     app: FastifyInstance,
@@ -889,10 +903,26 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const { id } = parseOrAppError(tripIdParamsSchema, request.params);
         await assertTripMember(pool, userId, id);
         const body = parseOrAppError(tripLogEntryCreateSchema, request.body);
+        if (body.visitedOn !== undefined) {
+          validateNotFutureVisitDate(
+            body.visitedOn,
+            body.userTz ?? DEFAULT_LOG_USER_TZ,
+            clock(),
+          );
+        }
         const { logEntryId, pendingTags } = await repo.logCompletion(
           id,
           userId,
-          body,
+          {
+            experienceId: body.experienceId,
+            rodeWith: body.rodeWith,
+            ...(body.rating !== undefined ? { rating: body.rating } : {}),
+            ...(body.note !== undefined ? { note: body.note } : {}),
+            ...(body.visitedOn !== undefined
+              ? { completedOn: body.visitedOn, visitedOn: body.visitedOn }
+              : {}),
+            ...(body.userTz !== undefined ? { userTz: body.userTz } : {}),
+          },
         );
         // Fire-and-forget push to each Tagged_Member (R10.8). The dispatch
         // returns void and owns its own error handling, so it never blocks or
@@ -946,6 +976,34 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const { id } = parseOrAppError(tripIdParamsSchema, request.params);
         await assertTripMember(pool, userId, id);
         return repo.listLogEntries(id);
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // DELETE /trips/:id/log-entries/:logEntryId — delete/undo a Completion log
+    // (Requirement 20.10, 20.11)
+    // -------------------------------------------------------------------
+    app.delete<{ Params: { id: string; logEntryId: string } }>(
+      '/trips/:id/log-entries/:logEntryId',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id, logEntryId } = parseOrAppError(
+          tripLogEntryParamsSchema,
+          request.params,
+        );
+        const callerRole = await assertTripMember(pool, userId, id);
+        const deleted = await repo.deleteLogEntry(
+          id,
+          logEntryId,
+          userId,
+          callerRole,
+        );
+        if (!deleted) {
+          throw new AppError('trip_not_found', 'Log entry not found.');
+        }
+        reply.code(204);
+        reply.send();
       },
     );
 
@@ -1005,7 +1063,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           rodeWithTagParamsSchema,
           request.params,
         );
-        const body = parseOrAppError(rodeWithConfirmSchema, request.body);
+        const body = parseOrAppError(rodeWithConfirmSchema, request.body ?? {});
         const confirmed = await repo.confirmRodeWithTag(tagId, userId, body.rating);
 
         // Confirming raises the caller's (Tagged_Member's) confirmed-friend-ride

@@ -3,6 +3,7 @@ import {
   navigateToTripSchedule,
   navigateToTripDetail,
   navigateToBookingTimeline,
+  navigateToTripFeed,
 } from '../navigationRef';
 
 describe('navigationRef', () => {
@@ -140,6 +141,44 @@ describe('navigationRef', () => {
         params: {
           screen: 'TripDetail',
           params: { tripId: 'trip-456' },
+        },
+      });
+    });
+  });
+
+  describe('navigateToTripFeed', () => {
+    it('returns false when navigationRef is not ready', () => {
+      jest.spyOn(navigationRef, 'isReady').mockReturnValue(false);
+      const navigateSpy = jest.spyOn(navigationRef, 'navigate').mockImplementation();
+
+      const result = navigateToTripFeed({ tripId: 'trip-123' });
+
+      expect(result).toBe(false);
+      expect(navigateSpy).not.toHaveBeenCalled();
+    });
+
+    it('seeds TripDetail then navigates to TripFeed in the Trips stack when ready', () => {
+      jest.spyOn(navigationRef, 'isReady').mockReturnValue(true);
+      const navigateSpy = jest.spyOn(navigationRef, 'navigate').mockImplementation();
+
+      const result = navigateToTripFeed({ tripId: 'trip-123' });
+
+      expect(result).toBe(true);
+      expect(navigateSpy).toHaveBeenCalledTimes(2);
+
+      expect(navigateSpy).toHaveBeenNthCalledWith(1, 'MainTabs', {
+        screen: 'Trips',
+        params: {
+          screen: 'TripDetail',
+          params: { tripId: 'trip-123' },
+        },
+      });
+
+      expect(navigateSpy).toHaveBeenNthCalledWith(2, 'MainTabs', {
+        screen: 'Trips',
+        params: {
+          screen: 'TripFeed',
+          params: { tripId: 'trip-123' },
         },
       });
     });

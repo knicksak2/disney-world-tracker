@@ -219,6 +219,7 @@ async function addLog(
     // If linking to a Trip, the caller must be a current member of it. A
     // non-member (or non-existent Trip) collapses to `trip_forbidden` so Trip
     // existence cannot be probed (R1.2, design Error Handling 403).
+    // Note: this legacy branch is no longer on the serving path when TripLogPort is wired (R13.6).
     if (tripId !== null) {
       const member = await client.query(
         `SELECT 1 FROM trip_memberships WHERE trip_id = $1 AND user_id = $2`,

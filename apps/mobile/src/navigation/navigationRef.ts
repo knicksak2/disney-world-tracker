@@ -344,4 +344,29 @@ export function navigateToTripMembers(params: { readonly tripId: string }): bool
   return true;
 }
 
+/**
+ * Navigate to the `TripFeed` section of a trip.
+ * Seeds `TripDetail` in the Trips stack so the user can navigate back to the hub.
+ */
+export function navigateToTripFeed(params: { readonly tripId: string }): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripDetail',
+      params: { tripId: params.tripId },
+    },
+  });
+  navigationRef.navigate('MainTabs', {
+    screen: 'Trips',
+    params: {
+      screen: 'TripFeed',
+      params,
+    },
+  });
+  return true;
+}
+
 

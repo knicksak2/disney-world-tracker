@@ -45,6 +45,8 @@ Terms introduced by this feature:
 
 ### Requirement 1: Log a Completion Directly From a Planned Item
 
+_(Extended by `unified-experience-logging`: the Log_Composer is now the Unified_Log_Sheet in locked mode, still posting to `POST /trips/:id/log-entries`)._
+
 **User Story:** As a Trip_Member, I want to log a completion straight from a Planned_Item, so that I do not have to re-find in the Catalog something the group already planned.
 
 #### Acceptance Criteria

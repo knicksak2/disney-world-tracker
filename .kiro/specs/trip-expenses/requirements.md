@@ -231,7 +231,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 5. IF no recognizable per-person pricing line is found in a linked restaurant's cached menu, THEN THE Mobile_App SHALL fall back to empty manual Expense_Tier entry without error.
 6. THE Trip_Service SHALL reject an `experienceId` that does not reference a Restaurant_Experience, or a `resortId` that does not reference a Catalog Resort, or either referencing an entity not found in the Catalog, with `trip_validation_failed`.
 7. THE Trip_Service SHALL treat the restaurant/Resort link as informational only: removing the link, or the linked Experience or Resort later being deactivated in the Catalog, SHALL NOT alter any already-stored Expense_Share, Expense_Tier, or Expense_Item.
-8. THE Trip_Service SHALL NOT offer a Catalog link for an Expense of any other Category (`tickets`, `shopping`, `transportation`, `other`), because gift shops, transportation providers, and other retail are not individually modeled as Catalog entities; those Expenses are recorded through `exact`, `even`, `tiered`, or `itemized` Split_Mode with no Catalog reference.
+8. THE Trip_Service SHALL NOT offer a Catalog link for an Expense of any other Category (`tickets`, `lightning_lane`, `shopping`, `transportation`, `other`), because gift shops, transportation providers, and other retail are not individually modeled as Catalog entities; those Expenses are recorded through `exact`, `even`, `tiered`, or `itemized` Split_Mode with no Catalog reference.
 
 ### Requirement 12: Refunds
 

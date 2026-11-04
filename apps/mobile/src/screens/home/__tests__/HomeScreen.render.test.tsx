@@ -224,7 +224,7 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     // Crew preview row
     const crewRow = await screen.findByTestId('home-upcoming-trip-card-crew');
     expect(crewRow).toBeTruthy();
-    expect(screen.getByText(/With Emma/)).toBeTruthy();
+    expect(await screen.findByText(/With Emma/)).toBeTruthy();
 
     fireEvent.press(crewRow);
     expect(navigateToTripMembersSpy).toHaveBeenCalledWith({ tripId: 'trip-fall-magic' });

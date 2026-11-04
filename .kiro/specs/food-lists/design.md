@@ -248,6 +248,32 @@ export interface FoodListItemDTO {
   /** `null` when the contributing User's account has since been deleted (ON DELETE SET NULL). */
   readonly addedByUserId: string | null;
   readonly addedByDisplayName: string | null;
+  /** Present only when the parent Food_List's `isChecklist` is `true` (Requirement 13.3, 13.4). */
+  readonly gotten?: boolean;
+  /**
+   * The 1-10 rating from the User's most recent qualifying `Food_Item_Log`
+   * for this item (Requirement 13.7's repeat-log allowance — "most recent"
+   * is the same tie-break this codebase already uses elsewhere), or `null`
+   * if that log carried no rating. Present only when `gotten` is `true`;
+   * absent entirely (not merely `null`) when the list isn't a checklist or
+   * the item isn't yet gotten.
+   */
+  readonly rating?: number | null | undefined;
+  /**
+   * The id of the most recent qualifying Food_Item_Log that marked this item
+   * as gotten (Requirement 13.23). Present only when `gotten` is `true`.
+   */
+  readonly logId?: string | null | undefined;
+  /**
+   * The YYYY-MM-DD visit date of the most recent qualifying Food_Item_Log (Requirement 13.23).
+   * Present only when `gotten` is `true`.
+   */
+  readonly visitedOn?: string | null | undefined;
+  /**
+   * The optional note of the most recent qualifying Food_Item_Log (Requirement 13.23).
+   * Present only when `gotten` is `true`.
+   */
+  readonly note?: string | null | undefined;
 }
 
 /** The requesting User's access level on a Food_List (Requirement 7.1, 7.3). */
@@ -677,8 +703,8 @@ No new `ErrorCode` is introduced by this amendment. `isChecklist` follows the ex
 *For any Checklist Food_List item with N pre-existing qualifying `Food_Item_Log` rows (N >= 0) for the acting User, a new mark-gotten submission creates exactly one additional `Food_Item_Log` row and returns its `id`; activating that specific submission's undo affordance deletes only the `Food_Item_Log` row with that returned `id`, leaving all N pre-existing rows untouched, regardless of how many qualifying logs exist for that item at the time of the undo. Letting the undo affordance dismiss or time out without activation leaves the newly created row permanently in place. For any two mark-gotten submissions (same or different items) whose undo affordances are simultaneously visible, activating or dismissing one never deletes, times out, or otherwise affects the other's referenced log.*
 **Validates:** Requirement 13.16, Requirement 13.17, Requirement 13.18
 
-### Property 19: Optional Rating Never Blocks or Delays Mark-Gotten (Added by this amendment)
-*For any mark-gotten submission, presenting `RateOnCheckoffPrompt` and either (a) skipping it, (b) dismissing it without a selection, or (c) confirming it with a selected 1–10 rating all result in exactly one `Food_Item_Log` being created; cases (a) and (b) create that log with `rating: null`/absent, and case (c) creates it with the selected `rating` value included — in every case, `gotten` resolves to `true` for that item immediately after, with no case left partially submitted or blocked pending further User input beyond the prompt itself.*
+### Property 19: Full Food Log Submission on Mark-Gotten (Amended)
+*For any mark-gotten submission initiated from a Checklist Food_List item, presenting `LogFoodItemModal` and confirming it creates exactly one `Food_Item_Log` with the chosen `visitedOn`, `userTz`, optional `rating`, and optional `note`, and uploads any attached photos; dismissing or canceling the modal leaves the item unlogged and `gotten: false`. Upon successful creation, `gotten` resolves to `true` immediately, celebration fires if the list reaches 100%, and an action-scoped undo toast is mounted.*
 **Validates:** Requirement 13.15
 
 ## Correctness Properties — Addition (Rating Visibility, Whole-Row Activation, Drag-to-Reorder)
@@ -687,12 +713,12 @@ No new `ErrorCode` is introduced by this amendment. `isChecklist` follows the ex
 *For any Checklist Food_List item and any set of qualifying `Food_Item_Log` rows for the acting User (Property 16's viewer-scoped, time-scoped qualification), the item's `rating` field on `GET /food-lists/:id` equals the `rating` of whichever qualifying log has the latest `visited_on` (ties broken by latest `logged_at`), or `null` if that specific log's `rating` is `null` — never the rating of an earlier qualifying log, even if that earlier log had a non-null rating and the most recent one does not. `rating` is present in the response if and only if `gotten` is `true` for that item; it is entirely absent when `gotten` is `false` or the list is not a checklist (mirroring how `gotten` itself is entirely absent for a non-checklist list, Property 16).*
 **Validates:** Requirement 13.19
 
-### Property 21: Check-Off Button Exclusivity, Badge Rendering, and Restaurant Navigation (Added by this amendment)
-*For any Checklist Food_List item row, at most one of the following is true at render time: (a) when `gotten` is `false`, an explicit trailing "Check off" action button is rendered in the badge slot before the delete button (with testID `food-list-item-check-off-btn-${foodItemId}`) as the exclusive completion activation target opening `RateOnCheckoffPrompt`, or (b) when `gotten` is `true`, the "Check off" action button is replaced by a trailing completed badge showing `` `${rating}/10` `` when `rating` is non-null or a generic completed label when `rating` is `null`. No leading circle/checkbox-shaped element is rendered in either state. The row details area (dish name/location/price) does not trigger mark-gotten or open `RateOnCheckoffPrompt` in any state; instead, activating the row details area WHERE `experienceId` is non-null navigates to `ExperienceDetailScreen` (`{ experienceId }`), and is inert when `experienceId` is `null`. A non-checklist list's item row renders neither the "Check off" button nor a completion badge, and its details area similarly navigates to `ExperienceDetailScreen` WHERE `experienceId` is non-null.*
+### Property 21: Check-Off Button Exclusivity, Badge Rendering, and Restaurant Navigation (Amended)
+*For any Checklist Food_List item row, at most one of the following is true at render time: (a) when `gotten` is `false`, an explicit trailing "Check off" action button is rendered in the badge slot before the delete button (with testID `food-list-item-check-off-btn-${foodItemId}`) as the exclusive completion activation target opening `LogFoodItemModal`, or (b) when `gotten` is `true`, the "Check off" action button is replaced by a trailing completed badge showing `` `${rating}/10` `` when `rating` is non-null or a generic completed label when `rating` is `null`. No leading circle/checkbox-shaped element is rendered in either state. The row details area (dish name/location/price) does not trigger mark-gotten or open `LogFoodItemModal` in any state; instead, activating the row details area WHERE `experienceId` is non-null navigates to `ExperienceDetailScreen` (`{ experienceId }`), and is inert when `experienceId` is `null`. A non-checklist list's item row renders neither the "Check off" button nor a completion badge, and its details area similarly navigates to `ExperienceDetailScreen` WHERE `experienceId` is non-null.*
 **Validates:** Requirement 13.20, Requirement 13.21
 
-### Property 22: Post-Completion Rating Editing on Checklist Items (Added by this amendment)
-*For any Checklist Food_List item with `gotten = true`, its DTO carries `logId` populated with the UUID of the most recent qualifying `Food_Item_Log`. The item's completed status badge (`testID="food-list-item-gotten-badge-${foodItemId}"`) is an accessible button; activating it opens `RateOnCheckoffPrompt` with `initialRating` pre-selected to the item's current rating. Confirming a rating issues `PATCH /me/food-items/:foodItemId/logs/:logId` with `{ rating }`, and updates the list's query data so the updated rating renders on the completed badge.*
+### Property 22: Post-Completion Log Editing on Checklist Items (Amended)
+*For any Checklist Food_List item with `gotten = true`, its DTO carries `logId`, `visitedOn`, and `note` populated from the most recent qualifying `Food_Item_Log`. The item's completed status badge (`testID="food-list-item-gotten-badge-${foodItemId}"`) is an accessible button; activating it opens `EditFoodLogModal` pre-populated with the log's date, rating, note, and photo gallery. Confirming an edit issues `PATCH /me/food-items/:foodItemId/logs/:logId` and associated photo mutations, and refreshes the list's query data so the updated rating, note, photos, and date render across the app.*
 **Validates:** Requirement 13.23
 
 ## Testing Strategy — Addition

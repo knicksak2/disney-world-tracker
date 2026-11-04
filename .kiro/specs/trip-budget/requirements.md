@@ -328,7 +328,7 @@ This feature **depends on** `trips` (membership, roles, the permission matrix, t
 
 #### Acceptance Criteria
 
-1. THE pure mapping `BUDGET_TO_EXPENSE_CATEGORY` SHALL map `tickets` to `tickets`, `lightning_lane` to `tickets`, `dining` to `dining`, `lodging` to `hotel`, `transportation` to `transportation`, `shopping` to `shopping`, `other` to `other`, and the mapping SHALL be total over `BUDGET_CATEGORIES`.
+1. THE pure mapping `BUDGET_TO_EXPENSE_CATEGORY` SHALL map `tickets` to `tickets`, `lightning_lane` to `lightning_lane`, `dining` to `dining`, `lodging` to `hotel`, `transportation` to `transportation`, `shopping` to `shopping`, `other` to `other`, and the mapping SHALL be total over `BUDGET_CATEGORIES`.
 2. THE Budget response SHALL include a `vsActual` array with, for each Expense category, `budgetedCents` (sum of line totals of the Budget_Categories mapped to it) and `actualCents` (the sum of `expenses.amount_cents` of that category on the Trip minus its `expense_refunds`), computed by read-only SQL against the Expense tables.
 3. THE Trip_Service SHALL accept an optional `linkedExpenseId` on a Budget_Line only if the Expense belongs to the same Trip, and SHALL reject any other value with `trip_validation_failed`.
 4. WHEN a linked Expense is removed, THE Trip_Service SHALL keep the Budget_Line and set `linked_expense_id` to NULL (`ON DELETE SET NULL`).

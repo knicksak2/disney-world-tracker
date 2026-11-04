@@ -272,6 +272,7 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
     applyMigration(db, '0006_experience_land.sql');
     applyMigration(db, '0013_avatar_presets.sql');
     applyMigration(db, '0015_trips.sql');
+    applyMigration(db, '0034_experience_logs.sql');
     applyMigration(db, '0062_photo_uploads.sql');
     applyMigration(db, '0063_trip_photos.sql');
     applyMigration(db, '0064_account_deletion.sql');
@@ -303,8 +304,8 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
     `);
 
     tripRepo = createTripRepo(pool, {
-      completions: {} as any,
-      ratings: {} as any,
+      completions: { mark: async () => null } as any,
+      ratings: { setRating: async () => {} } as any,
       resolveFoodList: () => Promise.resolve(null),
     });
     fakeStore = new FakeObjectStore();
@@ -684,6 +685,58 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
       expect(itemWithPort?.photos?.length).toBe(1);
       expect(itemWithPort?.metadata?.photoIds).toBeUndefined();
       expect(itemWithPort?.metadata?.caption).toBe('Secret trip caption');
+    });
+  });
+
+  describe('Trip Log Entry Notes (trip log note support)', () => {
+    it('persists note on POST /trips/:id/log-entries and enriches feed item metadata and listLogEntries', async () => {
+      const expId = randomUUID();
+      db.public.none(`
+        INSERT INTO experiences (id, upstream_entity_id, name, park, category, land) VALUES
+          ('${expId}', 'upstream-btmr', 'Big Thunder Mountain', 'Magic Kingdom', 'Ride', 'Frontierland');
+      `);
+
+      const server = buildTestServer({ userId: authorMemberId, withPort: false });
+
+      const logRes = await server.inject({
+        method: 'POST',
+        url: `/trips/${tripId}/log-entries`,
+        payload: {
+          experienceId: expId,
+          note: 'Front row seats, great fireworks view!',
+        },
+      });
+
+      expect(logRes.statusCode).toBe(201);
+      const { logEntryId } = logRes.json() as { logEntryId: string };
+      expect(logEntryId).toBeDefined();
+
+      // Verify DB row in experience_logs
+      const dbRow = db.public.one(
+        `SELECT el.note FROM experience_logs el JOIN trip_log_entries tle ON tle.log_id = el.id WHERE tle.id = '${logEntryId}'`,
+      );
+      expect(dbRow.note).toBe('Front row seats, great fireworks view!');
+
+      // Verify GET /trips/:id/feed includes note in metadata
+      const feedRes = await server.inject({
+        method: 'GET',
+        url: `/trips/${tripId}/feed`,
+      });
+      expect(feedRes.statusCode).toBe(200);
+      const feed = feedRes.json() as TripFeedItemDTO[];
+      const logItem = feed.find((i) => i.type === 'completion_logged');
+      expect(logItem).toBeDefined();
+      expect(logItem?.metadata?.note).toBe('Front row seats, great fireworks view!');
+
+      // Verify GET /trips/:id/log-entries includes note
+      const listRes = await server.inject({
+        method: 'GET',
+        url: `/trips/${tripId}/log-entries`,
+      });
+      expect(listRes.statusCode).toBe(200);
+      const entries = listRes.json() as Array<{ id: string; note?: string | null }>;
+      const entry = entries.find((e) => e.id === logEntryId);
+      expect(entry?.note).toBe('Front row seats, great fireworks view!');
     });
   });
 });

@@ -404,6 +404,25 @@ describe('FoodItemLogRepo Property Tests', () => {
     expect(updatedNote.rating).toBeNull();
     expect(updatedNote.note).toBe('Updated review text');
 
+    // Update visitedOn
+    const updatedDate = await logRepo.updateLog({
+      userId,
+      foodItemId,
+      logId: created.id,
+      visitedOn: '2026-06-12',
+    });
+    expect(updatedDate.visitedOn).toBe('2026-06-12');
+
+    // Reject future visitedOn
+    await expect(
+      logRepo.updateLog({
+        userId,
+        foodItemId,
+        logId: created.id,
+        visitedOn: '2026-06-20', // fixedNow is 2026-06-15
+      }),
+    ).rejects.toThrowError(AppError);
+
     // Other user cannot update log
     await expect(
       logRepo.updateLog({

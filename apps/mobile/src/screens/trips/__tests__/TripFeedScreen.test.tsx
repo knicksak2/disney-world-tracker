@@ -34,8 +34,8 @@ jest.mock('../../../api/client', () => {
 });
 
 import TripFeedScreen from '../TripFeedScreen';
-import { apiRequest as mockedApiRequest } from '../../../api/client';
-import type { TripFeedItemDTO, TripMemberDTO, TripPostPhotoSlotDTO } from '@dwt/shared';
+import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
+import type { ExperienceDTO, TripFeedItemDTO, TripMemberDTO, TripPostPhotoSlotDTO } from '@dwt/shared';
 import { useTripAlbum, useTripSummaryPhotos } from '../../../photos/api';
 import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
@@ -139,11 +139,11 @@ const MEMBER_POST_MINE_ALL_REMOVED: TripFeedItemDTO = {
   comments: [],
 };
 
-const SEARCH_HIT = {
+const SEARCH_HIT: ExperienceDTO = {
   id: EXPERIENCE_UUID,
   name: 'Big Thunder Mountain',
   park: 'Magic Kingdom',
-  category: 'Attraction',
+  category: 'Ride',
   description: '',
   active: true,
   imageUrl: null,
@@ -168,6 +168,18 @@ function installApi(handlers: Handlers = {}): void {
       if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) {
         return handlers.members ?? MEMBERS;
       }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return {
+          id: TRIP_ID,
+          name: 'Family Trip',
+          status: 'active',
+          startDate: '2020-01-01',
+          endDate: '2030-12-31',
+        };
+      }
+      if (method === 'GET' && path === '/me/trips') {
+        return [{ status: 'active', trips: [] }];
+      }
       if (method === 'GET' && path === '/photos/config') {
         return { enabled: true, tripEnabled: true, remainingToday: 20 };
       }
@@ -178,7 +190,7 @@ function installApi(handlers: Handlers = {}): void {
         return handlers.search ? await handlers.search(path) : { experiences: [] };
       }
       if (handlers.mutate) return handlers.mutate(method, path, body);
-      return null;
+      return {};
     },
   );
 }
@@ -341,9 +353,80 @@ describe('Trip_Activity screen', () => {
       expect(mutate).toHaveBeenCalledWith(
         'POST',
         `/trips/${TRIP_ID}/log-entries`,
-        { experienceId: EXPERIENCE_UUID, rodeWith: [ARIEL_ID], rating: 8 },
+        expect.objectContaining({
+          experienceId: EXPERIENCE_UUID,
+          rodeWith: [ARIEL_ID],
+          rating: 8,
+        }),
       );
     });
+  });
+
+  test('logging a completion with note sends note in payload', async () => {
+    const mutate = jest.fn().mockResolvedValue(undefined);
+    const search = jest.fn().mockResolvedValue({ experiences: [SEARCH_HIT] });
+    installApi({ mutate, search });
+
+    renderActivity();
+
+    fireEvent.press(await screen.findByTestId('trip-activity-log-cta'));
+    fireEvent.changeText(await screen.findByTestId('activity-log-search'), 'Thunder');
+    fireEvent.press(await screen.findByTestId(`activity-log-result-${SEARCH_HIT.id}`));
+    await screen.findByTestId('activity-log-selected');
+
+    expect(screen.getByText('Rode with')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId('activity-log-note-input'), 'Front row was thrilling!');
+    fireEvent.press(screen.getByTestId('activity-log-submit'));
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/log-entries`,
+        expect.objectContaining({
+          experienceId: EXPERIENCE_UUID,
+          rodeWith: [],
+          note: 'Front row was thrilling!',
+        }),
+      );
+    });
+  });
+
+  test('logging a dining completion shows "Dined with" header', async () => {
+    const DINING_HIT: ExperienceDTO = {
+      ...SEARCH_HIT,
+      id: '99999999-9999-4999-8999-999999999999',
+      name: 'Be Our Guest Restaurant',
+      category: 'Restaurant',
+    };
+    const search = jest.fn().mockResolvedValue({ experiences: [DINING_HIT] });
+    installApi({ search });
+
+    renderActivity();
+
+    fireEvent.press(await screen.findByTestId('trip-activity-log-cta'));
+    fireEvent.changeText(await screen.findByTestId('activity-log-search'), 'Guest');
+    fireEvent.press(await screen.findByTestId(`activity-log-result-${DINING_HIT.id}`));
+    await screen.findByTestId('activity-log-selected');
+
+    expect(screen.getByText('Dined with')).toBeTruthy();
+  });
+
+  test('feed item renders note when present in metadata', async () => {
+    const baseItem = FEED[0]!;
+    const itemWithNote: TripFeedItemDTO = {
+      ...baseItem,
+      id: 'item-note-1',
+      metadata: {
+        ...baseItem.metadata,
+        note: 'Amazing fireworks view from our table!',
+      },
+    };
+    installApi({ feed: async () => [itemWithNote] });
+
+    renderActivity();
+
+    expect(await screen.findByText('"Amazing fireworks view from our table!"')).toBeTruthy();
   });
 
   test('R13.4: tapping a reaction posts it for the feed item', async () => {
@@ -925,7 +1008,7 @@ describe('Trip_Activity screen', () => {
       const cta = flat(screen.getByTestId('trip-activity-log-cta'));
       expect(cta.backgroundColor).toBe(FEED_MISC.dark.ctaBg);
       expect(cta.borderColor).toBe(FEED_MISC.dark.ctaBorder);
-      expect(flat(screen.getByText('Log a ride or snack')).color).toBe(darkTheme.color.primaryFg);
+      expect(flat(screen.getByText('Log a ride or food')).color).toBe(darkTheme.color.primaryFg);
       expect(flat(screen.getByText('✓ Ariel')).color).toBe(RODE_WITH.dark.confirmedFg);
     });
 
@@ -936,7 +1019,7 @@ describe('Trip_Activity screen', () => {
       await screen.findByText('Big Thunder Mountain');
       expect(flat(screen.getByTestId('trip-activity-log-cta')).backgroundColor).toBe('#fcfaff');
       expect(flat(screen.getByText('✓ Ariel')).color).toBe('#27855a');
-      expect(flat(screen.getByText('Log a ride or snack')).color).toBe('#5b2a86');
+      expect(flat(screen.getByText('Log a ride or food')).color).toBe('#5b2a86');
     });
 
     test('uses undefined behavior for KeyboardAvoidingView on Android to prevent soft-keyboard jitter loops', async () => {
@@ -1077,6 +1160,262 @@ describe('Trip_Activity screen', () => {
       // Pull-to-refresh wired on FlatList
       const list = screen.getByTestId('trip-feed');
       expect(typeof list.props.onRefresh).toBe('function');
+    });
+  });
+
+  describe('Task 28: Completion log deletion (R20.10, R20.11)', () => {
+    const BASE_COMPLETION_ITEM = FEED[0]!;
+
+    test('renders delete button for author (mine: true), clicking it sends DELETE /trips/:id/log-entries/:logEntryId and removes item', async () => {
+      const completionItem: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        mine: true,
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          logEntryId: 'log-entry-123',
+        },
+      };
+      let currentFeed: TripFeedItemDTO[] = [completionItem];
+      const feed = jest.fn().mockImplementation(async () => currentFeed);
+      const mutate = jest.fn().mockImplementation(async (method: string, path: string) => {
+        if (method === 'DELETE' && path.includes('log-entry-123')) {
+          currentFeed = [];
+        }
+        return undefined;
+      });
+      installApi({
+        members: [{ userId: OWN_USER_ID, displayName: 'Me', avatarPreset: null, role: 'member' }],
+        feed,
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId(`trip-feed-item-${COMPLETION_ITEM_ID}`)).toBeTruthy();
+      const deleteBtn = screen.getByTestId(`trip-feed-completion-delete-${COMPLETION_ITEM_ID}`);
+      expect(deleteBtn).toBeTruthy();
+
+      fireEvent.press(deleteBtn);
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'DELETE',
+          `/trips/${TRIP_ID}/log-entries/log-entry-123`,
+          undefined,
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId(`trip-feed-item-${COMPLETION_ITEM_ID}`)).toBeNull();
+      });
+    });
+
+    test('organizer can see and delete completion logged by another member (mine: false)', async () => {
+      const completionItem: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        mine: false,
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          logEntryId: 'log-entry-456',
+        },
+      };
+      const mutate = jest.fn().mockResolvedValue(null);
+      installApi({
+        members: [{ userId: OWN_USER_ID, displayName: 'Me', avatarPreset: null, role: 'organizer' }],
+        feed: async () => [completionItem],
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId(`trip-feed-item-${COMPLETION_ITEM_ID}`)).toBeTruthy();
+      const deleteBtn = screen.getByTestId(`trip-feed-completion-delete-${COMPLETION_ITEM_ID}`);
+      expect(deleteBtn).toBeTruthy();
+
+      fireEvent.press(deleteBtn);
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'DELETE',
+          `/trips/${TRIP_ID}/log-entries/log-entry-456`,
+          undefined,
+        );
+      });
+    });
+
+    test('non-author non-organizer member sees no delete control on completion', async () => {
+      const completionItem: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        mine: false,
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          logEntryId: 'log-entry-789',
+        },
+      };
+      installApi({
+        members: [{ userId: OWN_USER_ID, displayName: 'Me', avatarPreset: null, role: 'member' }],
+        feed: async () => [completionItem],
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId(`trip-feed-item-${COMPLETION_ITEM_ID}`)).toBeTruthy();
+      expect(screen.queryByTestId(`trip-feed-completion-delete-${COMPLETION_ITEM_ID}`)).toBeNull();
+    });
+
+    test('an upcoming Trip shows the message instead of the sheet', async () => {
+      apiRequestMock.mockImplementation(async (method: string, path: string) => {
+        if (method === 'GET' && path === '/me') return ME;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return MEMBERS;
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            name: 'Upcoming Trip',
+            status: 'upcoming',
+            startDate: '2030-01-01',
+            endDate: '2030-01-10',
+          };
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/feed`) return FEED;
+        return {};
+      });
+
+      renderActivity();
+
+      fireEvent.press(await screen.findByTestId('trip-activity-log-cta'));
+
+      expect(await screen.findByText('Logging opens when the trip starts.')).toBeTruthy();
+      expect(screen.queryByTestId('activity-log-date')).toBeNull();
+    });
+
+    test('Inline_Tag_Response shows controls only for tagId entry and Confirm posts {} to confirm endpoint', async () => {
+      const mutate = jest.fn().mockResolvedValue(undefined);
+      const completionWithTags: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        id: 'item-tags-1',
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          rodeWith: [
+            {
+              taggedMemberId: 'member-1',
+              displayName: 'Alice Tagged',
+              state: 'pending',
+              tagId: 'tag-alice-123',
+            },
+            {
+              taggedMemberId: 'member-2',
+              displayName: 'Bob Tagged',
+              state: 'pending',
+              tagId: null,
+            },
+            {
+              taggedMemberId: 'member-3',
+              displayName: 'Charlie Confirmed',
+              state: 'confirmed',
+              tagId: null,
+            },
+          ],
+        },
+      };
+
+      installApi({
+        feed: async () => [completionWithTags],
+        mutate,
+      });
+
+      renderActivity();
+
+      // Tag controls present only for tagId entry
+      expect(await screen.findByTestId('feed-tag-confirm-tag-alice-123')).toBeTruthy();
+      expect(screen.getByTestId('feed-tag-decline-tag-alice-123')).toBeTruthy();
+      expect(screen.queryByTestId('feed-tag-confirm-null')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('feed-tag-confirm-tag-alice-123'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          '/me/rode-with-tags/tag-alice-123/confirm',
+          {},
+        );
+      });
+    });
+
+    test('Inline_Tag_Response Decline posts to decline endpoint', async () => {
+      const mutate = jest.fn().mockResolvedValue(undefined);
+      const completionWithTags: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        id: 'item-tags-2',
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          rodeWith: [
+            {
+              taggedMemberId: 'member-1',
+              displayName: 'Alice Tagged',
+              state: 'pending',
+              tagId: 'tag-alice-456',
+            },
+          ],
+        },
+      };
+
+      installApi({
+        feed: async () => [completionWithTags],
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId('feed-tag-decline-tag-alice-456')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('feed-tag-decline-tag-alice-456'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          '/me/rode-with-tags/tag-alice-456/decline',
+          {},
+        );
+      });
+    });
+
+    test('Inline_Tag_Response shows inline error on failure and keeps controls', async () => {
+      const mutate = jest.fn().mockRejectedValue(new ApiError({ status: 500, code: 'internal_error', message: 'Could not confirm tag.' }));
+      const completionWithTags: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        id: 'item-tags-3',
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          rodeWith: [
+            {
+              taggedMemberId: 'member-1',
+              displayName: 'Alice Tagged',
+              state: 'pending',
+              tagId: 'tag-alice-789',
+            },
+          ],
+        },
+      };
+
+      installApi({
+        feed: async () => [completionWithTags],
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId('feed-tag-confirm-tag-alice-789')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('feed-tag-confirm-tag-alice-789'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('feed-tag-error-item-tags-3')).toBeTruthy();
+        expect(screen.getByText('Could not confirm tag.')).toBeTruthy();
+      });
+
+      // Controls are kept
+      expect(screen.getByTestId('feed-tag-confirm-tag-alice-789')).toBeTruthy();
+      expect(screen.getByTestId('feed-tag-decline-tag-alice-789')).toBeTruthy();
     });
   });
 });

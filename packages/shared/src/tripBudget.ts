@@ -69,7 +69,7 @@ export const BUDGET_DEFAULT_DINING_TIP_BPS = 1800;
 
 export const BUDGET_TO_EXPENSE_CATEGORY: Readonly<Record<BudgetCategory, ExpenseCategory>> = {
   tickets: 'tickets',
-  lightning_lane: 'tickets',
+  lightning_lane: 'lightning_lane',
   dining: 'dining',
   lodging: 'hotel',
   transportation: 'transportation',

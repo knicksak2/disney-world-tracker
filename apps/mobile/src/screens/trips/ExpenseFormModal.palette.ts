@@ -121,6 +121,15 @@ export const FORM = definePalette({
     greyHairline: '#e2e8f0',
     // Selected assignee initial on its white disc (violet T).
     assigneeInitialSelected: '#7c3aed',
+    // Category grid card tokens (matching BudgetLineFormModal)
+    chipActiveBg: '#5b2a86',
+    chipActiveText: '#ffffff',
+    chipInactiveBg: '#efe9f7',
+    chipInactiveText: '#1f1235',
+    chipBorder: '#e2d9f0',
+    chipHintText: '#6b6480',
+    categoryBadgeBg: '#ede7f6',
+    categoryTagText: '#5b2a86',
   },
   dark: {
     scrim: 'rgba(0, 0, 0, 0.6)',
@@ -186,5 +195,13 @@ export const FORM = definePalette({
     greyDivider: darkColor.border,
     greyHairline: darkColor.border,
     assigneeInitialSelected: DARK_TONAL.violet.fg,
+    chipActiveBg: '#7e57c2',
+    chipActiveText: '#ffffff',
+    chipInactiveBg: '#2a1d42',
+    chipInactiveText: '#f3eefc',
+    chipBorder: '#33264d',
+    chipHintText: '#b3a8c9',
+    categoryBadgeBg: '#2a1d42',
+    categoryTagText: '#c4a3ff',
   },
 });

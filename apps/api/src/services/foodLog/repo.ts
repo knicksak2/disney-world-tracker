@@ -65,6 +65,8 @@ export interface UpdateFoodItemLogRepoInput {
   readonly logId: string;
   readonly rating?: number | null | undefined;
   readonly note?: string | null | undefined;
+  readonly visitedOn?: string | undefined;
+  readonly userTz?: string | undefined;
 }
 
 export interface FoodItemLogRepo {
@@ -526,14 +528,26 @@ export function createFoodItemLogRepo(options: {
     async updateLog(
       input: UpdateFoodItemLogRepoInput,
     ): Promise<FoodItemLogDTO> {
-      const checkRes = await pool.query<{ id: string }>(
-        `SELECT id FROM food_item_logs
+      const checkRes = await pool.query<{ id: string; user_tz: string }>(
+        `SELECT id, user_tz FROM food_item_logs
           WHERE id = $1 AND user_id = $2 AND food_item_id = $3`,
         [input.logId, input.userId, input.foodItemId],
       );
 
       if (checkRes.rows.length === 0) {
         throw new AppError('food_log_not_found', 'Food item log not found');
+      }
+
+      if (input.visitedOn !== undefined) {
+        const effectiveTz = input.userTz ?? checkRes.rows[0]!.user_tz;
+        const todayInUserTz = formatYmdInTimeZone(clock(), effectiveTz);
+        if (input.visitedOn > todayInUserTz) {
+          throw new AppError(
+            'food_log_future_date',
+            'Visit date cannot be in the future',
+            { field: 'visitedOn' },
+          );
+        }
       }
 
       const updates: string[] = [];
@@ -548,6 +562,16 @@ export function createFoodItemLogRepo(options: {
       if (input.note !== undefined) {
         updates.push(`note = $${paramIdx++}`);
         values.push(input.note === null ? null : input.note.trim() || null);
+      }
+
+      if (input.visitedOn !== undefined) {
+        updates.push(`visited_on = $${paramIdx++}`);
+        values.push(input.visitedOn);
+      }
+
+      if (input.userTz !== undefined) {
+        updates.push(`user_tz = $${paramIdx++}`);
+        values.push(input.userTz);
       }
 
       if (updates.length === 0) {

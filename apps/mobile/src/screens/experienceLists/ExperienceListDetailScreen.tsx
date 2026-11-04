@@ -36,6 +36,7 @@ import { ApiError, apiRequest } from '../../api/client';
 import { withAlpha } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { EXPERIENCE_LIST_DETAIL } from './ExperienceListDetailScreen.palette';
 import { Badge, Card, GradientHeader, ScreenContainer } from '../../theme/components';
 import { useOpenExperience } from '../navigation/experienceNavigation';
@@ -278,6 +279,10 @@ export default function ExperienceListDetailScreen(): JSX.Element {
   // Drives the "Add items" modal (Requirement 9.5, Entry Point 2), whose
   // body is the `AddItemsCatalogSearch` catalog search step below.
   const [addItemsModalVisible, setAddItemsModalVisible] = useState(false);
+  const {
+    keyboardInset: addItemsKeyboardInset,
+    getAvailableModalHeight: getAddItemsModalHeight,
+  } = useKeyboardBottomInset(addItemsModalVisible);
   // Task 13.4: the experienceId currently targeted by the per-row "Log a
   // visit" action, or null when no `LogVisitModal` should be shown. Mirrors
   // `LiveWaitsScreen.tsx`'s `activeLogExperienceId` pattern — a single modal
@@ -994,9 +999,21 @@ export default function ExperienceListDetailScreen(): JSX.Element {
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.modalBackdrop}
+            style={[
+              styles.modalBackdrop,
+              Platform.OS === 'android' && addItemsKeyboardInset > 0
+                ? { paddingBottom: addItemsKeyboardInset }
+                : null,
+            ]}
           >
-            <View style={styles.modalContainer}>
+            <View
+              style={[
+                styles.modalContainer,
+                Platform.OS === 'android' && addItemsKeyboardInset > 0
+                  ? { maxHeight: getAddItemsModalHeight(40) }
+                  : null,
+              ]}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Items</Text>
                 <Pressable

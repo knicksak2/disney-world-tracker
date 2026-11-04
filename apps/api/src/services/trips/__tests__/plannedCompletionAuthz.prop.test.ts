@@ -234,7 +234,7 @@ function makeRecordingRepo(opts: {
     },
     logCompletion: async (tripId: string) => {
       record('logCompletion', tripId);
-      return { logEntryId: `log-${tripId}`, pendingTags: [] };
+      return { logId: 'log-id', loggedAt: '2026-05-10T12:00:00.000Z', logEntryId: `log-${tripId}`, pendingTags: [] };
     },
   };
 

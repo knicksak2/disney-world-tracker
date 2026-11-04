@@ -216,3 +216,98 @@ describe('GET /me/rode-with-tags?state=pending', () => {
     expect(getRodeWithTag).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /me/rode-with-tags/:tagId/confirm', () => {
+  const TAG_ID = '99999999-9999-9999-9999-999999999999';
+  const TRIP_ID = '88888888-8888-8888-8888-888888888888';
+  const EXP_ID = '77777777-7777-7777-7777-777777777777';
+
+  it('confirms tag when body is completely omitted (undefined body)', async () => {
+    const confirmRodeWithTag = vi.fn().mockResolvedValue({
+      tagId: TAG_ID,
+      tripId: TRIP_ID,
+      experienceId: EXP_ID,
+    });
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(confirmRodeWithTag).toHaveBeenCalledWith(TAG_ID, CALLER_ID, undefined);
+    expect(res.json()).toMatchObject({
+      tagId: TAG_ID,
+      tripId: TRIP_ID,
+      experienceId: EXP_ID,
+      newlyAwardedPinIds: [],
+    });
+  });
+
+  it('confirms tag when body is an empty object {}', async () => {
+    const confirmRodeWithTag = vi.fn().mockResolvedValue({
+      tagId: TAG_ID,
+      tripId: TRIP_ID,
+      experienceId: EXP_ID,
+    });
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(confirmRodeWithTag).toHaveBeenCalledWith(TAG_ID, CALLER_ID, undefined);
+  });
+
+  it('confirms tag with a valid rating (1-10)', async () => {
+    const confirmRodeWithTag = vi.fn().mockResolvedValue({
+      tagId: TAG_ID,
+      tripId: TRIP_ID,
+      experienceId: EXP_ID,
+    });
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+      payload: { rating: 8 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(confirmRodeWithTag).toHaveBeenCalledWith(TAG_ID, CALLER_ID, 8);
+  });
+
+  it('rejects an invalid rating with 400 validation_failed', async () => {
+    const confirmRodeWithTag = vi.fn();
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+      payload: { rating: 12 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'trip_validation_failed' },
+    });
+    expect(confirmRodeWithTag).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated confirm requests with 401', async () => {
+    const confirmRodeWithTag = vi.fn();
+    app = await buildApp(makeRepo({ confirmRodeWithTag }), false);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(confirmRodeWithTag).not.toHaveBeenCalled();
+  });
+});

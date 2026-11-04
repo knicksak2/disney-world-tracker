@@ -31,6 +31,8 @@ export interface CreateFoodItemLogInputDTO {
 export interface UpdateFoodItemLogInputDTO {
   readonly rating?: number | null | undefined;
   readonly note?: string | null | undefined;
+  readonly visitedOn?: string | undefined;
+  readonly userTz?: string | undefined;
 }
 
 export interface FoodItemLogWithContextDTO extends FoodItemLogDTO {

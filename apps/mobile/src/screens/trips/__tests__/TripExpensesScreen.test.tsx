@@ -405,6 +405,52 @@ describe('TripExpensesScreen', () => {
     });
   });
 
+  it('supports lightning_lane category in 3x2 grid and spanning Other shelf', async () => {
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId(`expense-card-${EXPENSE_1.id}`)).toBeTruthy());
+
+    // Filter chip for lightning_lane exists on screen
+    expect(screen.getByTestId('category-filter-lightning_lane')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('add-expense-button'));
+    await waitFor(() => expect(screen.getByTestId('expense-form-modal')).toBeTruthy());
+
+    // 6 Core category cards + spanning Other shelf exist
+    expect(screen.getByTestId('category-chip-tickets')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-lightning_lane')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-dining')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-hotel')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-transportation')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-shopping')).toBeTruthy();
+    expect(screen.getByTestId('category-chip-other')).toBeTruthy();
+
+    // Default category is dining; active pill shows Dining
+    expect(screen.getByTestId('active-category-pill')).toBeTruthy();
+    expect(within(screen.getByTestId('active-category-pill')).getByText('Dining')).toBeTruthy();
+
+    // Select lightning_lane
+    fireEvent.press(screen.getByTestId('category-chip-lightning_lane'));
+    expect(within(screen.getByTestId('active-category-pill')).getByText('Lightning Lane')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByTestId('expense-description-input'), 'Magic Kingdom Multi Pass');
+    fireEvent.changeText(screen.getByTestId('expense-amount-input'), '120.00');
+
+    fireEvent.press(screen.getByTestId('submit-expense-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'POST',
+        `/trips/${TRIP_ID}/expenses`,
+        expect.objectContaining({
+          description: 'Magic Kingdom Multi Pass',
+          amountCents: 12000,
+          category: 'lightning_lane',
+        }),
+      );
+    });
+  });
+
   it('adds an expense in TIERED split mode asserting POST payload', async () => {
     renderScreen();
 
@@ -1330,7 +1376,6 @@ describe('TripExpensesScreen', () => {
       expect(screen.getByTestId('receipt-scanner-hero-card')).toBeTruthy();
       expect(screen.getByTestId('scan-receipt-camera-button')).toBeTruthy();
       expect(screen.getByTestId('scan-receipt-library-button')).toBeTruthy();
-      expect(screen.getByTestId('scan-receipt-demo-button')).toBeTruthy();
     });
 
     // Press Take Photo button
@@ -1417,18 +1462,22 @@ describe('TripExpensesScreen', () => {
     });
   });
 
-  it('loads sample Disney receipt immediately via the Sample quick button', async () => {
+  it('scans receipt from photo library via the Photo quick button', async () => {
+    mockScanReceiptPhoto.mockResolvedValueOnce(
+      'French Dip Sandwich $17.49\nTotal $17.49'
+    );
     renderScreen();
     await waitFor(() => expect(screen.getByTestId('add-expense-button')).toBeTruthy());
     fireEvent.press(screen.getByTestId('add-expense-button'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('scan-receipt-demo-button')).toBeTruthy();
+      expect(screen.getByTestId('scan-receipt-library-button')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId('scan-receipt-demo-button'));
+    fireEvent.press(screen.getByTestId('scan-receipt-library-button'));
 
     await waitFor(() => {
+      expect(mockScanReceiptPhoto).toHaveBeenCalledWith('library');
       expect(screen.getByTestId('receipt-review-modal')).toBeTruthy();
       expect(screen.getByDisplayValue('French Dip Sandwich')).toBeTruthy();
     });

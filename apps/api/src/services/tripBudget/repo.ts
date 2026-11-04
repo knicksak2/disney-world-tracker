@@ -1626,6 +1626,7 @@ export function createTripBudgetRepo(pool: DbPool): TripBudgetRepo {
       const vsActualByExpenseCategory = {
         hotel: 0,
         tickets: 0,
+        lightning_lane: 0,
         dining: 0,
         shopping: 0,
         transportation: 0,

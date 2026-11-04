@@ -173,12 +173,13 @@ describe('foodLists checklist properties (fast-check)', () => {
     foodItemId: string,
     visitedOn: string,
     rating: number | null = null,
+    note: string | null = null,
   ): Promise<string> {
     const res = await pool.query<{ id: string }>(
-      `INSERT INTO food_item_logs (user_id, food_item_id, visited_on, user_tz, rating)
-       VALUES ($1, $2, $3, 'America/New_York', $4)
+      `INSERT INTO food_item_logs (user_id, food_item_id, visited_on, user_tz, rating, note)
+       VALUES ($1, $2, $3, 'America/New_York', $4, $5)
        RETURNING id`,
-      [userId, foodItemId, visitedOn, rating],
+      [userId, foodItemId, visitedOn, rating, note],
     );
     return res.rows[0]!.id;
   }
@@ -347,19 +348,19 @@ describe('foodLists checklist properties (fast-check)', () => {
     // Rated dish, single log.
     const ratedItemId = await createFoodItem('Rated Dish');
     await foodListItemRepo.addItem(list.id, ownerId, ratedItemId);
-    const ratedLogId = await logFoodItem(ownerId, ratedItemId, '2026-06-10', 9);
+    const ratedLogId = await logFoodItem(ownerId, ratedItemId, '2026-06-10', 9, 'Delicious dish!');
 
     // Unrated dish — gotten, but the log carried no rating.
     const unratedItemId = await createFoodItem('Unrated Dish');
     await foodListItemRepo.addItem(list.id, ownerId, unratedItemId);
-    const unratedLogId = await logFoodItem(ownerId, unratedItemId, '2026-06-11', null);
+    const unratedLogId = await logFoodItem(ownerId, unratedItemId, '2026-06-11', null, null);
 
     // Repeat-logged dish: an earlier lower rating, then a later higher one.
     // "Most recent wins" means the row should show 8, not 4.
     const repeatItemId = await createFoodItem('Repeat-Logged Dish');
     await foodListItemRepo.addItem(list.id, ownerId, repeatItemId);
-    await logFoodItem(ownerId, repeatItemId, '2026-06-12', 4);
-    const repeatLog2Id = await logFoodItem(ownerId, repeatItemId, '2026-06-20', 8);
+    await logFoodItem(ownerId, repeatItemId, '2026-06-12', 4, 'Okay on first try');
+    const repeatLog2Id = await logFoodItem(ownerId, repeatItemId, '2026-06-20', 8, 'Much better this time!');
 
     // Never logged — not gotten, must carry no rating.
     const notGottenItemId = await createFoodItem('Never Logged Dish');
@@ -371,16 +372,22 @@ describe('foodLists checklist properties (fast-check)', () => {
     expect(rated.gotten).toBe(true);
     expect(rated.rating).toBe(9);
     expect(rated.logId).toBe(ratedLogId);
+    expect(rated.visitedOn).toBe('2026-06-10');
+    expect(rated.note).toBe('Delicious dish!');
 
     const unrated = detail.items.find((i) => i.foodItemId === unratedItemId)!;
     expect(unrated.gotten).toBe(true);
     expect(unrated.rating).toBeNull();
     expect(unrated.logId).toBe(unratedLogId);
+    expect(unrated.visitedOn).toBe('2026-06-11');
+    expect(unrated.note).toBeNull();
 
     const repeat = detail.items.find((i) => i.foodItemId === repeatItemId)!;
     expect(repeat.gotten).toBe(true);
     expect(repeat.rating).toBe(8); // most recent log (2026-06-20), not the earlier 4
     expect(repeat.logId).toBe(repeatLog2Id);
+    expect(repeat.visitedOn).toBe('2026-06-20');
+    expect(repeat.note).toBe('Much better this time!');
 
     const notGotten = detail.items.find((i) => i.foodItemId === notGottenItemId)!;
     expect(notGotten.gotten).toBe(false);
@@ -391,6 +398,10 @@ describe('foodLists checklist properties (fast-check)', () => {
     expect('rating' in notGotten).toBe(false);
     expect(notGotten.logId).toBeUndefined();
     expect('logId' in notGotten).toBe(false);
+    expect(notGotten.visitedOn).toBeUndefined();
+    expect('visitedOn' in notGotten).toBe(false);
+    expect(notGotten.note).toBeUndefined();
+    expect('note' in notGotten).toBe(false);
   });
 
   // Feature: food-lists, Property 17: Checklist Mode Is Independently Toggleable Without Side Effects

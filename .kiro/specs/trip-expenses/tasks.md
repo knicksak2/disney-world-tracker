@@ -306,6 +306,14 @@ No external vendor, credential, or network call is introduced anywhere in this p
     - Mark this task done only when trip-budget tasks 1.3, 5.1, 5.2, 17.3 and 19.1 are done and the existing `TripExpensesScreen` tests still pass.
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 10.6, 2.13_
 
+- [ ] 22. Lightning Lane Expense Category and Modern Category Selector
+  - [ ] 22.1 Migration 0069 and shared EXPENSE_CATEGORIES vocabulary expansion
+    - Add `apps/api/migrations/0069_expense_category_lightning_lane.sql` updating `chk_expenses_category` to include `lightning_lane`. Add `migration0069.test.ts`. Update `EXPENSE_CATEGORIES` in `packages/shared/src/enums.ts`.
+    - _Requirements: 11.8_
+  - [ ] 22.2 Modern category grid with spanning Other shelf in ExpenseFormModal and filter chips
+    - Redesign category selector in `ExpenseFormModal.tsx` to 3×2 grid + full-width Other shelf matching the budget styling with Ionicons. Add `lightning_lane` filter chip and category meta in `TripExpensesScreen.tsx`.
+    - _Requirements: 10.5, 11.8_
+
 ## Notes
 
 - **New service, not an extension of `trips/repo.ts`.** `apps/api/src/services/tripExpenses/` is a sibling to `apps/api/src/services/trips/`, reusing only `assertTripMember`/`assertTripOrganizer` from `trips/authz.ts` by import. Do not add Expense/Settlement/Guest methods to `trips/repo.ts` itself.

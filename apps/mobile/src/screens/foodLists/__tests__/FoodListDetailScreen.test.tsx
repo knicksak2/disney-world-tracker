@@ -1449,12 +1449,12 @@ describe('FoodListDetailScreen', () => {
     mockNavigate.mockClear();
     fireEvent.press(row);
     expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-1' });
-    expect(screen.queryByTestId('rate-on-checkoff-prompt')).toBeNull();
+    expect(screen.queryByTestId('log-food-item-modal')).toBeNull();
     // No leading circle/checkbox indicator exists anywhere for this row.
     expect(screen.queryByTestId('food-list-item-checkbox-item-dole')).toBeNull();
   });
 
-  test('tapping the trailing "Check off" button opens RateOnCheckoffPrompt (Requirement 13.20)', async () => {
+  test('tapping the trailing "Check off" button opens LogFoodItemModal (Requirement 13.20)', async () => {
     const checklistData: FoodListDetailDTO = {
       ...sampleOwnerList,
       isChecklist: true,
@@ -1480,7 +1480,7 @@ describe('FoodListDetailScreen', () => {
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByTestId('log-food-item-modal')).toBeTruthy();
     });
   });
 
@@ -1576,16 +1576,16 @@ describe('FoodListDetailScreen', () => {
       expect(screen.getByText('0 of 2 tried')).toBeTruthy();
     });
 
-    // Activating the "Check off" button for Dole Whip opens the optional rating
-    // prompt (Requirement 13.15) rather than submitting immediately.
+    // Activating the "Check off" button for Dole Whip opens LogFoodItemModal
+    // (Requirement 13.15) rather than submitting immediately.
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByTestId('log-food-item-modal')).toBeTruthy();
     });
 
-    // Skip the rating — the submission still proceeds with no rating.
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    // Submit with default date and userTz — rating and note are optional.
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith(
@@ -1612,6 +1612,8 @@ describe('FoodListDetailScreen', () => {
     expect(logCall?.[2]).toEqual({
       visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       userTz: expect.any(String),
+      rating: null,
+      note: null,
     });
 
     // Progress updates to 1 of 2 tried
@@ -1663,11 +1665,11 @@ describe('FoodListDetailScreen', () => {
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByTestId('log-food-item-modal')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-9'));
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+    fireEvent.press(screen.getByTestId('rating-btn-9'));
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(() => {
       const logCall = apiRequestMock.mock.calls.find(
@@ -1677,6 +1679,7 @@ describe('FoodListDetailScreen', () => {
         visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         userTz: expect.any(String),
         rating: 9,
+        note: null,
       });
     });
   });
@@ -1796,9 +1799,9 @@ describe('FoodListDetailScreen', () => {
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
+      expect(screen.getByTestId('log-food-item-modal')).toBeTruthy();
     });
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     // Celebration should now be visible!
     await waitFor(() => {
@@ -1841,7 +1844,7 @@ describe('FoodListDetailScreen', () => {
 
     fireEvent.press(screen.getByTestId('food-list-item-details-item-dole'));
 
-    expect(screen.queryByTestId('rate-on-checkoff-prompt')).toBeNull();
+    expect(screen.queryByTestId('log-food-item-modal')).toBeNull();
     expect(apiRequestMock).not.toHaveBeenCalledWith(
       'POST',
       expect.stringMatching(/\/me\/food-items\/.*\/logs/),
@@ -1899,8 +1902,8 @@ describe('FoodListDetailScreen', () => {
     });
 
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
-    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    await waitFor(() => expect(screen.getByTestId('log-food-item-modal')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(() => {
       expect(screen.getByTestId('mark-gotten-undo-toast')).toBeTruthy();
@@ -1964,10 +1967,10 @@ describe('FoodListDetailScreen', () => {
       expect(screen.getByTestId('food-list-item-check-off-btn-item-dole')).toBeTruthy();
     });
 
-    // Mark Dole Whip gotten, skipping the rating.
+    // Mark Dole Whip gotten, with default log submission.
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
-    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    await waitFor(() => expect(screen.getByTestId('log-food-item-modal')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(() => {
       expect(screen.getAllByTestId('mark-gotten-undo-toast')).toHaveLength(1);
@@ -1975,8 +1978,8 @@ describe('FoodListDetailScreen', () => {
 
     // Before that toast is dismissed, mark Cinnamon Churro gotten too.
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
-    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    await waitFor(() => expect(screen.getByTestId('log-food-item-modal')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(
       () => {
@@ -2042,8 +2045,8 @@ describe('FoodListDetailScreen', () => {
       expect(screen.getByTestId('food-list-item-check-off-btn-item-dole')).toBeTruthy();
     });
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-dole'));
-    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-skip-btn'));
+    await waitFor(() => expect(screen.getByTestId('log-food-item-modal')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
 
     await waitFor(() => {
       const doleLogCalls = apiRequestMock.mock.calls.filter(
@@ -2053,6 +2056,8 @@ describe('FoodListDetailScreen', () => {
       expect(doleLogCalls[0]![2]).toEqual({
         visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         userTz: expect.any(String),
+        rating: null,
+        note: null,
       });
     });
     await waitFor(() => {
@@ -2083,26 +2088,20 @@ describe('FoodListDetailScreen', () => {
     });
 
     fireEvent.press(screen.getByTestId('food-list-item-check-off-btn-item-churro'));
-    await waitFor(() => expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy());
-    // Dismiss via the backdrop, without selecting a rating.
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-backdrop'));
+    await waitFor(() => expect(screen.getByTestId('log-food-item-modal')).toBeTruthy());
+    // Dismiss via the close button, without submitting.
+    fireEvent.press(screen.getByTestId('close-log-food-item-btn'));
 
     await waitFor(() => {
       const churroLogCalls = apiRequestMock.mock.calls.filter(
         (c) => c[0] === 'POST' && c[1] === '/me/food-items/item-churro/logs',
       );
-      expect(churroLogCalls).toHaveLength(1);
-      expect(churroLogCalls[0]![2]).toEqual({
-        visitedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-        userTz: expect.any(String),
-      });
+      expect(churroLogCalls).toHaveLength(0);
     });
-    await waitFor(() => {
-      expect(screen.getByText('2 of 2 tried')).toBeTruthy();
-    });
+    expect(screen.getByText('1 of 2 tried')).toBeTruthy();
   });
 
-  test('tapping a completed item gotten badge opens rating prompt and updates rating via PATCH (Requirement 13.23)', async () => {
+  test('tapping a completed item gotten badge opens EditFoodLogModal and updates rating and notes via PATCH (Requirement 13.23)', async () => {
     const currentDetail: FoodListDetailDTO = {
       ...sampleOwnerList,
       isChecklist: true,
@@ -2113,6 +2112,8 @@ describe('FoodListDetailScreen', () => {
           gotten: true,
           rating: null,
           logId: 'log-dole-1',
+          visitedOn: '2026-09-19',
+          note: null,
         },
       ],
     };
@@ -2126,6 +2127,7 @@ describe('FoodListDetailScreen', () => {
           id: 'log-dole-1',
           foodItemId: 'item-dole',
           rating: 9,
+          note: 'Delicious pineapple snack',
           visitedOn: '2026-09-19',
         };
       }
@@ -2142,22 +2144,23 @@ describe('FoodListDetailScreen', () => {
     fireEvent.press(screen.getByTestId('food-list-item-gotten-badge-item-dole'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-prompt')).toBeTruthy();
-      expect(screen.getAllByText('Dole Whip').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
+      expect(screen.getAllByText('Dole Whip').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Select rating 9 and confirm
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-rating-btn-9'));
-    await waitFor(() => {
-      expect(screen.getByTestId('rate-on-checkoff-confirm-btn')).toBeTruthy();
-    });
-    fireEvent.press(screen.getByTestId('rate-on-checkoff-confirm-btn'));
+    // Select rating 9, enter note, and save
+    fireEvent.press(screen.getByTestId('edit-rating-btn-9'));
+    fireEvent.changeText(screen.getByTestId('edit-food-log-note-input'), 'Delicious pineapple snack');
+    fireEvent.press(screen.getByTestId('submit-edit-food-log-btn'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalledWith(
         'PATCH',
         '/me/food-items/item-dole/logs/log-dole-1',
-        { rating: 9 },
+        expect.objectContaining({
+          rating: 9,
+          note: 'Delicious pineapple snack',
+        }),
       );
     });
   });

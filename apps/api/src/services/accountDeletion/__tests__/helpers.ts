@@ -86,6 +86,9 @@ export function buildMigratedDb(): IMemoryDb {
     implementation: (s: unknown): number => (typeof s === 'string' ? s.length : 0),
   });
   for (const name of migrationFileNames()) {
+    // 0070 is a data-only backfill whose correlated NOT EXISTS subquery pg-mem cannot evaluate;
+    // tests start with an empty DB so the backfill has no rows to insert anyway.
+    if (name.startsWith('0070_')) continue;
     let sql = readFileSync(resolve(MIGRATIONS_DIR, name), 'utf8');
     sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
     sql = sql.replace(/\s+AT\s+TIME\s+ZONE\s+('[^']*'|[A-Za-z_][\w.]*)/gimu, '');

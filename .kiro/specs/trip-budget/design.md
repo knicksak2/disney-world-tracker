@@ -196,7 +196,7 @@ export const BUDGET_DEFAULT_TAX_BPS: Readonly<Record<BudgetCategory, number>> = 
 };
 export const BUDGET_DEFAULT_DINING_TIP_BPS = 1800;     // ASSUMPTION (unverified); only for lines with applyTip
 export const BUDGET_TO_EXPENSE_CATEGORY: Readonly<Record<BudgetCategory, ExpenseCategory>> = {
-  tickets: 'tickets', lightning_lane: 'tickets', dining: 'dining', lodging: 'hotel',
+  tickets: 'tickets', lightning_lane: 'lightning_lane', dining: 'dining', lodging: 'hotel',
   transportation: 'transportation', shopping: 'shopping', other: 'other',
 };
 export const MENU_SHAPE_VERSION = 2;

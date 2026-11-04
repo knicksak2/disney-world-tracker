@@ -22,6 +22,7 @@ import { Badge, Card } from '../../theme/components';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
+import EditFoodLogModal from './EditFoodLogModal';
 
 export interface FoodItemLogHistorySheetProps {
   /** The food item whose history is being viewed. */
@@ -45,6 +46,7 @@ export default function FoodItemLogHistorySheet({
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<FoodItemLogDTO | null>(null);
 
   const foodItemId = foodItem?.id;
 
@@ -175,20 +177,31 @@ export default function FoodItemLogHistorySheet({
                         </View>
                       )}
                     </View>
-                    <Pressable
-                      onPress={() => void handleDelete(log.id)}
-                      disabled={deletingId === log.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete log from ${log.visitedOn}`}
-                      style={styles.deleteBtn}
-                      testID={`food-item-delete-log-${log.id}`}
-                    >
-                      {deletingId === log.id ? (
-                        <ActivityIndicator size="small" color={t.color.danger} />
-                      ) : (
-                        <Ionicons name="trash-outline" size={18} color={t.color.danger} />
-                      )}
-                    </Pressable>
+                    <View style={styles.logHeaderActions}>
+                      <Pressable
+                        onPress={() => setEditingLog(log)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit log from ${log.visitedOn}`}
+                        style={styles.editBtn}
+                        testID={`food-item-edit-log-${log.id}`}
+                      >
+                        <Ionicons name="pencil-outline" size={18} color={t.color.textSecondary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void handleDelete(log.id)}
+                        disabled={deletingId === log.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete log from ${log.visitedOn}`}
+                        style={styles.deleteBtn}
+                        testID={`food-item-delete-log-${log.id}`}
+                      >
+                        {deletingId === log.id ? (
+                          <ActivityIndicator size="small" color={t.color.danger} />
+                        ) : (
+                          <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
                   {log.note && log.note.trim().length > 0 ? (
                     <Text style={styles.logNote}>{log.note}</Text>
@@ -200,6 +213,17 @@ export default function FoodItemLogHistorySheet({
           </ScrollView>
         </View>
       </View>
+
+      {editingLog ? (
+        <EditFoodLogModal
+          visible={Boolean(editingLog)}
+          log={{
+            ...editingLog,
+            foodItemName: foodItem.name,
+          }}
+          onClose={() => setEditingLog(null)}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -308,6 +332,14 @@ const useStyles = makeStyles((t) => ({
     fontSize: 12,
     fontWeight: '600',
     color: t.color.textPrimary,
+  },
+  logHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBtn: {
+    padding: 6,
   },
   deleteBtn: {
     padding: 6,

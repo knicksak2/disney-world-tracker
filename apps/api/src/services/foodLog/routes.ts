@@ -272,6 +272,8 @@ export function foodItemLogRoutes(
           logId,
           rating: body.rating,
           note: body.note,
+          visitedOn: body.visitedOn,
+          userTz: body.userTz,
         });
       },
     );

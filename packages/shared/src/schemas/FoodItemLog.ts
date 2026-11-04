@@ -58,6 +58,8 @@ export const updateFoodItemLogInputSchema = z
   .object({
     rating: ratingValueSchema.nullable().optional(),
     note: noteBodySchema.nullable().optional(),
+    visitedOn: isoDateSchema.optional(),
+    userTz: ianaTzSchema.optional(),
   })
   .strict();
 

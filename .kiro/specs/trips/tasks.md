@@ -492,6 +492,21 @@ existing `RatingChanged` propagation path is reused unchanged.
     - Add inline quick-post input (`trip-activity-quick-post-input`, `trip-activity-quick-post-submit`), allow `FeedPostComposerModal` to post with caption-only or photos, add `Posts` filter chip (`trip-activity-filter-posts`), wire `FlatList` pull-to-refresh, render `"posted an update"` vs `"posted photos"` based on `item.photos.length`, and cover all new flows in `TripFeedScreen.test.tsx`.
     - _Requirements: 20.8, 20.9_
 
+- [ ] 28. Trip Completion Log Deletion / Undo (R20.10–R20.12)
+  - [ ] 28.1 Backend Repo & Route (`apps/api/src/services/trips/repo.ts`, `routes.ts`)
+    - Implement `deleteLogEntry(tripId, logEntryId, callerId, callerRole)` in `repo.ts`: verify adder or organizer; in a transaction delete linked feed items (`type = 'completion_logged'` and their comments/reactions), delete `trip_log_entries` (cascading `rode_with_tags`), delete the underlying `experience_logs` row, and if that was the last log for `(member_id, experience_id)`, delete from `completions` (leaving `ratings` untouched).
+    - Wire `DELETE /trips/:id/log-entries/:logEntryId` in `routes.ts` gated with `requireSession`, `assertTripMember`, and adder-or-organizer authorization.
+    - Select `(fi.actor_id = $2) AS mine` in `getFeed` and set `mine: row.mine === true` for feed items, and omit orphaned `completion_logged` feed items where `le.id IS NULL`.
+    - _Requirements: 20.10, 20.11_
+  - [ ] 28.2 Mobile Trip Activity Completion Card Delete / Undo (`apps/mobile/src/screens/trips/TripFeedScreen.tsx`)
+    - On `completion_logged` feed items where `item.mine === true || isOrganizer`, display the trash-outline delete button.
+    - Wire `deleteCompletionMutation` to call `DELETE /trips/${tripId}/log-entries/${logEntryId}` with optimistic removal from the feed cache, rollback on error, and cache invalidation on settled.
+    - _Requirements: 20.12_
+  - [ ] 28.3 Tests & Verification
+    - Add integration tests covering `deleteLogEntry` happy path, non-author rejection (403), organizer permission, cascade cleanup of feed item, comments, and canonical completion removal.
+    - Add mobile tests in `TripFeedScreen.test.tsx` verifying author and organizer delete button presence, pressing delete sends the DELETE request and removes the card, and non-author non-organizer has no delete button.
+    - _Requirements: 20.10, 20.11, 20.12_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.
@@ -531,7 +546,8 @@ existing `RatingChanged` propagation path is reused unchanged.
     { "id": 22, "tasks": ["25.8", "25.10"] },
     { "id": 23, "tasks": ["25.9"] },
     { "id": 24, "tasks": ["26.1", "26.2", "26.3"] },
-    { "id": 25, "tasks": ["27.1", "27.2", "27.3"] }
+    { "id": 25, "tasks": ["27.1", "27.2", "27.3"] },
+    { "id": 26, "tasks": ["28.1", "28.2", "28.3"] }
   ]
 }
 ```

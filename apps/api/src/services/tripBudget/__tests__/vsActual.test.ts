@@ -11,7 +11,7 @@ import { computeVsActual } from '../vsActual.js';
 describe('vsActual', () => {
   // Feature: trip-budget, Property 23: Budget versus actual is a total mapping with conserved sums
   // Validates: Requirements 17.1, 17.2
-  it('Property 23: returns entries in EXPENSE_CATEGORIES order, conserves budgeted and actual sums, and tickets receives both tickets and lightning_lane', () => {
+  it('Property 23: returns entries in EXPENSE_CATEGORIES order, conserves budgeted and actual sums, and maps lightning_lane and tickets 1:1', () => {
     const budgetTotalsArb = fc.record(
       Object.fromEntries(BUDGET_CATEGORIES.map((c) => [c, fc.nat(1_000_000)])),
     ) as unknown as fc.Arbitrary<Record<BudgetCategory, number>>;
@@ -40,9 +40,12 @@ describe('vsActual', () => {
         const sumActualOutput = rows.reduce((a, r) => a + r.actualCents, 0);
         expect(sumActualOutput).toBe(sumActualInput);
 
-        // 4. tickets row receives both tickets and lightning_lane budget totals
+        // 4. tickets and lightning_lane map 1:1
         const ticketsRow = rows.find((r) => r.expenseCategory === 'tickets')!;
-        expect(ticketsRow.budgetedCents).toBe(budgetTotals.tickets + budgetTotals.lightning_lane);
+        expect(ticketsRow.budgetedCents).toBe(budgetTotals.tickets);
+
+        const llRow = rows.find((r) => r.expenseCategory === 'lightning_lane')!;
+        expect(llRow.budgetedCents).toBe(budgetTotals.lightning_lane);
 
         // 5. hotel receives lodging
         const hotelRow = rows.find((r) => r.expenseCategory === 'hotel')!;
@@ -66,7 +69,7 @@ describe('vsActual', () => {
       }
     });
 
-    it('rolls tickets and lightning_lane both into tickets expenseCategory', () => {
+    it('maps tickets and lightning_lane to their respective expenseCategories', () => {
       const rows = computeVsActual({
         lineTotalsByBudgetCategory: {
           tickets: 50000,
@@ -80,6 +83,7 @@ describe('vsActual', () => {
         actualByExpenseCategory: {
           hotel: 75000,
           tickets: 60000,
+          lightning_lane: 12000,
           dining: 18000,
           shopping: 4000,
           transportation: 9000,
@@ -90,8 +94,15 @@ describe('vsActual', () => {
       const ticketsRow = rows.find((r) => r.expenseCategory === 'tickets');
       expect(ticketsRow).toEqual({
         expenseCategory: 'tickets',
-        budgetedCents: 65000, // 50000 + 15000
+        budgetedCents: 50000,
         actualCents: 60000,
+      });
+
+      const llRow = rows.find((r) => r.expenseCategory === 'lightning_lane');
+      expect(llRow).toEqual({
+        expenseCategory: 'lightning_lane',
+        budgetedCents: 15000,
+        actualCents: 12000,
       });
 
       const hotelRow = rows.find((r) => r.expenseCategory === 'hotel');

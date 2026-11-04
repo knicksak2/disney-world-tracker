@@ -542,7 +542,7 @@ export function useAttentionActions(): UseAttentionActionsResult {
           // The rating is optional on confirm; only send a body when one was
           // provided so the server applies the default no-rating behavior.
           body: ({ rating }) =>
-            rating === undefined || rating === null ? undefined : { rating },
+            rating === undefined || rating === null ? {} : { rating },
         }),
       [buildOptions],
     ),

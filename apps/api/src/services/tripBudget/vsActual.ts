@@ -25,6 +25,7 @@ export function computeVsActual(i: ComputeVsActualInput): VsActualDTO[] {
   const budgetedByExpCat: Record<ExpenseCategory, number> = {
     hotel: 0,
     tickets: 0,
+    lightning_lane: 0,
     dining: 0,
     shopping: 0,
     transportation: 0,

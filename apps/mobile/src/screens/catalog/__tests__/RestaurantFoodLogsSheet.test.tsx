@@ -285,6 +285,23 @@ describe('RestaurantFoodLogsSheet', () => {
 
     expect(screen.getByText('No logged items here yet')).toBeTruthy();
   });
+
+  test('R9.9: tapping edit button opens edit food log modal', async () => {
+    apiRequestMock.mockResolvedValueOnce([...MOCK_BE_OUR_GUEST_LOGS]);
+
+    renderSheet({ experienceId: 'exp-bog' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('scoped-food-log-edit-log-bog-1')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('scoped-food-log-edit-log-bog-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-food-log-modal')).toBeTruthy();
+      expect(screen.getAllByText('French Onion Soup').length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
 
 /** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */

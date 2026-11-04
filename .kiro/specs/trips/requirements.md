@@ -213,6 +213,8 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 
 ### Requirement 10: Log a Completion During a Trip with Rode-With Tags
 
+_(Extended by `unified-experience-logging`: `POST /trips/:id/log-entries` accepts optional `visitedOn` and `userTz`; when provided, `visitedOn` must fall within the Trip's `start_date`..`end_date` inclusive)._
+
 **User Story:** As a Trip_Member, I want to log an Experience I completed during a Trip and tag the members I rode with, so that our shared log reflects who was there.
 
 #### Acceptance Criteria
@@ -261,6 +263,8 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 8. WHEN the Trip_Detail_View displays the Trip_Activity feed or Trip_Summary for a Trip_Member who has no canonical Rating for a referenced Experience, THE App SHALL display an unrated indicator rather than a Rating value.
 
 ### Requirement 13: Trip Activity Feed, Reactions, and Comments
+
+_(Extended by `unified-experience-logging`: feed `rode_with` entries carry `tagId` for the caller's own pending tag, enabling inline Confirm and Decline controls directly on the feed item card)._
 
 **User Story:** As a Trip_Member, I want a shared activity feed with reactions and comments, so that the group can follow and respond to what everyone is doing.
 
@@ -383,6 +387,9 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 7. WHEN a Trip_Member submits `POST /trips/:id/feed/posts` with a non-empty trimmed `caption` (1 to 500 characters) and zero `photoIds` (`photoIds: []` or omitted), THE Trip_Service SHALL create a `trip_feed_items` row of type `member_post` with `metadata.photoIds = []` and `metadata.caption = <trimmed caption>`, and WHEN `GET /trips/:id/feed` is read by any Trip_Member of that Trip (author or non-author), THE Trip_Service SHALL include that zero-photo `member_post` item in the response (`photos: []`, `metadata.caption` preserved); IF both `photoIds` is empty and `caption` is absent or empty after trimming, THEN THE Trip_Service SHALL reject the request with `validation_failed`.
 8. WHEN a Trip_Member opens the Trip_Activity surface, THE App SHALL present an inline quick-post composer (`trip-activity-quick-post-input` and `trip-activity-quick-post-submit`) at the head of the feed allowing the Member to post a text update without logging a Completion or attaching a Photo, and SHALL also allow the modal post composer to submit a post with a caption alone, photos alone (1 to 4), or both.
 9. THE Trip_Activity surface SHALL provide filter chips for `All`, `Posts` (`trip-activity-filter-posts`, narrowing displayed items to `member_post` items), and `Completions` (`trip-activity-filter-completions`, narrowing displayed items to `completion_logged` items), SHALL support pull-to-refresh on the feed list, and SHALL label a `member_post` item with zero photos as `"posted an update"` and a `member_post` item with one or more photo slots as `"posted photos"`.
+10. WHEN the Member who logged a Completion, or an Organizer, requests to delete a logged Completion (`DELETE /trips/:id/log-entries/:logEntryId`), THE Trip_Service SHALL remove the `trip_log_entries` row, its cascaded `rode_with_tags`, any corresponding `completion_logged` `trip_feed_items` (and their reactions and comments), and the underlying `experience_logs` row; and IF that was the Member's last remaining log for that Experience, THE Trip_Service SHALL remove the canonical `completions` record while leaving the canonical `ratings` row untouched.
+11. WHEN a non-author, non-Organizer Member requests to delete a logged Completion, THE Trip_Service SHALL reject the request with `trip_forbidden` and SHALL leave the log entry in place.
+12. WHEN the Trip_Activity surface displays a `completion_logged` item for which the current User is the logging Member or an Organizer, THE App SHALL provide a delete control allowing the User to delete/undo the logged Completion.
 
 ### Requirement 21: Trip Resort Stay
 

@@ -1030,6 +1030,15 @@ export default function ExperienceDetailScreen(): JSX.Element {
       {/* Log visit modal */}
       <LogVisitModal
         experienceId={experienceId}
+        experience={
+          experience
+            ? {
+                name: experience.name,
+                category: experience.category,
+                park: experience.park,
+              }
+            : undefined
+        }
         visible={logVisitModalVisible}
         onClose={() => setLogVisitModalVisible(false)}
         onLogged={invalidateAfterLogChange}

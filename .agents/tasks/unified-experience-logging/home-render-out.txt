@@ -1,0 +1,7 @@
+PASS src/screens/home/__tests__/HomeScreen.render.test.tsx (8.139 s)
+
+Test Suites: 1 passed, 1 total
+Tests:       19 passed, 19 total
+Snapshots:   0 total
+Time:        8.719 s, estimated 10 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

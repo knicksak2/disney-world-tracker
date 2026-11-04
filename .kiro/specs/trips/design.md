@@ -1166,6 +1166,12 @@ Added by the `trip-budget` spec. For every Trip_Role, `can(role, 'view_budget')`
 
 **Validates: Requirements 20.7, 20.8, 20.9**
 
+### Property 32: Deleting or undoing a logged Completion removes the log entry and linked feed items, preserving canonical ratings and removing canonical completion if it was the last visit
+
+*For any* `DELETE /trips/:id/log-entries/:logEntryId`: (a) an Organizer or the logging Member may delete the log entry, while non-author non-Organizers are rejected with `trip_forbidden` (403); (b) deletion removes the `trip_log_entries` row, cascades deletion of its `rode_with_tags`, removes linked `completion_logged` feed items (and their reactions/comments), and deletes the underlying `experience_logs` row; (c) if that was the Member's last remaining log for that Experience, the canonical `completions` row is deleted, while if other logs exist for that Experience the `completions` row remains; and (d) canonical `ratings` rows are preserved untouched. On `GET /trips/:id/feed`, `completion_logged` items indicate `mine: true` when the caller is the actor, and orphaned items whose log entries no longer exist are omitted.
+
+**Validates: Requirements 20.10, 20.11, 20.12**
+
 ## Error Handling
 
 All errors are thrown as `AppError(code, message, { field? })` with `code` drawn from the closed

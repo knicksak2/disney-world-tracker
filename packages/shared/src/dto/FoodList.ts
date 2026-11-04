@@ -62,6 +62,16 @@ export interface FoodListItemDTO {
    * as gotten (Requirement 13.23). Present only when `gotten` is `true`.
    */
   readonly logId?: string | null | undefined;
+  /**
+   * The YYYY-MM-DD visit date of the most recent qualifying Food_Item_Log (Requirement 13.23).
+   * Present only when `gotten` is `true`.
+   */
+  readonly visitedOn?: string | null | undefined;
+  /**
+   * The optional note of the most recent qualifying Food_Item_Log (Requirement 13.23).
+   * Present only when `gotten` is `true`.
+   */
+  readonly note?: string | null | undefined;
 }
 
 /** The requesting User's access level on a Food_List (Requirement 7.1, 7.3). */

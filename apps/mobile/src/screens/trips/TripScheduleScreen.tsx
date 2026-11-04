@@ -59,6 +59,7 @@ import { useAttachedExperienceListItems } from './useAttachedExperienceListItems
 import { useFavoriteSourcedExperienceItems } from '../catalog/useFavoriteSourcedExperienceItems';
 import { reservationKindPresentation } from './reservations';
 import { TimeWheelPicker } from '../../components/TimeWheelPicker';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 /**
  * Timeline badge label for a Reservation (trip-reservations R4.3). Carries the
@@ -437,6 +438,10 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<PlannedItemDTO | null>(null);
   const [draftItem, setDraftItem] = useState<PlannedItemDTO | null>(null);
+  const {
+    keyboardInset: editItemKeyboardInset,
+    getAvailableModalHeight: getEditItemModalHeight,
+  } = useKeyboardBottomInset(editingItem !== null);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // Schedule Builder / Planned List Picker Integration (Requirement 15):
@@ -1758,9 +1763,21 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
           >
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.modalBg}
+              style={[
+                styles.modalBg,
+                Platform.OS === 'android' && editItemKeyboardInset > 0
+                  ? { paddingBottom: editItemKeyboardInset }
+                  : null,
+              ]}
             >
-              <View style={styles.modalContent}>
+              <View
+                style={[
+                  styles.modalContent,
+                  Platform.OS === 'android' && editItemKeyboardInset > 0
+                    ? { maxHeight: getEditItemModalHeight(40) }
+                    : null,
+                ]}
+              >
                 {draftItem && (
                   <ScrollView keyboardShouldPersistTaps="handled">
                     <Text style={styles.modalTitle}>

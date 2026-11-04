@@ -111,6 +111,8 @@ import { createStatsRepo } from './services/stats/repo.js';
 import { buildCuratedProgressStats } from './services/stats/curatedShare.js';
 
 import { createTripRepo } from './services/trips/repo.js';
+import { assertTripMember } from './services/trips/authz.js';
+import type { TripLogPort } from './services/tracking/logs/tripLogPort.js';
 import { resolveExperienceListForTrip, resolveFoodListForTrip } from './services/trips/listResolvers.js';
 import type {
   RodeWithTagCreatedNotice,
@@ -1023,6 +1025,30 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   void ticketPriceClient;
   const tripBudgetRepo = createTripBudgetRepo(pool);
 
+  // Feature: unified-experience-logging (Task 3.3)
+  // Structural TripLogPort delegating Trip-linked logs to tripRepo.logCompletion
+  // and feed purge to tripRepo.purgeFeedForLog without importing trips into tracking.
+  const tripLogPort: TripLogPort = {
+    async logToTrip(i) {
+      await assertTripMember(pool, i.userId, i.tripId);
+      const r = await tripRepo.logCompletion(i.tripId, i.userId, {
+        experienceId: i.experienceId,
+        rodeWith: [...i.rodeWith],
+        ...(i.rating !== null ? { rating: i.rating } : {}),
+        note: i.note,
+        completedOn: i.visitedOn,
+        userTz: i.userTz,
+      });
+      return {
+        logId: r.logId,
+        loggedAt: r.loggedAt,
+        logEntryId: r.logEntryId,
+        pendingTags: r.pendingTags,
+      };
+    },
+    purgeFeedForLog: (logId, userId) => tripRepo.purgeFeedForLog(logId, userId),
+  };
+
   // --- Build app ------------------------------------------------------
   const app = buildServer(config, {
     catalog: {
@@ -1205,6 +1231,8 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
         repo: experienceLogRepo,
         requireSession: sessionMiddleware,
         awardPins,
+        tripLog: tripLogPort,
+        onRodeWithTagCreated: emitRodeWithTagCreated,
       },
     },
     admin: {

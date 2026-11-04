@@ -26,6 +26,7 @@ import type { RenderItemParams } from 'react-native-draggable-flatlist';
 import type {
   ExperienceDTO,
   FoodItemDTO,
+  FoodItemLogDTO,
   FoodListDetailDTO,
   FoodListItemDTO,
   LocationSuggestionDTO,
@@ -40,9 +41,10 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { FOOD_LIST_DETAIL } from './FoodListDetailScreen.palette';
 import CreateLocationModal from '../catalog/CreateLocationModal';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
+import LogFoodItemModal from '../catalog/LogFoodItemModal';
+import EditFoodLogModal from '../catalog/EditFoodLogModal';
 import ManageFoodListSharesSheet from './ManageFoodListSharesSheet';
 import MarkGottenUndoToast from './MarkGottenUndoToast';
-import RateOnCheckoffPrompt from './RateOnCheckoffPrompt';
 import { useFoodListNotice } from './foodListNotice';
 import { useOpenExperience } from '../navigation/experienceNavigation';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
@@ -56,20 +58,6 @@ interface CatalogSearchResponse {
 }
 
 type FoodListDetailRouteProp = RouteProp<{ FoodListDetail: FoodListDetailParams }, 'FoodListDetail'>;
-
-/** The checklist item currently awaiting a rating decision (Requirement 13.15). */
-interface RatingPromptTarget {
-  readonly foodItemId: string;
-  readonly name: string;
-}
-
-/** The completed checklist item awaiting rating update after the fact (Requirement 13.23). */
-interface EditRatingTarget {
-  readonly foodItemId: string;
-  readonly logId: string | null;
-  readonly name: string;
-  readonly initialRating: number | null;
-}
 
 /** A search result item in the restaurant/place search modal (official restaurant or community spot). */
 type SearchPlaceItem =
@@ -137,12 +125,11 @@ export default function FoodListDetailScreen(): JSX.Element {
   const [isDeleting, setIsDeleting] = useState(false);
   const [staleWriteNotice, setStaleWriteNotice] = useState<string | null>(null);
   const [manageSharesVisible, setManageSharesVisible] = useState(false);
-  const [markingGottenId, setMarkingGottenId] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
-  // Requirement 13.15: the item awaiting the optional rating prompt.
-  const [ratingPromptItem, setRatingPromptItem] = useState<RatingPromptTarget | null>(null);
-  // Requirement 13.23: the completed item awaiting a rating edit after the fact.
-  const [editRatingItem, setEditRatingItem] = useState<EditRatingTarget | null>(null);
+  // Requirement 13.15: the item awaiting full food logging on check-off.
+  const [loggingItem, setLoggingItem] = useState<FoodListItemDTO | null>(null);
+  // Requirement 13.23: the completed item awaiting full log editing after the fact.
+  const [editingLogItem, setEditingLogItem] = useState<FoodListItemDTO | null>(null);
   // Requirement 13.16-13.18: one entry per currently-visible undo toast;
   // multiple can coexist (Requirement 13.18), each acting only on its own
   // `logId` (Requirement 13.17).
@@ -162,6 +149,8 @@ export default function FoodListDetailScreen(): JSX.Element {
     keyboardInset: restaurantSearchKeyboardInset,
     getAvailableModalHeight: getRestaurantSearchModalHeight,
   } = useKeyboardBottomInset(restaurantSearchModalVisible);
+  const { keyboardInset: renameKeyboardInset } =
+    useKeyboardBottomInset(renameModalVisible);
 
   useEffect(() => {
     if (restaurantSearch === debouncedRestaurantSearch) return;
@@ -511,30 +500,35 @@ export default function FoodListDetailScreen(): JSX.Element {
   // per-submission undo toast (Requirement 13.16, 13.17) — the endpoint
   // already returns `FoodItemLogDTO.id`, so no backend change is needed.
   // Task 17.4: Client-local completion celebration on transition to 100% (Requirement 13.12)
-  async function handleMarkGotten(
-    foodItemId: string,
-    itemName: string,
-    rating?: number,
+  const foodItemToLog: FoodItemDTO | null = useMemo(() => {
+    if (!loggingItem) return null;
+    return {
+      id: loggingItem.foodItemId,
+      name: loggingItem.name,
+      experienceId: loggingItem.experienceId,
+      locationId: loggingItem.locationId,
+      price: loggingItem.price,
+      source: 'user_submitted',
+      createdByUserId: loggingItem.addedByUserId,
+      lastSeenAt: new Date().toISOString(),
+      currentlyOnMenu: true,
+    };
+  }, [loggingItem]);
+
+  // Task 27.3: Mark an item gotten via LogFoodItemModal (Requirement 13.6, 13.15)
+  // Captures the created log's `id` from the response to back a per-submission undo toast
+  // (Requirement 13.16, 13.17) and triggers celebration on transition to 100% (Requirement 13.12).
+  async function handleLoggedItem(
+    item: FoodListItemDTO,
+    createdLog: FoodItemLogDTO,
   ): Promise<void> {
-    if (!list || markingGottenId) return;
-    setMarkingGottenId(foodItemId);
-    const tz = deviceTimeZone();
-    const today = ymdInTimeZone(new Date(), tz);
+    if (!list) return;
     const preGottenCount = list.gottenCount ?? 0;
     const preItemCount = list.itemCount;
 
     setStaleWriteNotice(null);
 
     try {
-      const created = await apiRequest<{ readonly id: string }>(
-        'POST',
-        `/me/food-items/${encodeURIComponent(foodItemId)}/logs`,
-        {
-          visitedOn: today,
-          userTz: tz,
-          ...(rating !== undefined ? { rating } : {}),
-        },
-      );
       const updatedDetail = await queryClient.fetchQuery<FoodListDetailDTO>({
         queryKey: ['food-list-detail', foodListId],
         queryFn: () =>
@@ -545,6 +539,7 @@ export default function FoodListDetailScreen(): JSX.Element {
       });
       await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
       await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+      await queryClient.invalidateQueries({ queryKey: ['me-food-item-logs'] });
 
       // Requirement 13.16/13.18: append this submission's own undo toast
       // rather than replacing any existing one — several can be visible
@@ -552,10 +547,10 @@ export default function FoodListDetailScreen(): JSX.Element {
       setActiveUndoToasts((prev) => [
         ...prev,
         {
-          toastKey: `${created.id}-${Date.now()}`,
-          logId: created.id,
-          foodItemId,
-          itemName,
+          toastKey: `${createdLog.id}-${Date.now()}`,
+          logId: createdLog.id,
+          foodItemId: item.foodItemId,
+          itemName: item.name,
         },
       ]);
 
@@ -569,13 +564,7 @@ export default function FoodListDetailScreen(): JSX.Element {
         setShowCelebration(true);
       }
     } catch {
-      // Surface the failure rather than letting the checkbox silently do
-      // nothing — an empty catch here previously hid a real bug (a missing
-      // required `userTz` field made every mark-gotten request reject with
-      // 400 validation_failed with no visible sign to the User).
-      setStaleWriteNotice("Couldn't save that. Please try again.");
-    } finally {
-      setMarkingGottenId(null);
+      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
     }
   }
 
@@ -599,25 +588,6 @@ export default function FoodListDetailScreen(): JSX.Element {
 
   function dismissUndoToast(toastKey: string): void {
     setActiveUndoToasts((prev) => prev.filter((t) => t.toastKey !== toastKey));
-  }
-
-  // Requirement 13.23: Update rating after the fact on a completed checklist item
-  async function handleUpdateRating(
-    foodItemId: string,
-    logId: string,
-    rating: number,
-  ): Promise<void> {
-    try {
-      await apiRequest(
-        'PATCH',
-        `/me/food-items/${encodeURIComponent(foodItemId)}/logs/${encodeURIComponent(logId)}`,
-        { rating },
-      );
-      await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
-      await queryClient.invalidateQueries({ queryKey: ['me-food-item-logs'] });
-    } catch {
-      // Ignore
-    }
   }
 
   // Entry point 2: Add selected items from picker scoped to restaurant
@@ -778,13 +748,8 @@ export default function FoodListDetailScreen(): JSX.Element {
                 (Requirement 13.16-13.18), never from this badge. */}
             {isChecklist && !item.gotten ? (
               <Pressable
-                onPress={() =>
-                  setRatingPromptItem({
-                    foodItemId: item.foodItemId,
-                    name: item.name,
-                  })
-                }
-                disabled={markingGottenId === item.foodItemId}
+                onPress={() => setLoggingItem(item)}
+                disabled={loggingItem?.foodItemId === item.foodItemId}
                 style={({ pressed }) => [
                   styles.checkOffBtn,
                   pressed && styles.checkOffBtnPressed,
@@ -799,20 +764,13 @@ export default function FoodListDetailScreen(): JSX.Element {
 
             {isChecklist && item.gotten ? (
               <Pressable
-                onPress={() =>
-                  setEditRatingItem({
-                    foodItemId: item.foodItemId,
-                    logId: item.logId ?? null,
-                    name: item.name,
-                    initialRating: item.rating ?? null,
-                  })
-                }
+                onPress={() => setEditingLogItem(item)}
                 style={({ pressed }) => [
                   styles.gottenBadge,
                   pressed && styles.gottenBadgePressed,
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={`Rating for ${item.name}: ${item.rating != null ? `${item.rating} out of 10` : 'unrated'}. Tap to edit rating`}
+                accessibilityLabel={`Rating for ${item.name}: ${item.rating != null ? `${item.rating} out of 10` : 'unrated'}. Tap to edit`}
                 testID={`food-list-item-gotten-badge-${item.foodItemId}`}
               >
                 <Ionicons name="checkmark" size={14} color={t.color.primaryFg} />
@@ -845,7 +803,7 @@ export default function FoodListDetailScreen(): JSX.Element {
       openExperience,
       showAttribution,
       list?.isChecklist,
-      markingGottenId,
+      loggingItem,
       handleDeleteItem,
       styles,
       t,
@@ -1362,37 +1320,39 @@ export default function FoodListDetailScreen(): JSX.Element {
         )}
       </NestableScrollContainer>
 
-      {/* Optional rating prompt on checklist mark-gotten (Requirement 13.15) */}
-      <RateOnCheckoffPrompt
-        visible={ratingPromptItem !== null}
-        foodItemName={ratingPromptItem?.name ?? ''}
-        onSkip={() => {
-          if (ratingPromptItem) {
-            void handleMarkGotten(ratingPromptItem.foodItemId, ratingPromptItem.name);
+      {/* Full food logging modal on checklist mark-gotten (Requirement 13.15) */}
+      <LogFoodItemModal
+        visible={loggingItem !== null}
+        foodItem={foodItemToLog}
+        onClose={() => setLoggingItem(null)}
+        onLogged={(createdLog) => {
+          if (loggingItem) {
+            void handleLoggedItem(loggingItem, createdLog);
           }
-          setRatingPromptItem(null);
-        }}
-        onConfirm={(rating) => {
-          if (ratingPromptItem) {
-            void handleMarkGotten(ratingPromptItem.foodItemId, ratingPromptItem.name, rating);
-          }
-          setRatingPromptItem(null);
+          setLoggingItem(null);
         }}
       />
 
-      {/* Update rating after the fact on completed checklist item (Requirement 13.23) */}
-      {editRatingItem ? (
-        <RateOnCheckoffPrompt
-          visible={Boolean(editRatingItem)}
-          foodItemName={editRatingItem.name}
-          initialRating={editRatingItem.initialRating}
-          onSkip={() => setEditRatingItem(null)}
-          onConfirm={(rating) => {
-            const target = editRatingItem;
-            setEditRatingItem(null);
-            if (target?.logId) {
-              void handleUpdateRating(target.foodItemId, target.logId, rating);
-            }
+      {/* Edit food log modal on completed checklist item (Requirement 13.23) */}
+      {editingLogItem && editingLogItem.logId ? (
+        <EditFoodLogModal
+          visible={Boolean(editingLogItem)}
+          log={{
+            id: editingLogItem.logId,
+            foodItemId: editingLogItem.foodItemId,
+            foodItemName: editingLogItem.name,
+            restaurantName: editingLogItem.experienceName ?? null,
+            locationName: editingLogItem.locationName ?? null,
+            visitedOn: editingLogItem.visitedOn ?? ymdInTimeZone(new Date(), deviceTimeZone()),
+            rating: editingLogItem.rating ?? null,
+            note: editingLogItem.note ?? null,
+          }}
+          onClose={() => setEditingLogItem(null)}
+          onUpdated={async () => {
+            await queryClient.invalidateQueries({ queryKey: ['food-list-detail', foodListId] });
+            await queryClient.invalidateQueries({ queryKey: ['food-lists-collection'] });
+            await queryClient.invalidateQueries({ queryKey: ['me-food-item-logs'] });
+            setEditingLogItem(null);
           }}
         />
       ) : null}
@@ -1534,7 +1494,12 @@ export default function FoodListDetailScreen(): JSX.Element {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.renameModalBackdrop}
+          style={[
+            styles.renameModalBackdrop,
+            Platform.OS === 'android' && renameKeyboardInset > 0
+              ? { paddingBottom: renameKeyboardInset }
+              : null,
+          ]}
         >
           <Pressable
             style={StyleSheet.absoluteFill}

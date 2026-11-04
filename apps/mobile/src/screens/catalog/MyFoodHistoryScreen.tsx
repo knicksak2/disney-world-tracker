@@ -25,7 +25,7 @@ import {
   deriveDisplayedFoodLogs,
 } from './foodHistoryFilters';
 import { FoodHistoryControls } from './foodHistory/FoodHistoryControls';
-import RateOnCheckoffPrompt from '../foodLists/RateOnCheckoffPrompt';
+import EditFoodLogModal from './EditFoodLogModal';
 import { FoodLogPhotos } from '../../photos/FoodLogPhotos';
 
 export default function MyFoodHistoryScreen(): JSX.Element {
@@ -117,29 +117,6 @@ export default function MyFoodHistoryScreen(): JSX.Element {
     }
   }
 
-  // Requirement 8.11: Update rating after the fact on an existing food log
-  async function handleUpdateRating(
-    foodItemId: string,
-    logId: string,
-    rating: number,
-  ): Promise<void> {
-    try {
-      await apiRequest(
-        'PATCH',
-        `/me/food-items/${encodeURIComponent(foodItemId)}/logs/${encodeURIComponent(logId)}`,
-        { rating },
-      );
-      await queryClient.invalidateQueries({
-        queryKey: ['me-food-item-logs'],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ['food-item-logs', foodItemId],
-      });
-    } catch {
-      // Ignore
-    }
-  }
-
   // Stable `renderItem` identity — an inline arrow literal is recreated every
   // render (e.g. each keystroke re-deriving `displayedLogs`), which `FlatList`
   // treats as a changed render function and forces the whole visible window
@@ -172,20 +149,31 @@ export default function MyFoodHistoryScreen(): JSX.Element {
                 </View>
               )}
             </View>
-            <Pressable
-              onPress={() => void handleDeleteLog(item)}
-              disabled={deletingId === item.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Delete log for ${item.foodItemName}`}
-              style={styles.deleteBtn}
-              testID={`food-history-delete-${item.id}`}
-            >
-              {deletingId === item.id ? (
-                <ActivityIndicator size="small" color={t.color.danger} />
-              ) : (
-                <Ionicons name="trash-outline" size={18} color={t.color.danger} />
-              )}
-            </Pressable>
+            <View style={styles.cardActions}>
+              <Pressable
+                onPress={() => setEditingLog(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit log for ${item.foodItemName}`}
+                style={styles.editBtn}
+                testID={`food-history-edit-${item.id}`}
+              >
+                <Ionicons name="pencil-outline" size={18} color={t.color.textSecondary} />
+              </Pressable>
+              <Pressable
+                onPress={() => void handleDeleteLog(item)}
+                disabled={deletingId === item.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete log for ${item.foodItemName}`}
+                style={styles.deleteBtn}
+                testID={`food-history-delete-${item.id}`}
+              >
+                {deletingId === item.id ? (
+                  <ActivityIndicator size="small" color={t.color.danger} />
+                ) : (
+                  <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+                )}
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.metaRow}>
@@ -305,20 +293,14 @@ export default function MyFoodHistoryScreen(): JSX.Element {
       </View>
     </View>
 
-    {/* Requirement 8.11: Update rating prompt */}
-    {editingLog ? (
-      <RateOnCheckoffPrompt
-        visible={Boolean(editingLog)}
-        foodItemName={editingLog.foodItemName}
-        initialRating={editingLog.rating}
-        onSkip={() => setEditingLog(null)}
-        onConfirm={(rating) => {
-          const target = editingLog;
-          setEditingLog(null);
-          void handleUpdateRating(target.foodItemId, target.id, rating);
-        }}
-      />
-    ) : null}
+      {/* Requirement 8.11: Edit food log modal */}
+      {editingLog ? (
+        <EditFoodLogModal
+          visible={Boolean(editingLog)}
+          log={editingLog}
+          onClose={() => setEditingLog(null)}
+        />
+      ) : null}
   </ScreenContainer>
 );
 }
@@ -454,6 +436,14 @@ const useStyles = makeStyles((t) => ({
     fontSize: 13,
     color: t.color.textSecondary,
     fontWeight: '500',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBtn: {
+    padding: 6,
   },
   deleteBtn: {
     padding: 6,

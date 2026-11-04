@@ -109,7 +109,7 @@ const PLANNED_ITEM_LIMIT = 500;
  * the WDW local zone is the sensible default the mobile picker relies on when
  * it sends only `experienceId` / `rodeWith` / `rating`.
  */
-const DEFAULT_LOG_USER_TZ = 'America/New_York';
+export const DEFAULT_LOG_USER_TZ = 'America/New_York';
 
 // ---------------------------------------------------------------------------
 // Dependencies + context
@@ -259,6 +259,8 @@ export interface CreatedRodeWithTag {
  * fire one `RodeWithTagCreatedNotice` per Tagged_Member after commit (R10.8).
  */
 export interface LoggedCompletion {
+  readonly logId: string;
+  readonly loggedAt: string;
   readonly logEntryId: string;
   readonly pendingTags: readonly CreatedRodeWithTag[];
 }
@@ -633,6 +635,33 @@ export interface TripRepo {
   ): Promise<LoggedCompletion>;
 
   /**
+   * Delete or undo a logged Completion: removes the `trip_log_entries` row, its
+   * cascaded `rode_with_tags`, any corresponding `completion_logged` `trip_feed_items`
+   * (and their reactions and comments), and the underlying `experience_logs` row.
+   * If that was the Member's last remaining log for that Experience, removes the
+   * canonical `completions` row while leaving canonical `ratings` untouched.
+   *
+   * @param tripId The Trip containing the log entry.
+   * @param logEntryId The ID of the `trip_log_entries` row (or linked feed item ID).
+   * @param callerId The acting user ID.
+   * @param callerRole The acting user's Trip role.
+   * @returns `true` if deleted, `false` if not found.
+   */
+  deleteLogEntry(
+    tripId: string,
+    logEntryId: string,
+    callerId: string,
+    callerRole: TripRole,
+  ): Promise<boolean>;
+
+  /**
+   * Delete the feed item (+ its reactions + comments) of the Trip_Log_Entry linked to `logId`, if any.
+   * Scoped to logs owned by `userId`: a log that does not exist or belongs to someone else is a no-op.
+   * Idempotent.
+   */
+  purgeFeedForLog(logId: string, userId: string): Promise<void>;
+
+  /**
    * Read the Shared_Log of `tripId`: every Trip_Log_Entry with its logging
    * Member's display name, the completed Experience's name, the logging
    * Member's *current* canonical Rating joined live at read time (or `null`
@@ -986,6 +1015,9 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     listPlannedItems: (tripId) => listPlannedItems(ctx, tripId),
     logCompletion: (tripId, loggerId, input, now) =>
       logCompletion(ctx, tripId, loggerId, input, now),
+    deleteLogEntry: (tripId, logEntryId, callerId, callerRole) =>
+      deleteLogEntry(ctx, tripId, logEntryId, callerId, callerRole),
+    purgeFeedForLog: (logId, userId) => purgeFeedForLog(ctx, logId, userId),
     listLogEntries: (tripId) => listLogEntries(ctx, tripId),
     confirmRodeWithTag: (tagId, callerId, rating, opts) =>
       confirmRodeWithTag(ctx, tagId, callerId, rating, opts),
@@ -3524,6 +3556,28 @@ async function logCompletion(
       }
     }
 
+    // Step 2b — validate date within trip date range (only when completedOn is explicitly supplied)
+    if (input.completedOn !== undefined) {
+      const tripRes = await client.query<{
+        start_date: Date | string;
+        end_date: Date | string;
+      }>(`SELECT start_date, end_date FROM trips WHERE id = $1`, [tripId]);
+      if (tripRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new AppError('trip_forbidden', 'Trip not found or access denied.');
+      }
+      const s = toIsoDate(tripRes.rows[0]!.start_date);
+      const e = toIsoDate(tripRes.rows[0]!.end_date);
+      if (input.completedOn < s || input.completedOn > e) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'log_outside_trip_dates',
+          "The visit date is outside this trip's dates.",
+          { field: 'visitedOn' },
+        );
+      }
+    }
+
     // Step 3 — ensure the logging Member's canonical Completion via the
     // injected Tracking repo. `mark` inserts on conflict-do-nothing semantics:
     // a `null` return means a Completion already existed and is kept, never
@@ -3550,12 +3604,21 @@ async function logCompletion(
     // experience-activity-logging R1.2). The visit is dated to the logged
     // completion date and carries the optional per-visit rating so it appears
     // in the Member's Visit_History.
-    const experienceLogInsert = await client.query<{ id: string }>(
+    const experienceLogInsert = await client.query<{ id: string; logged_at: Date | string }>(
       `INSERT INTO experience_logs
-         (user_id, experience_id, visited_on, user_tz, rating)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [loggerId, input.experienceId, completedOn, userTz, input.rating ?? null],
+         (user_id, experience_id, visited_on, user_tz, rating, note)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, logged_at`,
+      [
+        loggerId,
+        input.experienceId,
+        completedOn,
+        userTz,
+        input.rating ?? null,
+        input.note !== undefined && input.note !== null && input.note.trim().length > 0
+          ? input.note.trim()
+          : null,
+      ],
     );
     const experienceLogId = experienceLogInsert.rows[0]?.id;
     if (!experienceLogId) {
@@ -3564,6 +3627,12 @@ async function logCompletion(
         'Experience log insertion returned no row.',
       );
     }
+    const rawLoggedAt =
+      experienceLogInsert.rows[0]?.logged_at ?? (now ? new Date(now) : new Date());
+    const loggedAt =
+      rawLoggedAt instanceof Date
+        ? rawLoggedAt.toISOString()
+        : new Date(rawLoggedAt).toISOString();
 
     const entryInsert = await client.query<{ id: string }>(
       `INSERT INTO trip_log_entries (trip_id, member_id, experience_id, log_id)
@@ -3613,7 +3682,199 @@ async function logCompletion(
     );
 
     await client.query('COMMIT');
-    return { logEntryId, pendingTags };
+    return { logId: experienceLogId, loggedAt, logEntryId, pendingTags };
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// deleteLogEntry (R20.10, R20.11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete or undo a logged Completion: removes the `trip_log_entries` row, its
+ * cascaded `rode_with_tags`, any corresponding `completion_logged` `trip_feed_items`
+ * (and their reactions and comments), and the underlying `experience_logs` row.
+ * If that was the Member's last remaining log for that Experience, removes the
+ * canonical `completions` row while leaving canonical `ratings` untouched.
+ */
+async function deleteLogEntry(
+  ctx: TripRepoContext,
+  tripId: string,
+  logEntryId: string,
+  callerId: string,
+  callerRole: TripRole,
+): Promise<boolean> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find the log entry, matching either directly by trip_log_entries.id
+    // or through trip_feed_items.id if the caller passed a feed item ID.
+    const entryRes = await client.query<{
+      id: string;
+      member_id: string;
+      experience_id: string;
+      log_id: string;
+    }>(
+      `SELECT tle.id, tle.member_id, tle.experience_id, tle.log_id
+         FROM trip_log_entries tle
+        WHERE tle.trip_id = $1
+          AND (
+            tle.id = $2
+            OR tle.id = (
+              SELECT NULLIF(metadata->>'logEntryId', '')::uuid
+                FROM trip_feed_items
+               WHERE id = $2 AND trip_id = $1
+            )
+          )
+        FOR UPDATE OF tle`,
+      [tripId, logEntryId],
+    );
+
+    const entry = entryRes.rows[0];
+    if (!entry) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    // Only the member who logged it or an organizer may delete it
+    if (callerRole !== 'organizer' && entry.member_id !== callerId) {
+      await client.query('ROLLBACK');
+      throw new AppError(
+        'trip_forbidden',
+        'You can only delete your own log entries.',
+      );
+    }
+
+    // 1. Delete associated trip_feed_items and their reactions/comments
+    const feedItemsRes = await client.query<{ id: string }>(
+      `SELECT id FROM trip_feed_items
+        WHERE trip_id = $1
+          AND (
+            id = $2
+            OR NULLIF(metadata->>'logEntryId', '')::uuid = $3
+          )`,
+      [tripId, logEntryId, entry.id],
+    );
+    const feedItemIds = feedItemsRes.rows.map((r) => r.id);
+    if (feedItemIds.length > 0) {
+      await client.query(
+        `DELETE FROM trip_reactions WHERE target_type = 'feed_item' AND target_id = ANY($1)`,
+        [feedItemIds],
+      );
+      await client.query(
+        `DELETE FROM trip_comments WHERE target_type = 'feed_item' AND target_id = ANY($1)`,
+        [feedItemIds],
+      );
+      await client.query(
+        `DELETE FROM trip_feed_items WHERE id = ANY($1)`,
+        [feedItemIds],
+      );
+    }
+
+    // 2. Delete reactions and comments on target_type = 'log_entry'
+    await client.query(
+      `DELETE FROM trip_reactions WHERE target_type = 'log_entry' AND target_id = $1`,
+      [entry.id],
+    );
+    await client.query(
+      `DELETE FROM trip_comments WHERE target_type = 'log_entry' AND target_id = $1`,
+      [entry.id],
+    );
+
+    // 3. Delete trip_log_entries (rode_with_tags cascades via FK)
+    await client.query(`DELETE FROM trip_log_entries WHERE id = $1`, [entry.id]);
+
+    // 4. Delete the underlying experience_logs row if present
+    if (entry.log_id) {
+      await client.query(
+        `DELETE FROM experience_logs
+          WHERE id = $1 AND user_id = $2 AND experience_id = $3`,
+        [entry.log_id, entry.member_id, entry.experience_id],
+      );
+
+      // Check if any remaining experience_logs exist for this (member, experience)
+      const remainingLogs = await client.query(
+        `SELECT 1 FROM experience_logs
+          WHERE user_id = $1 AND experience_id = $2
+          LIMIT 1`,
+        [entry.member_id, entry.experience_id],
+      );
+
+      // If no logs remain, remove canonical completion
+      if (remainingLogs.rows.length === 0) {
+        await client.query(
+          `DELETE FROM completions WHERE user_id = $1 AND experience_id = $2`,
+          [entry.member_id, entry.experience_id],
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// purgeFeedForLog
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete the feed item (+ its reactions + comments) of the Trip_Log_Entry linked to `logId`, if any.
+ * Scoped to logs owned by `userId`: a log that does not exist or belongs to someone else is a no-op.
+ * Idempotent.
+ */
+async function purgeFeedForLog(
+  ctx: TripRepoContext,
+  logId: string,
+  userId: string,
+): Promise<void> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tleRes = await client.query<{ id: string }>(
+      `SELECT tle.id
+         FROM trip_log_entries tle
+         JOIN experience_logs el ON el.id = tle.log_id
+        WHERE el.id = $1
+          AND el.user_id = $2`,
+      [logId, userId],
+    );
+    const feedItemIds: string[] = [];
+    for (const tle of tleRes.rows) {
+      const fiRes = await client.query<{ id: string }>(
+        `SELECT id FROM trip_feed_items
+          WHERE type = 'completion_logged'
+            AND metadata->>'logEntryId' = $1`,
+        [tle.id],
+      );
+      feedItemIds.push(...fiRes.rows.map((r) => r.id));
+    }
+    for (const fid of feedItemIds) {
+      await client.query(
+        `DELETE FROM trip_reactions WHERE target_type = 'feed_item' AND target_id = $1`,
+        [fid],
+      );
+      await client.query(
+        `DELETE FROM trip_comments WHERE target_type = 'feed_item' AND target_id = $1`,
+        [fid],
+      );
+      await client.query(
+        `DELETE FROM trip_feed_items WHERE id = $1`,
+        [fid],
+      );
+    }
+    await client.query('COMMIT');
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -3642,6 +3903,8 @@ interface TripLogEntryRow {
   experience_name: string;
   /** `ratings.value` (SMALLINT 1–10) or `null` when the Member has no Rating. */
   rating: number | string | null;
+  /** `experience_logs.note` or `null` when unnoted. */
+  note: string | null;
   /** Aggregated tags; `pg` parses the `json` column to a JS array. */
   rode_with: readonly { taggedMemberId: string; state: RodeWithTagState }[];
 }
@@ -3669,10 +3932,12 @@ async function listLogEntries(
             p.display_name  AS member_display_name,
             le.experience_id,
             e.name          AS experience_name,
-            r.value         AS rating
+            r.value         AS rating,
+            el.note         AS note
        FROM trip_log_entries le
        JOIN profile_identity p ON p.user_id = le.member_id
        JOIN experiences e ON e.id = le.experience_id
+       LEFT JOIN experience_logs el ON el.id = le.log_id
        LEFT JOIN ratings r
               ON r.user_id = le.member_id
              AND r.experience_id = le.experience_id
@@ -3718,6 +3983,7 @@ function rowToTripLogEntryDto(row: TripLogEntryRow): TripLogEntryDTO {
     experienceId: row.experience_id,
     experienceName: row.experience_name,
     rating: row.rating === null ? null : Number(row.rating),
+    note: row.note ?? null,
     rodeWith: row.rode_with.map((tag) => ({
       taggedMemberId: tag.taggedMemberId,
       state: tag.state,
@@ -4069,6 +4335,8 @@ interface TripFeedItemRow {
   /** Acting Member's avatar preset id (`profiles.avatar_preset`), or `null`. */
   actor_avatar_preset: string | null;
   created_at: Date | string;
+  /** True when the reading caller is the actor of this feed item. */
+  mine?: boolean;
   /** `pg` parses the `jsonb` column to a JS object. */
   metadata: Record<string, unknown>;
   /** Referenced Experience name, joined live via `metadata->>'experienceId'`. */
@@ -4083,6 +4351,8 @@ interface TripFeedItemRow {
   experience_image_url: string | null;
   /** For a `completion_logged` item: the logging Member's live canonical Rating. */
   rating: number | string | null;
+  /** For a `completion_logged` item: the logging Member's visit note from experience_logs, or `null`. */
+  note: string | null;
   /** For a `completion_logged` item: how many Members were tagged rode-with. */
   rode_with_count: number | string | null;
   /**
@@ -4095,6 +4365,7 @@ interface TripFeedItemRow {
     taggedMemberId: string;
     displayName: string;
     state: RodeWithTagState;
+    tagId?: string | null;
   }[] | null;
 }
 
@@ -4156,12 +4427,14 @@ async function getFeed(
               p.avatar_preset AS actor_avatar_preset,
               fi.created_at,
               fi.metadata,
+              (fi.actor_id = $2) AS mine,
               e.name          AS experience_name,
               e.park          AS experience_park,
               e.category      AS experience_category,
               e.land          AS experience_land,
               e.image_url     AS experience_image_url,
               r.value         AS rating,
+              el.note         AS note,
               (SELECT count(*)::int
                  FROM rode_with_tags rwt
                 WHERE rwt.log_entry_id = le.id) AS rode_with_count,
@@ -4169,7 +4442,8 @@ async function getFeed(
                         json_build_object(
                           'taggedMemberId', pr.public_id,
                           'displayName', pr.display_name,
-                          'state', rwt.state
+                          'state', rwt.state,
+                          'tagId', CASE WHEN rwt.tagged_member_id = $2 AND rwt.state = 'pending' THEN rwt.id END
                         )
                         ORDER BY rwt.created_at ASC, rwt.id ASC
                       )
@@ -4182,11 +4456,14 @@ async function getFeed(
                 ON e.id = NULLIF(fi.metadata->>'experienceId', '')::uuid
          LEFT JOIN trip_log_entries le
                 ON le.id = NULLIF(fi.metadata->>'logEntryId', '')::uuid
+         LEFT JOIN experience_logs el
+                ON el.id = le.log_id
          LEFT JOIN ratings r
                 ON r.user_id = le.member_id
                AND r.experience_id = le.experience_id
-        WHERE fi.trip_id = $1`,
-      [tripId],
+        WHERE fi.trip_id = $1
+          AND (fi.type != 'completion_logged' OR le.id IS NOT NULL)`,
+      [tripId, callerId],
     ),
     // Reactions on this Trip's feed items, aggregated per (item, value): the
     // total count and whether the reading caller is one of the reactors (R13.4,
@@ -4292,6 +4569,9 @@ function rowToTripFeedItemDto(
   if (row.rating !== null) {
     enrichment.rating = Number(row.rating);
   }
+  if (row.note !== null && row.note !== undefined) {
+    enrichment.note = row.note;
+  }
   const rodeWithCount =
     row.rode_with_count === null ? 0 : Number(row.rode_with_count);
   if (rodeWithCount > 0) {
@@ -4309,6 +4589,7 @@ function rowToTripFeedItemDto(
     metadata: { ...row.metadata, ...enrichment },
     reactions,
     comments,
+    mine: row.type === 'completion_logged' ? row.mine === true : undefined,
   };
 }
 

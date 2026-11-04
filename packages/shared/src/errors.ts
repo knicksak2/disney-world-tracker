@@ -64,6 +64,11 @@ export const ERROR_CODES = [
   // a date that has not yet occurred (experience-activity-logging R1.5).
   'log_future_date',
 
+  // `log_outside_trip_dates`: a Trip-linked create supplied an explicit
+  // `visited_on` outside the Trip's inclusive date range [start_date, end_date]
+  // (unified-experience-logging R6.5).
+  'log_outside_trip_dates',
+
   // -- Profile (R7.6-R7.8) ----------------------------------------------
   'display_name_invalid',
   'avatar_invalid',
@@ -341,6 +346,7 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   // Tracking: experience logs
   log_not_found: 404,
   log_future_date: 400,
+  log_outside_trip_dates: 400,
 
   // Profile
   display_name_invalid: 400,

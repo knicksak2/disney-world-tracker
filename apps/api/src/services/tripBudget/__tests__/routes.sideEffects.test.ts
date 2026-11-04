@@ -53,6 +53,7 @@ function makeDummyBundle(lines: StoredLine[] = []): RawBudgetBundle {
       hotel: 0,
       dining: 0,
       tickets: 0,
+      lightning_lane: 0,
       transportation: 0,
       shopping: 0,
       other: 0,

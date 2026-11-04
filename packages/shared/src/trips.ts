@@ -29,7 +29,10 @@ import type { Park, ReservationKind, TripReactionValue } from './enums.js';
 import { RESERVATION_KINDS } from './enums.js';
 import type { TripPostPhotoSlotDTO } from './dto/Photos.js';
 import {
+  ianaTzSchema,
+  isoDateSchema,
   isoTimestampSchema,
+  noteBodySchema,
   parkSchema,
   ratingValueSchema,
   tripReactionValueSchema,
@@ -577,6 +580,9 @@ export const tripLogEntryCreateSchema = z
     experienceId: uuidSchema,
     rodeWith: z.array(uuidSchema).default([]),
     rating: ratingValueSchema.optional(),
+    note: noteBodySchema.nullable().optional(),
+    visitedOn: isoDateSchema.optional(),
+    userTz: ianaTzSchema.optional(),
   })
   .strict();
 
@@ -591,7 +597,8 @@ export const rodeWithConfirmSchema = z
   .object({
     rating: ratingValueSchema.optional(),
   })
-  .strict();
+  .strict()
+  .default({});
 
 export type RodeWithConfirmInput = z.infer<typeof rodeWithConfirmSchema>;
 
@@ -976,6 +983,7 @@ export interface TripLogEntryDTO {
   readonly experienceName: string;
   /** Current canonical Rating (whole number 1–10) or `null` when unrated. */
   readonly rating: number | null;
+  readonly note?: string | null;
   readonly rodeWith: readonly {
     readonly taggedMemberId: string;
     readonly state: RodeWithTagState;

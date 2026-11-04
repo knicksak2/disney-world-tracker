@@ -12,7 +12,9 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,6 +51,7 @@ import {
 import FavoriteToggle from './FavoriteToggle';
 import { resortAreaLabel } from './infoTags';
 import { useFavoritedExperiences } from './useFavoritedExperiences';
+import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 export type ResortDirectoryTab = 'hotels' | 'dining' | 'recreation' | 'subdest';
 
@@ -918,6 +921,8 @@ export default function ResortsDirectoryScreen({
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
   const [isHotelModalOpen, setIsHotelModalOpen] = useState(false);
   const [hotelModalSearch, setHotelModalSearch] = useState('');
+  const { keyboardInset: hotelKeyboardInset, getAvailableModalHeight: getHotelModalHeight } =
+    useKeyboardBottomInset(isHotelModalOpen);
 
   const favoritedIds = useFavoritedExperiences();
 
@@ -2140,7 +2145,15 @@ export default function ResortsDirectoryScreen({
           setHotelModalSearch('');
         }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[
+            styles.modalOverlay,
+            Platform.OS === 'android' && hotelKeyboardInset > 0
+              ? { paddingBottom: hotelKeyboardInset }
+              : null,
+          ]}
+        >
           <Pressable
             style={styles.modalBackdrop}
             onPress={() => {
@@ -2148,7 +2161,15 @@ export default function ResortsDirectoryScreen({
               setHotelModalSearch('');
             }}
           />
-          <View style={styles.hotelModalSheet} testID="resorts-hotel-picker-modal">
+          <View
+            style={[
+              styles.hotelModalSheet,
+              Platform.OS === 'android' && hotelKeyboardInset > 0
+                ? { maxHeight: getHotelModalHeight(40) }
+                : null,
+            ]}
+            testID="resorts-hotel-picker-modal"
+          >
             <View style={styles.modalHandle} />
 
             <View style={styles.hotelModalHeader}>
@@ -2308,7 +2329,7 @@ export default function ResortsDirectoryScreen({
               ) : null}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenContainer>
   );
