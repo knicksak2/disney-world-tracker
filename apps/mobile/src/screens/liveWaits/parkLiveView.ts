@@ -19,6 +19,8 @@ import {
 
 export type LiveWaitsFilter = 'all' | 'walkOn' | 'lightningLane' | 'headliners' | 'favorites';
 
+export type LiveWaitDisplayStatus = 'operating' | 'down' | 'closed' | 'refurbishment';
+
 export const EMPTY_FAVORITED_SET: ReadonlySet<string> = new Set<string>();
 
 export interface LiveWaitsRow {
@@ -26,6 +28,7 @@ export interface LiveWaitsRow {
   readonly name: string;
   readonly waitMinutes: number | null;
   readonly isClosedOrDown: boolean;
+  readonly status: LiveWaitDisplayStatus;
   readonly land?: string | null;
   readonly lightningLane?: LightningLaneState;
   readonly isLightningLane?: boolean;
@@ -35,12 +38,15 @@ export type WaitStatus = 'low' | 'mod' | 'high' | 'down';
 
 /**
  * Classifies a wait time into a visual status dot color category:
- *   - 'down': closed/down or missing wait
+ *   - 'down': non-operating (closed, down, refurbishment) or missing wait
  *   - 'low': <= 25 min (walk-on)
  *   - 'mod': 26–50 min (moderate lines)
  *   - 'high': > 50 min (long wait)
  */
-export function getWaitStatus(waitMinutes: number | null, isClosedOrDown: boolean): WaitStatus {
+export function getWaitStatus(
+  waitMinutes: number | null,
+  isClosedOrDown: boolean,
+): WaitStatus {
   if (isClosedOrDown || waitMinutes === null) {
     return 'down';
   }
@@ -51,6 +57,90 @@ export function getWaitStatus(waitMinutes: number | null, isClosedOrDown: boolea
     return 'mod';
   }
   return 'high';
+}
+
+/**
+ * Known seasonal overlay names or patterns that represent seasonal/holiday overlays
+ * of a permanent parent attraction.
+ */
+export const KNOWN_SEASONAL_OVERLAY_PATTERNS: readonly (string | RegExp)[] = [
+  /glimmering greenhouses/i,
+  /^jingle cruise/i,
+];
+
+/**
+ * Returns true if an entry represents a seasonal overlay that is currently inactive
+ * (i.e. closed or lacking an active standby wait time / active Lightning Lane).
+ * (Requirement 10.12, Property 14)
+ */
+export function isInactiveSeasonalOverlay(
+  entry: ParkLiveEntryDTO,
+  allEntries?: readonly ParkLiveEntryDTO[],
+): boolean {
+  // If the entry has an active standby wait time or active Lightning Lane, it is currently in-season
+  const hasActiveWait = entry.waitMinutes !== null && entry.waitMinutes >= 0;
+  const hasActiveLL = Boolean(
+    entry.lightningLane?.state &&
+    entry.lightningLane.state !== 'CLOSED' &&
+    entry.lightningLane.state !== 'UNKNOWN'
+  );
+  if (hasActiveWait || hasActiveLL) {
+    return false;
+  }
+
+  // Check known seasonal overlay patterns
+  const isKnownPattern = KNOWN_SEASONAL_OVERLAY_PATTERNS.some((pattern) =>
+    typeof pattern === 'string'
+      ? entry.name.toLowerCase().includes(pattern.toLowerCase())
+      : pattern.test(entry.name),
+  );
+
+  if (isKnownPattern) {
+    return true;
+  }
+
+  // Also check if this entry is named as "{Parent} – {Overlay}" or "{Parent} - {Overlay}"
+  // and the parent attraction exists in the park's entries
+  if (allEntries && (entry.name.includes(' – ') || entry.name.includes(' - '))) {
+    const parentName = entry.name.split(/\s+[–-]\s+/)[0]?.trim();
+    if (parentName && parentName.length > 3) {
+      const parentExists = allEntries.some(
+        (other) =>
+          other.experienceId !== entry.experienceId &&
+          other.name.trim().toLowerCase() === parentName.toLowerCase(),
+      );
+      if (parentExists) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Resolves the display status ('operating' | 'down' | 'closed' | 'refurbishment')
+ * from raw ThemeParks status and numeric wait time.
+ * (Requirement 10.13, Property 14)
+ */
+export function resolveDisplayStatus(
+  rawStatus: string,
+  waitMinutes: number | null,
+): LiveWaitDisplayStatus {
+  const s = rawStatus.toUpperCase();
+  if (s === 'REFURBISHMENT') {
+    return 'refurbishment';
+  }
+  if (s === 'DOWN') {
+    return 'down';
+  }
+  if (s === 'CLOSED') {
+    return 'closed';
+  }
+  if (waitMinutes !== null && waitMinutes >= 0) {
+    return 'operating';
+  }
+  return 'closed';
 }
 
 /**
@@ -150,8 +240,12 @@ export function buildLiveWaitsRows(
     if (!isLiveWaitEligible(entry, experience)) {
       continue;
     }
+    if (isInactiveSeasonalOverlay(entry, entries)) {
+      continue;
+    }
 
-    const closedOrDown = isEntryClosedOrDown(entry.status, entry.waitMinutes);
+    const displayStatus = resolveDisplayStatus(entry.status, entry.waitMinutes);
+    const closedOrDown = displayStatus !== 'operating';
     const land = experience?.land ?? (experience?.areaType === 'ThemePark' ? experience.worldShowcaseCountry : null) ?? null;
     const hasLL = Boolean(entry.lightningLane || experience?.category === 'Ride' || (experience?.category as string) === 'Attraction');
 
@@ -160,13 +254,15 @@ export function buildLiveWaitsRows(
       name: entry.name,
       waitMinutes: closedOrDown ? null : entry.waitMinutes,
       isClosedOrDown: closedOrDown,
+      status: displayStatus,
       land,
       ...(entry.lightningLane !== undefined ? { lightningLane: entry.lightningLane } : {}),
       isLightningLane: hasLL,
     });
   }
 
-  // Sort ascending by waitMinutes, with closed/down entries last (R10.2)
+  // Sort ascending by waitMinutes, with non-operating entries last (R10.2).
+  // Non-operating order: Down (breakdowns first) -> Closed -> Refurbishment (last).
   rows.sort((a, b) => {
     if (a.isClosedOrDown !== b.isClosedOrDown) {
       return a.isClosedOrDown ? 1 : -1;
@@ -176,6 +272,18 @@ export function buildLiveWaitsRows(
       const waitB = b.waitMinutes ?? 0;
       if (waitA !== waitB) {
         return waitA - waitB;
+      }
+    } else {
+      const rank = (s: LiveWaitDisplayStatus): number => {
+        if (s === 'down') return 0;
+        if (s === 'closed') return 1;
+        if (s === 'refurbishment') return 2;
+        return 3;
+      };
+      const rankA = rank(a.status);
+      const rankB = rank(b.status);
+      if (rankA !== rankB) {
+        return rankA - rankB;
       }
     }
     return a.name.localeCompare(b.name);

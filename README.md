@@ -94,7 +94,7 @@ curl http://localhost:3000/catalog
 # Register a user.
 curl -X POST http://localhost:3000/auth/register \
   -H "content-type: application/json" \
-  -d '{"email":"test@example.com","password":"longenoughpw","displayName":"Test"}'
+  -d '{"email":"test@example.com","password":"longenoughpw","displayName":"Test","ageConfirmed":true}'
 ```
 
 If both succeed, the API is talking to Postgres and Redis correctly. The mobile app can then reach the same endpoints.

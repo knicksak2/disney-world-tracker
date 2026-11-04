@@ -176,6 +176,7 @@ describe('RegisterScreen: no deletion notice, no restored flag', () => {
     fireEvent.changeText(screen.getByTestId('register-email'), 'new@example.com');
     fireEvent.changeText(screen.getByTestId('register-display-name'), 'Newbie');
     fireEvent.changeText(screen.getByTestId('register-password'), 'long-enough-pw');
+    fireEvent.press(screen.getByTestId('register-age-confirm'));
     fireEvent.press(screen.getByTestId('register-submit'));
 
     await waitFor(() => expect(useSessionStore.getState().token).toBe('fresh-token'));
@@ -183,10 +184,89 @@ describe('RegisterScreen: no deletion notice, no restored flag', () => {
       [
         'POST',
         '/auth/register',
-        { email: 'new@example.com', displayName: 'Newbie', password: 'long-enough-pw' },
+        {
+          email: 'new@example.com',
+          displayName: 'Newbie',
+          password: 'long-enough-pw',
+          ageConfirmed: true,
+        },
       ],
     ]);
     expect(useSessionStore.getState().accountRestoredNotice).toBe(false);
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 7: Minimum age 13 attestation
+  describe('13+ age checkbox (legal-disclaimers-and-terms R8.6-R8.8)', () => {
+    function fillValidFields(): void {
+      fireEvent.changeText(screen.getByTestId('register-email'), 'new@example.com');
+      fireEvent.changeText(screen.getByTestId('register-display-name'), 'Newbie');
+      fireEvent.changeText(screen.getByTestId('register-password'), 'long-enough-pw');
+    }
+
+    it('renders the checkbox unchecked with checkbox role and label (R8.6)', () => {
+      render(<RegisterScreen navigation={loginNav()} route={{} as never} />);
+      const box = screen.getByTestId('register-age-confirm');
+      expect(box.props.accessibilityRole).toBe('checkbox');
+      expect(box.props.accessibilityLabel).toBe('I am at least 13 years old');
+      expect(box.props.accessibilityState).toMatchObject({ checked: false });
+      expect(screen.getByText('I am at least 13 years old')).toBeTruthy();
+      expect(screen.queryByTestId('register-age-error')).toBeNull();
+    });
+
+    it('submitting unchecked makes no API call and shows the age message; checking it clears the message (R8.7)', async () => {
+      render(<RegisterScreen navigation={loginNav()} route={{} as never} />);
+      fillValidFields();
+
+      fireEvent.press(screen.getByTestId('register-submit'));
+
+      expect(await screen.findByTestId('register-age-error')).toHaveTextContent(
+        'You must be 13 or older to create an account.',
+      );
+      expect(apiRequestMock).not.toHaveBeenCalled();
+      expect(useSessionStore.getState().token).toBeNull();
+
+      fireEvent.press(screen.getByTestId('register-age-confirm'));
+
+      expect(screen.queryByTestId('register-age-error')).toBeNull();
+      expect(screen.getByTestId('register-age-confirm').props.accessibilityState).toMatchObject({
+        checked: true,
+      });
+    });
+
+    it('unchecking again after checking blocks the submit once more (R8.7)', async () => {
+      render(<RegisterScreen navigation={loginNav()} route={{} as never} />);
+      fillValidFields();
+
+      fireEvent.press(screen.getByTestId('register-age-confirm'));
+      fireEvent.press(screen.getByTestId('register-age-confirm'));
+      expect(screen.getByTestId('register-age-confirm').props.accessibilityState).toMatchObject({
+        checked: false,
+      });
+      fireEvent.press(screen.getByTestId('register-submit'));
+
+      expect(await screen.findByTestId('register-age-error')).toBeTruthy();
+      expect(apiRequestMock).not.toHaveBeenCalled();
+    });
+
+    it('maps a server validation_failed on ageConfirmed to the same message (R8.4, R8.7)', async () => {
+      apiRequestMock.mockRejectedValueOnce(
+        new ApiError({
+          status: 400,
+          code: 'validation_failed',
+          message: 'Invalid value for "ageConfirmed".',
+          field: 'ageConfirmed',
+        }),
+      );
+      render(<RegisterScreen navigation={loginNav()} route={{} as never} />);
+      fillValidFields();
+      fireEvent.press(screen.getByTestId('register-age-confirm'));
+      fireEvent.press(screen.getByTestId('register-submit'));
+
+      expect(await screen.findByTestId('register-age-error')).toHaveTextContent(
+        'You must be 13 or older to create an account.',
+      );
+      expect(useSessionStore.getState().token).toBeNull();
+    });
   });
 });
 

@@ -1,7 +1,7 @@
 # Terms of Service
 
 **Effective Date:** October 23, 2026  
-**Last Updated:** October 23, 2026
+**Last Updated:** November 4, 2026
 
 Welcome to **Disney World Tracker** ("the App", "we", "us", or "our"). These Terms of Service ("Terms") govern your access to and use of the Disney World Tracker mobile application, website endpoints, and related services.
 
@@ -30,6 +30,7 @@ By creating an account, downloading, or using the App, you agree to be bound by 
 ## 3. Accounts & Security
 
 To access certain features (such as itineraries, pin collection, friend connections, and photo uploads), you must register an account with a valid email address and password.
+- **Minimum Age:** The App is not directed at children. You must be at least 13 years old to create an account or use the App. When you register, you confirm that you are 13 or older. If we learn that an account belongs to a person under 13, we will delete it and its data.
 - You are responsible for safeguarding your login credentials and for all activities that occur under your account.
 - You must provide accurate and current registration information.
 - We reserve the right to suspend or terminate accounts that violate these Terms or threaten community safety.

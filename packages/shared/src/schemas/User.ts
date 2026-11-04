@@ -36,12 +36,17 @@ export const userSchema = z
  * Registration input (R6.1, R6.4): RFC 5322 email, display name 1-50 chars
  * after trimming, password 8-128 chars. The output type carries the trimmed
  * display name.
+ *
+ * `ageConfirmed` is the caller's attestation that they are at least 13 years
+ * old (legal-disclaimers-and-terms R8.3). Only the boolean `true` is accepted.
+ * It is checked at request time and never persisted (R8.5).
  */
 export const registerInputSchema = z
   .object({
     email: emailSchema,
     displayName: displayNameSchema,
     password: passwordSchema,
+    ageConfirmed: z.literal(true),
   })
   .strict();
 

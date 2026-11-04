@@ -340,5 +340,40 @@ describe('webPages unit & property tests', () => {
       RUNS,
     );
   });
+
+  // Feature: legal-disclaimers-and-terms, Property 7: Minimum age 13 attestation
+  it('Property 7: Terms HTML states the 13+ minimum age inside the Accounts & Security section (R8.1)', () => {
+    const html = renderTermsOfServiceHtml({ supportEmail: SUPPORT_EMAIL });
+    const accounts = html.slice(
+      html.indexOf('<h2>3. Accounts &amp; Security</h2>'),
+      html.indexOf('<h2>4. User-Generated Content'),
+    );
+
+    expect(accounts).toContain('<strong>Minimum Age:</strong>');
+    expect(accounts).toContain('not directed at children');
+    expect(accounts).toContain('at least 13 years old');
+    expect(accounts).toContain('delete it and its data');
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 7: Minimum age 13 attestation
+  it('Property 7: Privacy HTML states the under-13 policy inside Information We Collect and keeps the section numbering (R8.2)', () => {
+    fc.assert(
+      fc.property(graceDaysArb, (graceDays) => {
+        const html = renderPrivacyPolicyHtml({ graceDays, supportEmail: SUPPORT_EMAIL });
+        const collect = html.slice(
+          html.indexOf('<h2>1. Information We Collect</h2>'),
+          html.indexOf('<h2>2. Third-Party Service Providers'),
+        );
+
+        expect(collect).toContain('<h3>Age Requirement (13+)</h3>');
+        expect(collect).toContain('not directed at children under 13');
+        expect(collect).toContain('do not knowingly collect personal information from children under 13');
+        expect(collect).toContain('We will delete that account and its data');
+        // The age subsection must not have renumbered the later sections.
+        expect(html).toContain('<h2>6. User-Generated Content &amp; Code of Conduct</h2>');
+      }),
+      RUNS,
+    );
+  });
 });
 

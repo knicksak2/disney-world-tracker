@@ -215,6 +215,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (!result.success) {
             return false;
@@ -244,6 +245,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (result.success) {
             return false;
@@ -269,6 +271,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (result.success) {
             return false;
@@ -298,6 +301,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (result.success) {
             return false;
@@ -323,6 +327,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (result.success) {
             return false;
@@ -330,6 +335,42 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
           return result.error.issues.some(
             (issue) => issue.path[0] === 'password',
           );
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    );
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 7: Minimum age 13 attestation
+  it('rejects when ageConfirmed is missing, false, or not the boolean true (other fields valid)', () => {
+    const badAgeArb = fc.constantFrom<unknown>(
+      undefined,
+      false,
+      'true',
+      1,
+      0,
+      null,
+      'yes',
+    );
+    fc.assert(
+      fc.property(
+        validEmailArb,
+        validDisplayNameArb,
+        validPasswordArb,
+        badAgeArb,
+        (email, displayName, password, ageConfirmed) => {
+          const body: Record<string, unknown> = { email, displayName, password };
+          if (ageConfirmed !== undefined) {
+            body.ageConfirmed = ageConfirmed;
+          }
+          const result = registerInputSchema.safeParse(body);
+          if (result.success) {
+            return false;
+          }
+          // The failing field must be identified, and it must be the first
+          // issue because every other field is valid (parseInput reports
+          // issues[0] as the envelope's `field`).
+          return result.error.issues[0]?.path[0] === 'ageConfirmed';
         },
       ),
       { numRuns: NUM_RUNS },
@@ -348,6 +389,7 @@ describe('registerInputSchema — Property 12: accepts iff all three fields vali
             email,
             displayName,
             password,
+            ageConfirmed: true,
           });
           if (result.success) {
             return false;

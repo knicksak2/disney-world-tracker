@@ -187,6 +187,7 @@ describe('POST /auth/register', () => {
         email: 'alice@example.com',
         displayName: 'Alice',
         password: 'correcthorsebatterystaple',
+        ageConfirmed: true,
       },
     });
 
@@ -229,6 +230,7 @@ describe('POST /auth/register', () => {
         email: 'bob@example.com',
         displayName: 'Bob',
         password: plaintext,
+        ageConfirmed: true,
       },
     });
 
@@ -268,6 +270,7 @@ describe('POST /auth/register', () => {
         email: 'taken@example.com',
         displayName: 'Taken',
         password: 'long-enough-password',
+        ageConfirmed: true,
       },
     });
 
@@ -292,6 +295,7 @@ describe('POST /auth/register', () => {
         email: 'not-an-email',
         displayName: 'Alice',
         password: 'long-enough-password',
+        ageConfirmed: true,
       },
     });
 
@@ -299,6 +303,72 @@ describe('POST /auth/register', () => {
     const body = response.json() as { error: { code: string; field?: string } };
     expect(body.error.code).toBe('validation_failed');
     expect(body.error.field).toBe('email');
+  });
+
+  // Feature: legal-disclaimers-and-terms, Property 7: Minimum age 13 attestation
+  it.each([
+    ['missing', undefined],
+    ['false', false],
+    ['the string "true"', 'true'],
+  ])(
+    'returns 400 validation_failed with field ageConfirmed and creates nothing when ageConfirmed is %s (R8.4)',
+    async (_label, ageConfirmed) => {
+      const pool = makePool(() => ({ rows: [] }));
+      const { app } = await buildApp({ pool });
+
+      const payload: Record<string, unknown> = {
+        email: 'kid@example.com',
+        displayName: 'Kid',
+        password: 'long-enough-password',
+      };
+      if (ageConfirmed !== undefined) {
+        payload.ageConfirmed = ageConfirmed;
+      }
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auth/register',
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: { code: string; field?: string } };
+      expect(body.error.code).toBe('validation_failed');
+      expect(body.error.field).toBe('ageConfirmed');
+      // No user, profile or session row was written.
+      expect(pool.calls.some((c) => c.text.startsWith('INSERT INTO users'))).toBe(false);
+      expect(pool.calls.some((c) => c.text.startsWith('INSERT INTO profiles'))).toBe(false);
+      expect(pool.calls.some((c) => c.text.startsWith('INSERT INTO sessions'))).toBe(false);
+    },
+  );
+
+  it('does not persist ageConfirmed: the users INSERT carries no age attestation (R8.5)', async () => {
+    const pool = makePool((call) => {
+      if (call.text.startsWith('INSERT INTO users')) {
+        return { rows: [{ id: 'user-1', email: 'adult@example.com' }] };
+      }
+      if (call.text.startsWith('INSERT INTO sessions')) {
+        return { rows: [{ id: 'session-1' }] };
+      }
+      return { rows: [] };
+    });
+    const { app } = await buildApp({ pool });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'adult@example.com',
+        displayName: 'Adult',
+        password: 'long-enough-password',
+        ageConfirmed: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const userInsert = pool.calls.find((c) => c.text.startsWith('INSERT INTO users'));
+    expect(userInsert).toBeDefined();
+    expect(userInsert!.text).not.toMatch(/age_?confirmed|birth/i);
+    expect(userInsert!.params).not.toContain(true);
   });
 });
 

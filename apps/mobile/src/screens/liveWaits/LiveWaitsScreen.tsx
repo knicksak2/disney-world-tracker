@@ -298,9 +298,29 @@ export default function LiveWaitsScreen({
 
         {/* Right Wait Time Box & Quick Log Button */}
         <View style={styles.waitTimeBox}>
-          {item.isClosedOrDown ? (
-            <Text style={styles.waitStatusClosed}>
-              {item.waitMinutes !== null ? 'Down' : 'Closed'}
+          {item.status === 'refurbishment' ? (
+            <Text
+              style={styles.waitStatusRefurbishment}
+              testID={`status-text-${item.experienceId}`}
+              numberOfLines={1}
+            >
+              Refurb
+            </Text>
+          ) : item.status === 'down' ? (
+            <Text
+              style={styles.waitStatusDown}
+              testID={`status-text-${item.experienceId}`}
+              numberOfLines={1}
+            >
+              Down
+            </Text>
+          ) : item.isClosedOrDown ? (
+            <Text
+              style={styles.waitStatusClosed}
+              testID={`status-text-${item.experienceId}`}
+              numberOfLines={1}
+            >
+              Closed
             </Text>
           ) : item.waitMinutes !== null ? (
             <View
@@ -889,6 +909,18 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11.5,
     fontWeight: '800',
     color: t.color.danger,
+    lineHeight: 16,
+  },
+  waitStatusDown: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: t.color.danger,
+    lineHeight: 16,
+  },
+  waitStatusRefurbishment: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: t.color.warning,
     lineHeight: 16,
   },
   waitStatusMuted: {

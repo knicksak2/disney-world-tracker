@@ -276,6 +276,11 @@ Headliner_Facet definition it refers to (Glossary, above). 10.5a below supersede
 10. THE Live_Waits_Screen SHALL present a Crowd Status radar card displaying the selected Park's calculated crowd level and average wait time with peak line guidance and a tips modal.
 11. THE Live_Waits_Screen SHALL present each attraction card with a status indicator dot (low, moderate, high, down), attraction title, land name, real-time Lightning Lane return time/price when available, a prominent numeric wait with min wait label, and a quick Log button formatted with clean non-overlapping spacing.
 
+**Amendment — Seasonal Overlay Suppression & Refurbishment/Down Status Distinction:**
+
+12. THE Live_Waits_Screen SHALL omit inactive seasonal overlay attractions (e.g. "Living with the Land – Glimmering Greenhouses", "Jingle Cruise") when they are closed and post no active standby wait time or Lightning Lane return window, preventing duplicate closed entries for permanent attractions.
+13. THE Live_Waits_Screen SHALL distinguish between `Operating`, `Down`, `Closed`, and `Refurbishment` states. Experiences with status `REFURBISHMENT` SHALL display a refurbishment indicator (amber "Refurb" label and non-operating neutral status dot), and experiences with status `DOWN` SHALL display a downtime indicator ("Down").
+
 ## Configuration & Constants
 
 - `WALK_ON_THRESHOLD_MINUTES` (default `25`) — the Walk_On_Threshold used by Requirement 10.4. Env var: none (compile-time constant in `packages/shared`, matching the pattern of other display thresholds); adjustable without a migration.

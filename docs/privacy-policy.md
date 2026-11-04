@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Effective Date:** October 18, 2026  
-**Last Updated:** October 18, 2026
+**Last Updated:** November 4, 2026
 
 Welcome to **Disney World Tracker** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our [Terms of Service](/terms).
 
@@ -17,6 +17,9 @@ We store records of experiences you rate, mark completed, or add to your itinera
 
 ### User Photos
 When you choose to upload photos (food logs, dish photos, or trip album photos), we process and store image files and associated metadata (such as timestamps, dish references, and captions).
+
+### Age Requirement (13+)
+The App is not directed at children under 13, and you must be at least 13 years old to create an account. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has an account, contact us at the support email in Section 6. We will delete that account and its data.
 
 ---
 

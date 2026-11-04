@@ -473,14 +473,38 @@ export interface LiveWaitsRow {
   readonly name: string;
   readonly waitMinutes: number | null;
   readonly isClosedOrDown: boolean;
+  readonly status: LiveWaitDisplayStatus;
   readonly land?: string | null;
   readonly lightningLane?: LightningLaneState;
   readonly isLightningLane?: boolean;
 }
 
+export type LiveWaitDisplayStatus = 'operating' | 'down' | 'closed' | 'refurbishment';
+
 export type WaitStatus = 'low' | 'mod' | 'high' | 'down';
 
-export function getWaitStatus(waitMinutes: number | null, isClosedOrDown: boolean): WaitStatus;
+export function getWaitStatus(
+  waitMinutes: number | null,
+  isClosedOrDown: boolean,
+): WaitStatus;
+
+/**
+ * Returns true if an entry represents a seasonal overlay that is currently inactive
+ * (i.e. closed or lacking a wait time / active Lightning Lane).
+ */
+export function isInactiveSeasonalOverlay(
+  entry: ParkLiveEntrySnapshot,
+  allEntries?: readonly ParkLiveEntrySnapshot[],
+): boolean;
+
+/**
+ * Resolves the display status ('operating' | 'down' | 'closed' | 'refurbishment')
+ * from raw ThemeParks status and numeric wait time.
+ */
+export function resolveDisplayStatus(
+  rawStatus: string,
+  waitMinutes: number | null,
+): LiveWaitDisplayStatus;
 
 /**
  * Sort (ascending wait, closed/down last — R10.2) and filter (R10.3-R10.6) a
@@ -853,6 +877,15 @@ The Home Screen (`HomeScreen.tsx`) is restructured from 6 competing visual tiers
 *(b) When `ownedLists.length > 0`, a "View all (N)" row renders (with `N = ownedLists.length`) for any count N (including 1, 2, 3, 4, or >4) navigating to `MyFoodListsScreen`/`MyExperienceListsScreen` with `{ initialTab: 'owned' }`;*
 *(c) When `ownedLists.length === 0`, an entry point row renders navigating to `MyFoodListsScreen`/`MyExperienceListsScreen` with `{ initialTab: savedLists.length > 0 ? 'saved' : 'owned' }`.*
 **Validates:** Requirement 6 amendment 8d
+
+### Property 14: Inactive Seasonal Overlay Suppression and Status Classification (Added by this amendment)
+*For any entry, `isInactiveSeasonalOverlay(entry, allEntries)` is true iff the entry has no active wait time (`waitMinutes === null || waitMinutes < 0`), no active Lightning Lane state, and either matches a known seasonal overlay pattern (`/glimmering greenhouses/i`, `/^jingle cruise/i`) or matches `{Parent} – {Overlay}` / `{Parent} - {Overlay}` where `{Parent}` is an existing experience in the same park snapshot.
+For any entry, `resolveDisplayStatus(rawStatus, waitMinutes)` resolves to:
+- `'refurbishment'` when `rawStatus` is `'REFURBISHMENT'` (case-insensitive);
+- `'down'` when `rawStatus` is `'DOWN'` (case-insensitive);
+- `'operating'` when `waitMinutes` is a non-negative integer and `rawStatus` is not `'CLOSED' | 'DOWN' | 'REFURBISHMENT'`;
+- `'closed'` otherwise.*
+**Validates:** Requirements 10.12, 10.13
 
 ## Testing Strategy — Addition
 

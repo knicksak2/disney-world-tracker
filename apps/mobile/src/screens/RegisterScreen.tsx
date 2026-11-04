@@ -67,23 +67,29 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
  * the server-side `validation_failed` mapper. Centralizing the
  * copy here keeps the two paths consistent.
  */
-const FIELD_COPY: Record<'email' | 'displayName' | 'password', string> = {
+const FIELD_COPY: Record<
+  'email' | 'displayName' | 'password' | 'ageConfirmed',
+  string
+> = {
   email: 'Email is invalid.',
   displayName:
     'Display name must be 1-50 characters with at least one non-whitespace character.',
   password: 'Password must be 8 to 128 characters.',
+  ageConfirmed: 'You must be 13 or older to create an account.',
 };
 
 interface FieldErrors {
   email: string | null;
   displayName: string | null;
   password: string | null;
+  ageConfirmed: string | null;
 }
 
 const NO_FIELD_ERRORS: FieldErrors = {
   email: null,
   displayName: null,
   password: null,
+  ageConfirmed: null,
 };
 
 export default function RegisterScreen({ navigation }: Props): JSX.Element {
@@ -95,6 +101,8 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // legal-disclaimers-and-terms R8.6: unchecked by default.
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>(NO_FIELD_ERRORS);
@@ -119,6 +127,7 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
       email: email.trim(),
       displayName: displayName.trim(),
       password,
+      ageConfirmed,
     });
 
     if (!parsed.success) {
@@ -288,6 +297,42 @@ export default function RegisterScreen({ navigation }: Props): JSX.Element {
                 ) : null}
               </View>
 
+              <View style={styles.field}>
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    if (submitting) {
+                      return;
+                    }
+                    setAgeConfirmed((prev) => !prev);
+                    // R8.7: the message clears once the box is toggled.
+                    setFieldErrors((prev) => ({ ...prev, ageConfirmed: null }));
+                  }}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="I am at least 13 years old"
+                  accessibilityState={{ checked: ageConfirmed, disabled: submitting }}
+                  testID="register-age-confirm"
+                >
+                  <Ionicons
+                    name={ageConfirmed ? 'checkbox' : 'square-outline'}
+                    size={24}
+                    color={
+                      fieldErrors.ageConfirmed !== null
+                        ? t.color.danger
+                        : t.color.primaryFg
+                    }
+                  />
+                  <Text style={styles.checkboxLabel}>
+                    I am at least 13 years old
+                  </Text>
+                </Pressable>
+                {fieldErrors.ageConfirmed !== null ? (
+                  <Text style={styles.fieldError} testID="register-age-error">
+                    {fieldErrors.ageConfirmed}
+                  </Text>
+                ) : null}
+              </View>
+
               {formError !== null ? (
                 <Text style={styles.formError} testID="register-form-error">
                   {formError}
@@ -354,6 +399,8 @@ function zodErrorsToFieldErrors(
       next.displayName = FIELD_COPY.displayName;
     } else if (key === 'password' && next.password === null) {
       next.password = FIELD_COPY.password;
+    } else if (key === 'ageConfirmed' && next.ageConfirmed === null) {
+      next.ageConfirmed = FIELD_COPY.ageConfirmed;
     }
   }
   return next;
@@ -376,6 +423,8 @@ function applyServerFieldError(
       return { ...NO_FIELD_ERRORS, displayName: FIELD_COPY.displayName };
     case 'password':
       return { ...NO_FIELD_ERRORS, password: FIELD_COPY.password };
+    case 'ageConfirmed':
+      return { ...NO_FIELD_ERRORS, ageConfirmed: FIELD_COPY.ageConfirmed };
     default:
       return { ...NO_FIELD_ERRORS, email: fallback };
   }
@@ -421,6 +470,17 @@ const useStyles = makeStyles((t) => ({
     right: t.spacing.md,
     height: '100%',
     justifyContent: 'center',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    minHeight: 44,
+  },
+  checkboxLabel: {
+    ...t.typography.body,
+    flex: 1,
+    color: t.color.textPrimary,
   },
   fieldError: {
     marginTop: t.spacing.xs,

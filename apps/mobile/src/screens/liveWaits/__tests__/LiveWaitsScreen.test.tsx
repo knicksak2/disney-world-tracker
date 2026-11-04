@@ -79,6 +79,30 @@ describe('LiveWaitsScreen', () => {
       active: true,
       location: null,
     } as unknown as ExperienceDTO,
+    {
+      id: 'exp-big-thunder',
+      name: 'Big Thunder Mountain',
+      park: 'Magic Kingdom',
+      category: 'Attraction',
+      active: true,
+      location: null,
+    } as unknown as ExperienceDTO,
+    {
+      id: 'exp-country-bears',
+      name: 'Country Bear Jamboree',
+      park: 'Magic Kingdom',
+      category: 'Attraction',
+      active: true,
+      location: null,
+    } as unknown as ExperienceDTO,
+    {
+      id: 'exp-jingle-cruise',
+      name: 'Jingle Cruise',
+      park: 'Magic Kingdom',
+      category: 'Attraction',
+      active: true,
+      location: null,
+    } as unknown as ExperienceDTO,
   ];
 
   const mockSnapshot: ParkLiveSnapshotDTO = {
@@ -106,6 +130,24 @@ describe('LiveWaitsScreen', () => {
         experienceId: 'exp-splash',
         name: 'Tiana Bayou Adventure',
         status: 'DOWN',
+        waitMinutes: null,
+      },
+      {
+        experienceId: 'exp-big-thunder',
+        name: 'Big Thunder Mountain',
+        status: 'REFURBISHMENT',
+        waitMinutes: null,
+      },
+      {
+        experienceId: 'exp-country-bears',
+        name: 'Country Bear Jamboree',
+        status: 'CLOSED',
+        waitMinutes: null,
+      },
+      {
+        experienceId: 'exp-jingle-cruise',
+        name: 'Jingle Cruise',
+        status: 'CLOSED',
         waitMinutes: null,
       },
     ],
@@ -153,13 +195,22 @@ describe('LiveWaitsScreen', () => {
       expect(screen.getByText('Space Mountain')).toBeTruthy();
       expect(screen.getByText("Peter Pan's Flight")).toBeTruthy();
       expect(screen.getByText('Tiana Bayou Adventure')).toBeTruthy();
+      expect(screen.getByText('Big Thunder Mountain')).toBeTruthy();
+      expect(screen.getByText('Country Bear Jamboree')).toBeTruthy();
     });
+
+    // Inactive seasonal overlay is omitted
+    expect(screen.queryByText('Jingle Cruise')).toBeNull();
 
     // Check wait times
     expect(screen.getByTestId('wait-time-exp-peoplemover')).toHaveTextContent(/10 min/);
     expect(screen.getByTestId('wait-time-exp-space-mountain')).toHaveTextContent(/25 min/);
     expect(screen.getByTestId('wait-time-exp-peter-pan')).toHaveTextContent(/45 min/);
-    expect(screen.getByText('Closed')).toBeTruthy();
+
+    // Check distinct non-operating statuses
+    expect(screen.getByTestId('status-text-exp-splash')).toHaveTextContent('Down');
+    expect(screen.getByTestId('status-text-exp-big-thunder')).toHaveTextContent('Refurb');
+    expect(screen.getByTestId('status-text-exp-country-bears')).toHaveTextContent('Closed');
   });
 
   it('filters by walk-on when walk-on chip is tapped', async () => {

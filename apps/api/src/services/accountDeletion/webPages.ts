@@ -286,7 +286,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
 <body>
   <div class="card">
     <h1>Privacy Policy</h1>
-    <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> October 18, 2026</div>
+    <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 4, 2026</div>
     <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our <a href="/terms">Terms of Service</a>.</p>
 
     <h2>1. Information We Collect</h2>
@@ -296,6 +296,8 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
     <p>We store records of experiences you rate, mark completed, or add to your itineraries, along with your friend connections and trip plans.</p>
     <h3>User Photos</h3>
     <p>When you choose to upload photos (food logs, dish photos, or trip album photos), we process and store image files and associated metadata (such as timestamps, dish references, and captions).</p>
+    <h3>Age Requirement (13+)</h3>
+    <p>The App is not directed at children under 13, and you must be at least 13 years old to create an account. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has an account, contact us at the support email in Section 6. We will delete that account and its data.</p>
 
     <h2>2. Third-Party Service Providers &amp; Processing Disclosures</h2>
     <p>To operate photo uploads safely and securely, we utilize trusted third-party infrastructure and AI service providers:</p>
@@ -402,7 +404,7 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
 <body>
   <div class="card">
     <h1>Terms of Service</h1>
-    <div class="meta"><strong>Effective Date:</strong> October 23, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> October 23, 2026</div>
+    <div class="meta"><strong>Effective Date:</strong> October 23, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 4, 2026</div>
     <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the Disney World Tracker application, website endpoints, and related services.</p>
     <p>By creating an account, downloading, or using the App, you agree to be bound by these Terms. If you do not agree to these Terms, do not use the App.</p>
 
@@ -424,6 +426,7 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
     <h2>3. Accounts &amp; Security</h2>
     <p>To access certain features (such as itineraries, pin collection, friend connections, and photo uploads), you must register an account with a valid email address and password.</p>
     <ul>
+      <li><strong>Minimum Age:</strong> The App is not directed at children. You must be at least 13 years old to create an account or use the App. When you register, you confirm that you are 13 or older. If we learn that an account belongs to a person under 13, we will delete it and its data.</li>
       <li>You are responsible for safeguarding your login credentials and for all activities that occur under your account.</li>
       <li>You must provide accurate and current registration information.</li>
       <li>We reserve the right to suspend or terminate accounts that violate these Terms or threaten community safety.</li>

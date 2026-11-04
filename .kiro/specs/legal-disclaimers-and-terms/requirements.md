@@ -121,3 +121,18 @@ This feature implements the lean, in-place legal compliance architecture (Option
 2. THE `GET /terms` page and mobile legal notices SHALL state that park ticket prices and restaurant menu prices come from Disney's website, are shown before tax, may be out of date or estimated, and that the final price at checkout may differ; and SHALL state that discounted, military, reseller and special-offer prices are not covered.
 3. THE Mobile_App SHALL show the visible credit "Powered by ThemeParks.wiki" on every screen that displays a Lightning Lane price, as specified in `trip-budget` Requirement 21.3.
 4. THE App SHALL NOT expose a bulk export, public feed, or endpoint returning raw ThemeParks.wiki-derived price rows; Lightning Lane prices are exposed only as the resolved price of a requested key and within a Trip's own Budget lines.
+
+### Requirement 8: Minimum age of 13 (COPPA posture)
+
+**User Story:** As the operator of an app that collects an email address, display name and friend connections, I want accounts limited to people aged 13 or older, so that the app does not knowingly collect personal information from children under 13 (US COPPA).
+
+#### Acceptance Criteria
+
+1. THE Terms_Of_Service (`docs/terms-of-service.md` and `GET /terms`) SHALL state that the App is not directed at children and that a person must be at least 13 years old to create an account or use the App.
+2. THE Privacy Policy (`docs/privacy-policy.md` and `GET /privacy`) SHALL state that the App is not directed at children under 13, that the App does not knowingly collect personal information from children under 13, and that an account found to belong to a child under 13 will be deleted together with its data; it SHALL give the support email for reporting such an account.
+3. THE `registerInputSchema` in `@dwt/shared` SHALL require a field `ageConfirmed` whose only accepted value is the boolean `true`; a missing, `false` or non-boolean value SHALL fail validation with the issue path `ageConfirmed`.
+4. WHEN `POST /auth/register` receives a body whose `ageConfirmed` is not `true`, THE API SHALL respond `400` with error code `validation_failed` and `field` equal to `ageConfirmed`, and SHALL NOT create a User, Profile or session.
+5. THE `ageConfirmed` field SHALL NOT be persisted; it is an attestation checked at request time only.
+6. THE `RegisterScreen` SHALL show an unchecked-by-default checkbox row labelled "I am at least 13 years old" (`testID="register-age-confirm"`, `accessibilityRole="checkbox"`, `accessibilityLabel="I am at least 13 years old"`, `accessibilityState.checked` reflecting the state) above the "Create account" button.
+7. WHEN the user presses "Create account" while the checkbox is unchecked, THE `RegisterScreen` SHALL NOT call the API and SHALL show the message "You must be 13 or older to create an account." (`testID="register-age-error"`) beneath the checkbox row; the message SHALL clear when the box is checked.
+8. WHEN the checkbox is checked and the other fields are valid, THE `RegisterScreen` SHALL send `ageConfirmed: true` in the `POST /auth/register` body.

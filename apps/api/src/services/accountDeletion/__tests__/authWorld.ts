@@ -233,7 +233,7 @@ export async function buildAuthWorld(options: AuthWorldOptions = {}): Promise<Au
       const res = await app.inject({
         method: 'POST',
         url: '/auth/register',
-        payload: { email, displayName, password: PASSWORD },
+        payload: { email, displayName, password: PASSWORD, ageConfirmed: true },
       });
       if (res.statusCode !== 201) throw new Error(`register failed: ${res.statusCode} ${res.payload}`);
       const body = res.json() as { token: string; user: { id: string } };

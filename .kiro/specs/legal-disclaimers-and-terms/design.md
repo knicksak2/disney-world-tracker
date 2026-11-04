@@ -116,6 +116,19 @@ Added by the `trip-budget` spec. For the rendered `GET /terms` HTML and the mobi
 
 **Validates: Requirements 7.1, 7.2, 7.3, 7.4**
 
+### Property 7: Minimum age 13 attestation
+
+*For any registration body, `registerInputSchema` accepts it only if `ageConfirmed === true` (and the existing email, display name and password rules hold); a missing, `false`, string or numeric `ageConfirmed` is rejected with the first issue path `ageConfirmed`. `POST /auth/register` with such a body returns `400 validation_failed` with `field: 'ageConfirmed'` and issues no `INSERT INTO users`. In the mobile `RegisterScreen`, pressing "Create account" with the checkbox unchecked makes no API call and shows "You must be 13 or older to create an account."; with it checked the request body carries `ageConfirmed: true`. The rendered Terms and Privacy HTML each contain their age statement (Requirement 8.1, 8.2) and stay in sync with the Markdown docs.*
+**Validates:** Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8
+
+## Age Requirement Design (Requirement 8)
+
+- **Shared contract:** `packages/shared/src/schemas/User.ts` adds `ageConfirmed: z.literal(true)` to `registerInputSchema` (still `.strict()`). The API route and the mobile client both parse with this schema, so they cannot drift. `RegisterInput` becomes `{ email, displayName, password, ageConfirmed: true }`.
+- **No persistence, no migration:** the flag is validated and dropped. `handleRegister` is unchanged.
+- **Docs:** Terms gain a "Minimum Age" bullet in section 3 (Accounts & Security). Privacy gains an "Age Requirement (13+)" subsection under section 1. Section numbers do not change. `Last Updated` dates are bumped in both Markdown and HTML.
+- **Mobile:** `RegisterScreen.tsx` adds a checkbox `Pressable` row between the password field and the form error. State `ageConfirmed` (default `false`). On submit the screen passes it to `registerInputSchema.safeParse`; a failure on path `ageConfirmed` maps to `FIELD_COPY.ageConfirmed` = "You must be 13 or older to create an account." The server `validation_failed` with `field: 'ageConfirmed'` maps to the same copy.
+- **Rollout note:** an installed build that predates this change cannot register (the server now requires the field). Existing accounts and login are unaffected.
+
 ## Error Handling
 
 - **Browser Link Failures**: If `Linking.openURL` fails (e.g. no browser installed), the error is caught and logged gracefully without crashing the app.
@@ -130,4 +143,9 @@ Added by the `trip-budget` spec. For the rendered `GET /terms` HTML and the mobi
    - `apps/mobile/src/screens/youAndCrew/__tests__/DeleteAccountFlow.test.tsx` (or a dedicated `LegalDisclaimers.test.tsx`):
      - Assert `terms-of-service-entry-button` renders and pressing it calls `Linking.openURL` with the expected URL.
      - Assert `you-and-crew-legal-disclaimer` renders the Disney non-affiliation text.
+3. **Age requirement (Property 7)**:
+   - `apps/api/src/services/auth/__tests__/registration.prop.test.ts`: schema accepts valid triples only with `ageConfirmed: true`; rejects missing / `false` / non-boolean with path `ageConfirmed`.
+   - `apps/api/src/services/auth/__tests__/routes.test.ts`: `POST /auth/register` without `ageConfirmed: true` returns 400 `validation_failed`, `field: 'ageConfirmed'`, and no `INSERT INTO users` is issued.
+   - `webPages.prop.test.ts`: Terms and Privacy HTML contain the age statements; the existing Markdown sync tests cover the new headings.
+   - `apps/mobile/src/screens/__tests__/authScreens.accountDeletion.test.tsx` (RegisterScreen block): unchecked submit makes no `apiRequest` call and shows `register-age-error`; checking the box clears it and the POST body includes `ageConfirmed: true`.
 

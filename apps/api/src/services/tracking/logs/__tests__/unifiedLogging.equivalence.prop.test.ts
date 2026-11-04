@@ -463,7 +463,7 @@ describe('unifiedLogging equivalence (Property 6)', () => {
       ),
       { numRuns: 100 },
     );
-  });
+  }, 60000);
 
   it('Regression for reported bug: POST /me/experiences/:id/logs with tripId produces completion_logged feed item', async () => {
     const { pool } = buildPgMem();

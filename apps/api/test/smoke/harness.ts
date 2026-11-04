@@ -1003,6 +1003,7 @@ async function measureScenarios(
         email: `register-smoke-${Date.now()}@harness.example`,
         password: SEED_PASSWORD,
         displayName: 'Register Smoke User',
+        ageConfirmed: true,
       }),
     });
   });

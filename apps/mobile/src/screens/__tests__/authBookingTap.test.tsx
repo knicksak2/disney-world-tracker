@@ -155,6 +155,7 @@ describe('Auth screens fire authFailed (Task 11.12, Requirements 10.3, 10.8)', (
     fireEvent.changeText(screen.getByTestId('register-email'), 'existing@example.com');
     fireEvent.changeText(screen.getByTestId('register-display-name'), 'Existing User');
     fireEvent.changeText(screen.getByTestId('register-password'), 'valid-password-123');
+    fireEvent.press(screen.getByTestId('register-age-confirm'));
     fireEvent.press(screen.getByTestId('register-submit'));
 
     await waitFor(() => {
@@ -208,6 +209,7 @@ describe('Auth screens fire authFailed (Task 11.12, Requirements 10.3, 10.8)', (
     fireEvent.changeText(screen.getByTestId('register-email'), 'new@example.com');
     fireEvent.changeText(screen.getByTestId('register-display-name'), 'New User');
     fireEvent.changeText(screen.getByTestId('register-password'), 'valid-password-123');
+    fireEvent.press(screen.getByTestId('register-age-confirm'));
     fireEvent.press(screen.getByTestId('register-submit'));
 
     await waitFor(() => {

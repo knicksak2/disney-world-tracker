@@ -73,6 +73,20 @@
     - Specified and tested in `.kiro/specs/trip-budget/tasks.md` tasks 20.1 (terms page and mobile legal notice text and tests) and 17.2 (`PriceBadge` credit and source lines; legal Property 6 = trip-budget Property 39). The no-bulk-export assertion is part of trip-budget task 15.3.
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
+- [x] 9. Minimum age 13 (R8)
+  - [x] 9.1 Shared schema and API
+    - Add `ageConfirmed: z.literal(true)` to `registerInputSchema` in `packages/shared/src/schemas/User.ts`. Update every existing `/auth/register` caller in API tests and the smoke harness to send `ageConfirmed: true`.
+    - Tests: `registration.prop.test.ts` (accept only with `true`; reject missing/false/non-boolean) and `routes.test.ts` (400 `validation_failed`, `field: 'ageConfirmed'`, no `INSERT INTO users`).
+    - _Requirements: 8.3, 8.4, 8.5_
+  - [x] 9.2 Terms and Privacy text
+    - `docs/terms-of-service.md` and `renderTermsOfServiceHtml`: add the "Minimum Age" bullet in section 3. `docs/privacy-policy.md` and `renderPrivacyPolicyHtml`: add the "Age Requirement (13+)" subsection in section 1. Bump `Last Updated` in both pairs. Add assertions in `webPages.prop.test.ts`.
+    - _Requirements: 8.1, 8.2_
+  - [x] 9.3 Mobile checkbox
+    - `RegisterScreen.tsx`: add the checkbox row, error copy and `ageConfirmed` in the request body. Update `authScreens.accountDeletion.test.tsx` and `authBookingTap.test.tsx` to check the box; add the unchecked-submit and checked-submit tests.
+    - _Requirements: 8.6, 8.7, 8.8_
+  - [x] 9.4 Final gate
+    - `npm run verify` exits 0; produce the behavior-to-test map.
+
 ## Notes
 
 - **Authority.** `requirements.md` and `design.md` in this folder are authoritative.
@@ -92,7 +106,10 @@
     { "id": 5, "tasks": ["5.1"] },
     { "id": 6, "tasks": ["5.2"] },
     { "id": 7, "tasks": ["6"] },
-    { "id": 8, "tasks": ["8.1"] }
+    { "id": 8, "tasks": ["8.1"] },
+    { "id": 9, "tasks": ["9.1", "9.2"] },
+    { "id": 10, "tasks": ["9.3"] },
+    { "id": 11, "tasks": ["9.4"] }
   ]
 }
 ```

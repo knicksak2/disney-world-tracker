@@ -269,7 +269,7 @@ describe('Auth_Service — Property 16: plaintext password never appears anywher
             const registerResp = await app.inject({
               method: 'POST',
               url: '/auth/register',
-              payload: { email, displayName, password },
+              payload: { email, displayName, password, ageConfirmed: true },
             });
             const loginResp = await app.inject({
               method: 'POST',

@@ -332,6 +332,21 @@ sub-tasks are marked optional with `*`.
     - Run file-level test loop, then `npm run verify`
     - _Requirements: 2.7, 2.8_
 
+- [x] 21. Live Waits Seasonal Overlay Suppression & Refurbishment/Down Status (Requirements 10.12, 10.13, Property 14)
+  - [x] 21.1 Implement `isInactiveSeasonalOverlay` and `resolveDisplayStatus` in `parkLiveView.ts`
+    - Omit inactive seasonal overlays (`/glimmering greenhouses/i`, `/^jingle cruise/i`, and `{Parent} – {Overlay}`) with null wait time and no active Lightning Lane
+    - Distinguish `operating`, `down`, `closed`, and `refurbishment` in `resolveDisplayStatus` and carry `status: LiveWaitDisplayStatus` on `LiveWaitsRow`
+    - Update row sorting: operating (ascending wait), down (alphabetical), closed (alphabetical), refurbishment (alphabetical)
+    - _Requirements: 10.12, 10.13_
+  - [x] 21.2 Update `LiveWaitsScreen.tsx` and `LiveWaitsScreen.palette.ts`
+    - Add `refurbishment: '#f59e0b'` to `WAIT_STATUS` in `LiveWaitsScreen.palette.ts`
+    - Render `Refurb` in amber (`t.color.warning`) for refurbishment status, `Down` in danger (`t.color.danger`) for down status, and `Closed` for closed status
+    - _Requirements: 10.13_
+  - [x] 21.3 Update and expand tests in `parkLiveView.prop.test.ts` and `LiveWaitsScreen.test.tsx`
+    - Add unit and property tests for Property 14 (`isInactiveSeasonalOverlay` and `resolveDisplayStatus`)
+    - Update `LiveWaitsScreen.test.tsx` to assert "Down", "Refurb", and "Closed" statuses and seasonal overlay omission
+    - _Requirements: 10.12, 10.13_
+
 ## Notes
 
 - Tasks marked with `*` are optional test sub-tasks and can be skipped for a faster MVP. (None are marked in this plan — every test sub-task here guards a Correctness Property or a stated regression risk, so none is optional.)
@@ -375,7 +390,8 @@ sub-tasks are marked optional with `*`.
     { "id": 25, "tasks": ["18.3", "18.4", "18.5"] },
     { "id": 26, "tasks": ["18.6", "18.7"] },
     { "id": 27, "tasks": ["18.8"] },
-    { "id": 28, "tasks": ["1.5", "1.6"] }
+    { "id": 28, "tasks": ["1.5", "1.6"] },
+    { "id": 29, "tasks": ["21.1", "21.2", "21.3"] }
   ]
 }
 ```

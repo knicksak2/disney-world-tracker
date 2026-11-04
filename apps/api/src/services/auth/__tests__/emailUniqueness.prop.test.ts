@@ -305,6 +305,7 @@ describe('Auth_Service — Property 13: email uniqueness across all User account
                 email,
                 displayName: 'TestUser',
                 password: 'password12345',
+                ageConfirmed: true,
               },
             });
 

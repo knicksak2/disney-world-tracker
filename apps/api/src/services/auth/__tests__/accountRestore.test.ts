@@ -90,7 +90,12 @@ describe('POST /auth/login and account deletion', () => {
     const res = await w.app.inject({
       method: 'POST',
       url: '/auth/register',
-      payload: { email: 'fresh@example.com', displayName: 'Fresh', password: PASSWORD },
+      payload: {
+        email: 'fresh@example.com',
+        displayName: 'Fresh',
+        password: PASSWORD,
+        ageConfirmed: true,
+      },
     });
     expect(res.statusCode).toBe(201);
     expect(Object.keys(res.json() as object)).not.toContain('accountRestored');

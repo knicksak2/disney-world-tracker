@@ -18,8 +18,10 @@ import {
   buildLiveWaitsRows,
   getWaitStatus,
   isHeadliner,
+  isInactiveSeasonalOverlay,
   isLiveWaitEligible,
   isWalkOn,
+  resolveDisplayStatus,
   type LiveWaitsFilter,
 } from '../parkLiveView';
 
@@ -300,6 +302,115 @@ describe('parkLiveView property tests', () => {
       expect(getWaitStatus(50, false)).toBe('mod');
       expect(getWaitStatus(51, false)).toBe('high');
       expect(getWaitStatus(120, false)).toBe('high');
+    });
+
+    // Feature: navigation-redesign, Property 14: Inactive Seasonal Overlay Suppression and Status Classification
+    it('Property 14: Inactive Seasonal Overlay Suppression and Status Classification', () => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom(
+            'Living with the Land – Glimmering Greenhouses',
+            'Living with the Land - Glimmering Greenhouses',
+            'Jingle Cruise',
+            'Space Mountain',
+            'Test Track',
+            "Peter Pan's Flight",
+          ),
+          fc.constantFrom('OPERATING', 'DOWN', 'CLOSED', 'REFURBISHMENT'),
+          fc.oneof(fc.integer({ min: 0, max: 120 }), fc.constant(null)),
+          (name, rawStatus, waitMinutes) => {
+            const entry: ParkLiveEntryDTO = {
+              experienceId: 'exp-1',
+              name,
+              status: rawStatus,
+              waitMinutes,
+            };
+
+            const isInactive = isInactiveSeasonalOverlay(entry);
+            const isOverlayName = /glimmering greenhouses/i.test(name) || /^jingle cruise/i.test(name);
+            const hasActiveWait = waitMinutes !== null && waitMinutes >= 0;
+
+            if (isOverlayName && !hasActiveWait) {
+              expect(isInactive).toBe(true);
+            } else {
+              expect(isInactive).toBe(false);
+            }
+
+            const displayStatus = resolveDisplayStatus(rawStatus, waitMinutes);
+            if (rawStatus === 'REFURBISHMENT') {
+              expect(displayStatus).toBe('refurbishment');
+            } else if (rawStatus === 'DOWN') {
+              expect(displayStatus).toBe('down');
+            } else if (rawStatus === 'CLOSED') {
+              expect(displayStatus).toBe('closed');
+            } else if (waitMinutes !== null && waitMinutes >= 0) {
+              expect(displayStatus).toBe('operating');
+            } else {
+              expect(displayStatus).toBe('closed');
+            }
+          },
+        ),
+        { numRuns: NUM_RUNS },
+      );
+    });
+
+    it('sorts non-operating entries in precedence: down before closed before refurbishment', () => {
+      const expDown = createMockExperience('exp-down');
+      const expClosed = createMockExperience('exp-closed');
+      const expRefurb = createMockExperience('exp-refurb');
+      const expOpen = createMockExperience('exp-open');
+
+      const map = new Map<string, ExperienceDTO>([
+        ['exp-down', expDown],
+        ['exp-closed', expClosed],
+        ['exp-refurb', expRefurb],
+        ['exp-open', expOpen],
+      ]);
+
+      const entries: ParkLiveEntryDTO[] = [
+        { experienceId: 'exp-refurb', name: 'Refurb Attraction', status: 'REFURBISHMENT', waitMinutes: null },
+        { experienceId: 'exp-closed', name: 'Closed Attraction', status: 'CLOSED', waitMinutes: null },
+        { experienceId: 'exp-open', name: 'Open Attraction', status: 'OPERATING', waitMinutes: 30 },
+        { experienceId: 'exp-down', name: 'Down Attraction', status: 'DOWN', waitMinutes: null },
+      ];
+
+      const rows = buildLiveWaitsRows(entries, map, 'all');
+      expect(rows.map((r) => r.experienceId)).toEqual([
+        'exp-open',
+        'exp-down',
+        'exp-closed',
+        'exp-refurb',
+      ]);
+      expect(rows[1]!.status).toBe('down');
+      expect(rows[2]!.status).toBe('closed');
+      expect(rows[3]!.status).toBe('refurbishment');
+    });
+
+    it('suppresses inactive seasonal overlay but includes active seasonal overlay', () => {
+      const expBase = createMockExperience('exp-base');
+      const expOverlay = createMockExperience('exp-overlay');
+      const map = new Map<string, ExperienceDTO>([
+        ['exp-base', expBase],
+        ['exp-overlay', expOverlay],
+      ]);
+
+      // Inactive overlay: Living with the Land is open, Glimmering Greenhouses is closed
+      const inactiveEntries: ParkLiveEntryDTO[] = [
+        { experienceId: 'exp-base', name: 'Living with the Land', status: 'OPERATING', waitMinutes: 15 },
+        { experienceId: 'exp-overlay', name: 'Living with the Land – Glimmering Greenhouses', status: 'CLOSED', waitMinutes: null },
+      ];
+
+      const inactiveRows = buildLiveWaitsRows(inactiveEntries, map, 'all');
+      expect(inactiveRows.map((r) => r.experienceId)).toEqual(['exp-base']);
+
+      // Active overlay: In December, Glimmering Greenhouses is open with a wait time
+      const activeEntries: ParkLiveEntryDTO[] = [
+        { experienceId: 'exp-base', name: 'Living with the Land', status: 'OPERATING', waitMinutes: 15 },
+        { experienceId: 'exp-overlay', name: 'Living with the Land – Glimmering Greenhouses', status: 'OPERATING', waitMinutes: 35 },
+      ];
+
+      const activeRows = buildLiveWaitsRows(activeEntries, map, 'all');
+      expect(activeRows.map((r) => r.experienceId)).toEqual(['exp-base', 'exp-overlay']);
     });
 
     // Feature: experience-favorites, Property 7: Live Waits Favorites Filter Is Park-Scoped and Re-Applies on Park Switch
