@@ -1341,6 +1341,126 @@ describe('Trip_Activity screen', () => {
       });
     });
 
+    test('Inline_Tag_Response shows resolution sheet when existingLogToday is found and allows link or new_log', async () => {
+      const mutate = jest.fn().mockImplementation((method: string, path: string) => {
+        if (method === 'GET' && path === '/me/rode-with-tags/tag-alice-dup') {
+          return {
+            id: 'tag-alice-dup',
+            existingLogToday: {
+              id: 'log-prev-1',
+              loggedAt: '2026-11-04T14:10:00Z',
+              visitedOn: '2026-11-04',
+              rating: 8,
+            },
+          };
+        }
+        return {};
+      });
+
+      const completionWithTags: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        id: 'item-tags-dup',
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          experienceName: 'Space Mountain',
+          rodeWith: [
+            {
+              taggedMemberId: 'member-1',
+              displayName: 'Alice Tagged',
+              state: 'pending',
+              tagId: 'tag-alice-dup',
+            },
+          ],
+        },
+      };
+
+      installApi({
+        feed: async () => [completionWithTags],
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId('feed-tag-confirm-tag-alice-dup')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('feed-tag-confirm-tag-alice-dup'));
+
+      // Sheet opens
+      const sheet = await screen.findByTestId('rode-with-resolution-sheet');
+      expect(sheet).toBeTruthy();
+      expect(screen.getAllByText('Space Mountain').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByTestId('resolution-option-link')).toBeTruthy();
+      expect(screen.getByTestId('resolution-option-new-log')).toBeTruthy();
+
+      // Tap 'We rode it again!'
+      fireEvent.press(screen.getByTestId('resolution-option-new-log'));
+
+      // Confirm
+      fireEvent.press(screen.getByTestId('resolution-confirm-btn'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          '/me/rode-with-tags/tag-alice-dup/confirm',
+          { resolution: 'new_log' },
+        );
+      });
+    });
+
+    test('Inline_Tag_Response resolution sheet confirms with link by default', async () => {
+      const mutate = jest.fn().mockImplementation((method: string, path: string) => {
+        if (method === 'GET' && path === '/me/rode-with-tags/tag-alice-link') {
+          return {
+            id: 'tag-alice-link',
+            existingLogToday: {
+              id: 'log-prev-2',
+              loggedAt: '2026-11-04T14:10:00Z',
+              visitedOn: '2026-11-04',
+              rating: null,
+            },
+          };
+        }
+        return {};
+      });
+
+      const completionWithTags: TripFeedItemDTO = {
+        ...BASE_COMPLETION_ITEM,
+        id: 'item-tags-link',
+        metadata: {
+          ...BASE_COMPLETION_ITEM.metadata,
+          experienceName: 'Big Thunder',
+          rodeWith: [
+            {
+              taggedMemberId: 'member-1',
+              displayName: 'Alice Tagged',
+              state: 'pending',
+              tagId: 'tag-alice-link',
+            },
+          ],
+        },
+      };
+
+      installApi({
+        feed: async () => [completionWithTags],
+        mutate,
+      });
+
+      renderActivity();
+
+      expect(await screen.findByTestId('feed-tag-confirm-tag-alice-link')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('feed-tag-confirm-tag-alice-link'));
+
+      expect(await screen.findByTestId('rode-with-resolution-sheet')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('resolution-confirm-btn'));
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(
+          'POST',
+          '/me/rode-with-tags/tag-alice-link/confirm',
+          { resolution: 'link' },
+        );
+      });
+    });
+
     test('Inline_Tag_Response Decline posts to decline endpoint', async () => {
       const mutate = jest.fn().mockResolvedValue(undefined);
       const completionWithTags: TripFeedItemDTO = {

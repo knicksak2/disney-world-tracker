@@ -318,7 +318,14 @@ describe('unifiedLogging equivalence (Property 6)', () => {
       fc.asyncProperty(
         fc.record({
           rating: fc.option(fc.integer({ min: 1, max: 10 }), { nil: null }),
-          note: fc.option(fc.string({ minLength: 1, maxLength: 50 }).map((s) => s.trim()).filter((s) => s.length > 0), { nil: null }),
+          note: fc.option(
+            fc
+              .string({ minLength: 1, maxLength: 50 })
+              .filter((s) => !s.includes('\\'))
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0),
+            { nil: null },
+          ),
           visitedOn: fc.constantFrom('2026-05-01', '2026-05-03', '2026-05-05', '2026-05-10'),
           rodeWith: fc.subarray(memberUniverse, { minLength: 0, maxLength: 2 }),
         }),

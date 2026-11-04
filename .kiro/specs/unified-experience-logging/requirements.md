@@ -239,4 +239,18 @@ Terms introduced by this feature:
 1. THE Unified_Log_Sheet SHALL give every interactive control an accessibility role and label, and SHALL expose selected state for Rating tiles, Trip chips, and Riding_With chips through accessibility state in addition to visual styling.
 2. THE Unified_Log_Sheet, Log_Toast, and Inline_Tag_Response controls SHALL take all colors from the active theme (`makeStyles` / `useAppTheme` / `*.palette.ts`) and SHALL pass the repository's theme guard test.
 3. THE Log_Toast SHALL be announced to screen readers when shown and its "View in trip" and "Log what you ate" actions SHALL be reachable by assistive technology.
-4. THE Unified_Log_Sheet SHALL keep the focused text input visible above the keyboard on iOS and Android, as `LogVisitModal` does today.
+242: 4. THE Unified_Log_Sheet SHALL keep the focused text input visible above the keyboard on iOS and Android, as `LogVisitModal` does today.
+243: 
+244: ### Requirement 15: Collaborative Duplicate Log Detection and Resolution
+245: 
+246: **User Story:** As a Tagged_Member who already logged a ride on the same day, I want the option to link to my existing log instead of creating a duplicate, while still being able to record back-to-back re-rides.
+247: 
+248: #### Acceptance Criteria
+249: 
+250: 1. WHEN the Tagged_Member views a pending Rode_With_Tag on the Trip_Activity card or in the Notification Center, THE system SHALL identify if the Tagged_Member already has an Experience_Log for that Experience on that visit date.
+251: 2. WHEN the Tagged_Member taps Confirm on a pending Rode_With_Tag AND has no existing Experience_Log for that Experience on that date, THE system SHALL confirm the tag directly using default `resolution: 'new_log'` semantics.
+252: 3. WHEN the Tagged_Member taps Confirm on a pending Rode_With_Tag AND already has an existing Experience_Log for that Experience on that date, THE App SHALL present the Rode_With_Resolution_Sheet displaying the timestamp/details of the earlier log and two resolution options: "Same ride (combine them)" (`resolution: 'link'`) and "We rode it again!" (`resolution: 'new_log'`), with "Same ride" selected by default.
+253: 4. WHEN the Tagged_Member confirms with `resolution: 'link'`, THE system SHALL transition the Rode_With_Tag to `confirmed`, SHALL ensure canonical Completion and optional Rating updates, but SHALL NOT insert a duplicate `experience_logs` row.
+254: 5. WHEN the Tagged_Member confirms with `resolution: 'link'`, IF the Tagged_Member also has a standalone `trip_log_entries` row for that Experience on that Trip on that date, THE system SHALL link or collapse the Tagged_Member's standalone `completion_logged` Trip_Feed_Item so the Trip_Activity stream does not show redundant duplicate cards for the same ride.
+255: 6. WHEN the Tagged_Member confirms with `resolution: 'new_log'`, THE system SHALL execute standard confirm logic, inserting a new `experience_logs` row and incrementing repeat visit counts.
+256: 7. THE `rodeWithConfirmSchema` SHALL accept an optional `resolution` field (`'link'` | `'new_log'`, defaulting to `'new_log'`).

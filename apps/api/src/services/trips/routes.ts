@@ -1064,7 +1064,10 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           request.params,
         );
         const body = parseOrAppError(rodeWithConfirmSchema, request.body ?? {});
-        const confirmed = await repo.confirmRodeWithTag(tagId, userId, body.rating);
+        const confirmed =
+          body.resolution !== undefined
+            ? await repo.confirmRodeWithTag(tagId, userId, body.rating, body.resolution)
+            : await repo.confirmRodeWithTag(tagId, userId, body.rating);
 
         // Confirming raises the caller's (Tagged_Member's) confirmed-friend-ride
         // count, which may unlock Squad/Social Pins (R2.3). Best-effort — a Pin

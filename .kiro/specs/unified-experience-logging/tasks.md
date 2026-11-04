@@ -170,7 +170,24 @@ Per `execution-discipline`: tests ship in the same task as the code, edit source
     - Re-run the Kiro Spec Format diagnostics on all four specs and confirm they are clean
     - _Requirements: 13.2_
 
-- [ ] 9. Final checkpoint - full gate
+- [x] 10. Collaborative Duplicate Log Detection & Resolution
+  - [x] 10.1 Schema & Shared Types
+    - In `packages/shared/src/trips.ts`: extend `rodeWithConfirmSchema` to accept optional `resolution: z.enum(['link', 'new_log']).optional()`.
+    - Build shared: `npm run build:shared`.
+    - Unit tests in `packages/shared/src/__tests__/trips.test.ts`.
+    - _Requirements: 15.7_
+  - [x] 10.2 Backend Repository & Endpoint
+    - In `apps/api/src/services/trips/repo.ts`: update `confirmRodeWithTag` to accept `resolution?: 'link' | 'new_log'`. When `'link'`, skip inserting into `experience_logs`. When caller has an existing solo `trip_feed_items` entry for that experience on that trip on that day, retire/link it so the feed avoids duplicate cards.
+    - Expose existing log info on tag / feed items where needed.
+    - Write unit/property tests for `confirmRodeWithTag` in `apps/api/src/services/trips/__tests__/`.
+    - _Requirements: 15.1, 15.2, 15.4, 15.5, 15.6_
+  - [x] 10.3 Mobile UI Resolution Sheet
+    - Create `RodeWithResolutionSheet` modal in `apps/mobile/src/screens/trips/RodeWithResolutionSheet.tsx`.
+    - In `TripFeedScreen.tsx`: when confirming, check if user has an existing log today for this experience; if so, open `RodeWithResolutionSheet` with "Same ride (combine them)" and "We rode it again!" options.
+    - Write mobile tests in `apps/mobile/src/screens/trips/__tests__/TripFeedScreen.test.tsx`.
+    - _Requirements: 15.3, 15.4, 15.6_
+
+- [ ] 11. Final checkpoint - full gate
   - Review `git diff` against the requirements: confirm every control, route field, and testID named in the design exists in source; no stray scripts or generated files
   - Run the full `npm run verify` once and paste the literal tail (per-workspace counts and exit code `0`)
   - Write the behavior-to-test map (every requirement behavior with its test file and specific assertion) in the completion message
@@ -201,7 +218,10 @@ Per `execution-discipline`: tests ship in the same task as the code, edit source
     { "id": 8, "tasks": ["6.4", "6.5", "6.6"] },
     { "id": 9, "tasks": ["7.1", "7.2", "7.3", "7.4"] },
     { "id": 10, "tasks": ["8.1"] },
-    { "id": 11, "tasks": ["9"] }
+    { "id": 11, "tasks": ["10.1"] },
+    { "id": 12, "tasks": ["10.2"] },
+    { "id": 13, "tasks": ["10.3"] },
+    { "id": 14, "tasks": ["11"] }
   ]
 }
 ```

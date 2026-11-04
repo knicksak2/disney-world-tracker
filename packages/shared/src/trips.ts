@@ -588,14 +588,20 @@ export const tripLogEntryCreateSchema = z
 
 export type TripLogEntryCreateInput = z.infer<typeof tripLogEntryCreateSchema>;
 
+export const rodeWithResolutionSchema = z.enum(['link', 'new_log']);
+export type RodeWithResolution = z.infer<typeof rodeWithResolutionSchema>;
+
 /**
- * Body for `POST /me/rode-with-tags/:tagId/confirm` (R11.4, R11.5). The
+ * Body for `POST /me/rode-with-tags/:tagId/confirm` (R11.4, R11.5, R15.7). The
  * optional `rating` sets the Tagged_Member's single canonical Rating; when it
- * is omitted the canonical Rating is left unchanged.
+ * is omitted the canonical Rating is left unchanged. The optional `resolution`
+ * ('link' | 'new_log') determines whether an existing same-day log is linked
+ * or a duplicate log is created (defaults to 'new_log').
  */
 export const rodeWithConfirmSchema = z
   .object({
     rating: ratingValueSchema.optional(),
+    resolution: rodeWithResolutionSchema.optional(),
   })
   .strict()
   .default({});

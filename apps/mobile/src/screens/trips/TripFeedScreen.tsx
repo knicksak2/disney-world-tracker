@@ -94,6 +94,7 @@ import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
 import { PhotoViewer, type PhotoViewerItem } from '../../photos/PhotoViewer';
 import type { PreparedImages } from '../../photos/imagePrep';
 import LogExperienceSheet from '../logging/LogExperienceSheet';
+import { RodeWithResolutionSheet } from './RodeWithResolutionSheet';
 import { tripFeedKeys } from './tripFeedQueryKeys';
 
 // ---------------------------------------------------------------------------
@@ -743,14 +744,25 @@ function FeedItemCard({
   const rodeWith = readRodeWith(item.metadata);
 
   const [tagActionError, setTagActionError] = useState<string | null>(null);
+  const [resolutionTarget, setResolutionTarget] = useState<{
+    tagId: string;
+    experienceName: string;
+    existingLogLoggedAt?: string | null;
+  } | null>(null);
 
-  const confirmTagMutation = useMutation<void, ApiError, string>({
-    mutationFn: async (tagId: string) => {
+  const confirmTagMutation = useMutation<
+    void,
+    ApiError,
+    { tagId: string; resolution?: 'link' | 'new_log' } | string
+  >({
+    mutationFn: async (arg) => {
+      const tagId = typeof arg === 'string' ? arg : arg.tagId;
+      const resolution = typeof arg === 'string' ? undefined : arg.resolution;
       setTagActionError(null);
       await apiRequest<void>(
         'POST',
         `/me/rode-with-tags/${encodeURIComponent(tagId)}/confirm`,
-        {},
+        resolution !== undefined ? { resolution } : {},
       );
     },
     onSuccess: () => {
@@ -762,6 +774,27 @@ function FeedItemCard({
       setTagActionError(err.message || 'Could not confirm tag.');
     },
   });
+
+  const handleConfirmPress = async (tagId: string) => {
+    try {
+      const tagDetails = await apiRequest<{
+        id: string;
+        existingLogToday?: { id: string; loggedAt: string; visitedOn: string } | null;
+      }>('GET', `/me/rode-with-tags/${encodeURIComponent(tagId)}`);
+
+      if (tagDetails.existingLogToday) {
+        setResolutionTarget({
+          tagId,
+          experienceName: experienceName ?? 'Experience',
+          existingLogLoggedAt: tagDetails.existingLogToday.loggedAt,
+        });
+        return;
+      }
+    } catch {
+      // If fetching tag details fails, fall back to direct confirm
+    }
+    confirmTagMutation.mutate({ tagId });
+  };
 
   const declineTagMutation = useMutation<void, ApiError, string>({
     mutationFn: async (tagId: string) => {
@@ -1137,7 +1170,7 @@ function FeedItemCard({
                             accessibilityRole="button"
                             accessibilityLabel={`Confirm tag for ${tag.displayName}`}
                             disabled={tagMutationBusy}
-                            onPress={() => confirmTagMutation.mutate(tag.tagId!)}
+                            onPress={() => handleConfirmPress(tag.tagId!)}
                             style={styles.tagActionBtn}
                             testID={`feed-tag-confirm-${tag.tagId}`}
                           >
@@ -1334,6 +1367,21 @@ function FeedItemCard({
           color={t.color.primaryFg}
           style={styles.itemBusy}
           testID={`trip-feed-item-busy-${item.id}`}
+        />
+      ) : null}
+
+      {resolutionTarget !== null ? (
+        <RodeWithResolutionSheet
+          visible={true}
+          experienceName={resolutionTarget.experienceName}
+          existingLogLoggedAt={resolutionTarget.existingLogLoggedAt}
+          isSubmitting={confirmTagMutation.isPending}
+          onClose={() => setResolutionTarget(null)}
+          onConfirm={(resolution) => {
+            const { tagId } = resolutionTarget;
+            setResolutionTarget(null);
+            confirmTagMutation.mutate({ tagId, resolution });
+          }}
         />
       ) : null}
     </Card>

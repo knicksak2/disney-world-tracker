@@ -560,4 +560,23 @@ describe('rodeWithConfirmSchema', () => {
   it('rejects unrecognized extra fields due to strict mode', () => {
     expect(rodeWithConfirmSchema.safeParse({ rating: 5, extra: 'forbidden' }).success).toBe(false);
   });
+
+  it('accepts valid resolution options ("link" and "new_log")', () => {
+    const linkParsed = rodeWithConfirmSchema.safeParse({ resolution: 'link' });
+    expect(linkParsed.success).toBe(true);
+    if (linkParsed.success) {
+      expect(linkParsed.data.resolution).toBe('link');
+    }
+
+    const newLogParsed = rodeWithConfirmSchema.safeParse({ resolution: 'new_log', rating: 9 });
+    expect(newLogParsed.success).toBe(true);
+    if (newLogParsed.success) {
+      expect(newLogParsed.data.resolution).toBe('new_log');
+      expect(newLogParsed.data.rating).toBe(9);
+    }
+  });
+
+  it('rejects invalid resolution string', () => {
+    expect(rodeWithConfirmSchema.safeParse({ resolution: 'invalid_mode' }).success).toBe(false);
+  });
 });

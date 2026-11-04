@@ -532,6 +532,15 @@ The pure core (`unifiedLogging.ts`) is universally quantified over drafts, trips
 
 **Validates: Requirements 10.1, 10.2, 10.3**
 
+### Property 12: Collaborative Duplicate Log Resolution Invariants
+
+*For any* pending Rode_With_Tag on Experience E and visit date D addressed to Member M:
+- When confirmed with `resolution: 'link'`, the count of `experience_logs` for (M, E, D) remains unchanged, the tag transitions to `confirmed`, canonical completion is marked, and any standalone solo `trip_feed_items` row for (M, E) on that trip is soft-retired/merged so the feed avoids duplicate cards.
+- When confirmed with `resolution: 'new_log'` (or omitted), the count of `experience_logs` for (M, E, D) increases by exactly 1 and the tag transitions to `confirmed`.
+- The schema accepts `resolution` in `['link', 'new_log']` and rejects invalid values.
+
+**Validates: Requirements 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7**
+
 ## Error Handling
 
 | Condition | Code / HTTP | Notes |

@@ -281,6 +281,41 @@ describe('POST /me/rode-with-tags/:tagId/confirm', () => {
     expect(confirmRodeWithTag).toHaveBeenCalledWith(TAG_ID, CALLER_ID, 8);
   });
 
+  it('accepts resolution "link" and passes it to the repo', async () => {
+    const confirmRodeWithTag = vi.fn().mockResolvedValue({
+      tagId: TAG_ID,
+      tripId: TRIP_ID,
+      experienceId: EXP_ID,
+    });
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+      payload: { resolution: 'link' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(confirmRodeWithTag).toHaveBeenCalledWith(TAG_ID, CALLER_ID, undefined, 'link');
+  });
+
+  it('rejects an invalid resolution with 400 validation_failed', async () => {
+    const confirmRodeWithTag = vi.fn();
+    app = await buildApp(makeRepo({ confirmRodeWithTag }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/rode-with-tags/${TAG_ID}/confirm`,
+      payload: { resolution: 'invalid_mode' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: { code: 'trip_validation_failed' },
+    });
+    expect(confirmRodeWithTag).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid rating with 400 validation_failed', async () => {
     const confirmRodeWithTag = vi.fn();
     app = await buildApp(makeRepo({ confirmRodeWithTag }));

@@ -283,6 +283,8 @@ export interface ConfirmRodeWithTagOptions {
   readonly userTz?: string;
   /** Injectable instant used to default `completedOn` when no log-entry date. */
   readonly now?: Date;
+  /** Whether to link to an existing log ('link') or create a duplicate ('new_log'). Defaults to 'new_log'. */
+  readonly resolution?: 'link' | 'new_log';
 }
 
 /**
@@ -315,6 +317,13 @@ export interface RodeWithTagTarget {
   readonly taggingMemberDisplayName: string;
   /** The caller's current canonical Rating (1–10) or `null` when unrated. */
   readonly currentRating: number | null;
+  /** Information on caller's prior same-day log if one exists. */
+  readonly existingLogToday?: {
+    readonly id: string;
+    readonly loggedAt: string;
+    readonly visitedOn: string;
+    readonly rating: number | null;
+  } | null;
 }
 
 /**
@@ -716,6 +725,7 @@ export interface TripRepo {
     tagId: string,
     callerId: string,
     rating?: number,
+    resolutionOrOpts?: 'link' | 'new_log' | ConfirmRodeWithTagOptions,
     opts?: ConfirmRodeWithTagOptions,
   ): Promise<ConfirmedRodeWithTag>;
 
@@ -1019,8 +1029,8 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       deleteLogEntry(ctx, tripId, logEntryId, callerId, callerRole),
     purgeFeedForLog: (logId, userId) => purgeFeedForLog(ctx, logId, userId),
     listLogEntries: (tripId) => listLogEntries(ctx, tripId),
-    confirmRodeWithTag: (tagId, callerId, rating, opts) =>
-      confirmRodeWithTag(ctx, tagId, callerId, rating, opts),
+    confirmRodeWithTag: (tagId, callerId, rating, resolutionOrOpts, opts) =>
+      confirmRodeWithTag(ctx, tagId, callerId, rating, resolutionOrOpts, opts),
     declineRodeWithTag: (tagId, callerId) =>
       declineRodeWithTag(ctx, tagId, callerId),
     getRodeWithTag: (tagId, callerId) =>
@@ -4022,8 +4032,18 @@ async function confirmRodeWithTag(
   tagId: string,
   callerId: string,
   rating: number | undefined,
-  opts: ConfirmRodeWithTagOptions | undefined,
+  resolutionOrOpts?: 'link' | 'new_log' | ConfirmRodeWithTagOptions,
+  opts?: ConfirmRodeWithTagOptions,
 ): Promise<ConfirmedRodeWithTag> {
+  const actualOpts =
+    typeof resolutionOrOpts === 'object' && resolutionOrOpts !== null
+      ? resolutionOrOpts
+      : opts;
+  const resolution =
+    typeof resolutionOrOpts === 'string'
+      ? resolutionOrOpts
+      : (actualOpts?.resolution ?? 'new_log');
+
   // R11.9: bound-check a supplied Rating up-front so an invalid value rejects
   // before any canonical or Trip write and leaves the existing Rating intact.
   if (
@@ -4094,11 +4114,11 @@ async function confirmRodeWithTag(
     // Completion is dated to when the ride was logged during the Trip, so the
     // trickled-down completion reflects the Trip day rather than the confirm day.
     const completedOn =
-      opts?.completedOn ??
+      actualOpts?.completedOn ??
       wdwToday(
-        row.log_created_at != null ? new Date(row.log_created_at) : opts?.now,
+        row.log_created_at != null ? new Date(row.log_created_at) : actualOpts?.now,
       );
-    const userTz = opts?.userTz ?? DEFAULT_LOG_USER_TZ;
+    const userTz = actualOpts?.userTz ?? DEFAULT_LOG_USER_TZ;
     await ctx.completions.mark({
       userId: callerId,
       experienceId: row.experience_id,
@@ -4115,19 +4135,50 @@ async function confirmRodeWithTag(
       await ctx.ratings.setRating(callerId, row.experience_id, rating);
     }
 
-    // experience-activity-logging R3.1 / R3.2: record the confirming Member's
-    // own Experience_Log so the ride counts toward their repeat counts and
-    // single-day challenges. It is dated to the originating log's visit day
-    // (falling back to the derived completion date if the origin row is
-    // somehow absent) and carries the optional rating supplied on confirm.
+    // experience-activity-logging R3.1 / R3.2 / R15.4 / R15.6: when resolution is
+    // 'new_log', record the confirming Member's own Experience_Log so the ride
+    // counts toward repeat counts. When resolution is 'link', skip the insert
+    // to avoid duplicating their visit count, and collapse/retire any solo
+    // completion_logged feed item created by the caller for this experience on
+    // this trip so the activity feed stays clean.
     const visitedOn = formatCalendarDate(row.origin_visited_on) ?? completedOn;
     const logUserTz = row.origin_user_tz ?? userTz;
-    await client.query(
-      `INSERT INTO experience_logs
-         (user_id, experience_id, visited_on, user_tz, rating)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [callerId, row.experience_id, visitedOn, logUserTz, rating ?? null],
-    );
+
+    if (resolution !== 'link') {
+      await client.query(
+        `INSERT INTO experience_logs
+           (user_id, experience_id, visited_on, user_tz, rating)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [callerId, row.experience_id, visitedOn, logUserTz, rating ?? null],
+      );
+    } else {
+      // resolution === 'link': Retire any solo completion_logged feed item created by caller
+      // on this trip for this experience so the feed doesn't duplicate.
+      const soloItems = await client.query<{ feed_item_id: string; log_entry_id: string | null }>(
+        `SELECT fi.id AS feed_item_id, le.id AS log_entry_id
+           FROM trip_feed_items fi
+           LEFT JOIN trip_log_entries le ON (fi.metadata->>'logEntryId') = le.id::text
+          WHERE fi.trip_id = $1
+            AND fi.actor_id = $2
+            AND fi.type = 'completion_logged'
+            AND (fi.metadata->>'experienceId') = $3::text`,
+        [row.trip_id, callerId, row.experience_id],
+      );
+      for (const solo of soloItems.rows) {
+        await client.query(
+          `DELETE FROM trip_reactions WHERE target_type = 'feed_item' AND target_id = $1`,
+          [solo.feed_item_id],
+        );
+        await client.query(
+          `DELETE FROM trip_comments WHERE target_type = 'feed_item' AND target_id = $1`,
+          [solo.feed_item_id],
+        );
+        await client.query(`DELETE FROM trip_feed_items WHERE id = $1`, [solo.feed_item_id]);
+        if (solo.log_entry_id) {
+          await client.query(`DELETE FROM trip_log_entries WHERE id = $1`, [solo.log_entry_id]);
+        }
+      }
+    }
 
     // R11.10: transition the tag to confirmed — the durable link of the
     // Tagged_Member's completion to this Trip. No Trip_Feed_Item is written:
@@ -4259,6 +4310,26 @@ async function getRodeWithTag(
   );
   const row = result.rows[0];
   if (!row) return null;
+
+  const priorLog = await ctx.pool.query<{
+    id: string;
+    logged_at: Date | string;
+    visited_on: Date | string;
+    rating: number | string | null;
+  }>(
+    `SELECT el.id, el.logged_at, el.visited_on, el.rating
+       FROM experience_logs el
+       LEFT JOIN trip_log_entries tle ON tle.id = $2
+       LEFT JOIN experience_logs el_origin ON el_origin.id = tle.log_id
+      WHERE el.user_id = $1
+        AND el.experience_id = $3
+        AND el.visited_on = COALESCE(el_origin.visited_on, CURRENT_DATE)
+      ORDER BY el.logged_at DESC
+      LIMIT 1`,
+    [callerId, row.log_entry_id, row.experience_id],
+  );
+  const existingRow = priorLog.rows[0];
+
   return {
     id: row.id,
     tripId: row.trip_id,
@@ -4269,6 +4340,23 @@ async function getRodeWithTag(
     taggingMemberDisplayName: row.tagging_member_display_name,
     currentRating:
       row.current_rating === null ? null : Number(row.current_rating),
+    existingLogToday: existingRow
+      ? {
+          id: existingRow.id,
+          loggedAt:
+            existingRow.logged_at instanceof Date
+              ? existingRow.logged_at.toISOString()
+              : String(existingRow.logged_at),
+          visitedOn:
+            existingRow.visited_on instanceof Date
+              ? existingRow.visited_on.toISOString().slice(0, 10)
+              : String(existingRow.visited_on).slice(0, 10),
+          rating:
+            existingRow.rating === null || existingRow.rating === undefined
+              ? null
+              : Number(existingRow.rating),
+        }
+      : null,
   };
 }
 

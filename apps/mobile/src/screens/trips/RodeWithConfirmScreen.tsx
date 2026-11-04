@@ -45,7 +45,8 @@
 // should expose this read to match.
 
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -94,6 +95,12 @@ interface RodeWithTagTargetResponse {
   readonly taggingMemberDisplayName: string;
   /** Current canonical Rating (whole number 1–10) or `null` when unrated. */
   readonly currentRating: number | null;
+  readonly existingLogToday?: {
+    readonly id: string;
+    readonly loggedAt: string;
+    readonly visitedOn: string;
+    readonly rating: number | null;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +141,7 @@ export default function RodeWithConfirmScreen({
   // Initialized from the read's `currentRating` once (R11.5 pre-fill) via the
   // key on the inner content component, so a refetch does not clobber an edit.
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
+  const [selectedResolution, setSelectedResolution] = useState<'link' | 'new_log'>('link');
   const [initialized, setInitialized] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -149,11 +157,14 @@ export default function RodeWithConfirmScreen({
 
   const confirmMutation = useMutation<void, ApiError, number | null>({
     mutationFn: async (rating) => {
-      // Validate the optional rating with the shared schema so the control
-      // enforces the same whole-number 1–10 rule as the server (R11.9). An
+      // Validate the optional rating and resolution with the shared schema so the control
+      // enforces the same rule as the server (R11.9, R15.7). An
       // unset rating omits the field entirely, leaving the canonical Rating
       // unchanged (R11.5).
-      const body = rating === null ? {} : { rating };
+      const body = {
+        ...(rating === null ? {} : { rating }),
+        ...(tag?.existingLogToday ? { resolution: selectedResolution } : {}),
+      };
       const parsed = rodeWithConfirmSchema.safeParse(body);
       if (!parsed.success) {
         throw new ApiError({
@@ -310,6 +321,63 @@ export default function RodeWithConfirmScreen({
             unchanged.
           </Text>
         </Card>
+
+        {target.existingLogToday ? (
+          <Card style={styles.resolutionCard} testID="rode-with-resolution-card">
+            <Text style={styles.resolutionTitle}>Existing Log Found</Text>
+            <Text style={styles.resolutionPrompt}>
+              You already logged this attraction today. Was this the same ride, or did you ride again?
+            </Text>
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ selected: selectedResolution === 'link' }}
+              accessibilityLabel="Same ride, combine them"
+              disabled={busy}
+              onPress={() => setSelectedResolution('link')}
+              style={[
+                styles.resolutionOption,
+                selectedResolution === 'link' && styles.resolutionOptionSelected,
+              ]}
+              testID="confirm-resolution-link"
+            >
+              <Ionicons
+                name={selectedResolution === 'link' ? 'radio-button-on' : 'radio-button-off'}
+                size={20}
+                color={selectedResolution === 'link' ? t.color.primary : t.color.textSecondary}
+              />
+              <View style={styles.resolutionTextCol}>
+                <Text style={styles.resolutionHeading}>Same ride (combine them)</Text>
+                <Text style={styles.resolutionDesc}>
+                  Links to your earlier log so you do not duplicate your ride count.
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ selected: selectedResolution === 'new_log' }}
+              accessibilityLabel="We rode it again"
+              disabled={busy}
+              onPress={() => setSelectedResolution('new_log')}
+              style={[
+                styles.resolutionOption,
+                selectedResolution === 'new_log' && styles.resolutionOptionSelected,
+              ]}
+              testID="confirm-resolution-new-log"
+            >
+              <Ionicons
+                name={selectedResolution === 'new_log' ? 'radio-button-on' : 'radio-button-off'}
+                size={20}
+                color={selectedResolution === 'new_log' ? t.color.primary : t.color.textSecondary}
+              />
+              <View style={styles.resolutionTextCol}>
+                <Text style={styles.resolutionHeading}>We rode it again!</Text>
+                <Text style={styles.resolutionDesc}>
+                  Counts as an additional ride today.
+                </Text>
+              </View>
+            </Pressable>
+          </Card>
+        ) : null}
 
         <RatingSelector
           currentRating={target.currentRating}
@@ -517,6 +585,44 @@ const useStyles = makeStyles((t) => ({
   },
   ratingCard: {
     gap: theme.spacing.sm,
+  },
+  resolutionCard: {
+    gap: theme.spacing.sm,
+  },
+  resolutionTitle: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+  },
+  resolutionPrompt: {
+    ...theme.typography.body,
+    color: t.color.textSecondary,
+  },
+  resolutionOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  resolutionOptionSelected: {
+    borderColor: t.color.primary,
+    backgroundColor: t.color.surface,
+  },
+  resolutionTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  resolutionHeading: {
+    ...theme.typography.subtitle,
+    color: t.color.textPrimary,
+    fontWeight: '600',
+  },
+  resolutionDesc: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
   },
   ratingHeaderRow: {
     flexDirection: 'row',
