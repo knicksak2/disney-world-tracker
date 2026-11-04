@@ -951,6 +951,95 @@ describe('TripScheduleScreen', () => {
     });
   });
 
+  it('names the items that could not be fitted and explains an empty result (R4.17)', async () => {
+    const plannedItems = [
+      { ...PLANNED_ITEM, id: 'item-a', experienceName: 'Space Mountain' },
+      { ...PLANNED_ITEM, id: 'item-b', experienceName: 'Big Thunder Mountain Railroad' },
+    ];
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return plannedItems;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+        return {
+          items: [],
+          totalWaitMinutes: 0,
+          totalWalkMinutes: 0,
+          unfittedItemIds: ['item-a', 'item-b', 'item-gone'],
+          warnings: ['over_constrained'],
+        } satisfies TripOptimizationResult;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    // Nothing has been optimized yet, so no unfitted notice is shown.
+    expect(screen.queryByTestId('unfitted-items-notice')).toBeNull();
+
+    fireEvent.press(screen.getByText('✨ Optimize'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('unfitted-items-notice')).toBeTruthy();
+    });
+    expect(screen.getByText(/Nothing could be scheduled\./)).toBeTruthy();
+    // Names resolve from the day's items; an id with no matching item falls back.
+    expect(
+      screen.getByText(/Couldn’t fit:\s*Space Mountain, Big Thunder Mountain Railroad, An item/),
+    ).toBeTruthy();
+  });
+
+  it('shows the unfitted notice without the "nothing scheduled" line when some items were scheduled, and formats fixed_past_close', async () => {
+    const plannedItems = [
+      { ...PLANNED_ITEM, id: 'item-a', experienceName: 'Space Mountain' },
+      { ...PLANNED_ITEM, id: 'item-dinner', experienceName: 'California Grill', customTitle: null },
+    ];
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+        return { id: TRIP_ID, name: 'Disney Trip', startDate: '2026-10-01' } as any;
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+        return plannedItems;
+      }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+        return {
+          items: [
+            { plannedItemId: 'item-dinner', suggestedArrival: '2026-10-02T00:30:00.000Z', predictedWaitMinutes: 0, travelFromPrev: null },
+          ],
+          totalWaitMinutes: 0,
+          totalWalkMinutes: 0,
+          unfittedItemIds: ['item-a'],
+          warnings: ['fixed_past_close:item-dinner', 'fixed_past_close:missing-id'],
+        } satisfies TripOptimizationResult;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText('✨ Optimize'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('unfitted-items-notice')).toBeTruthy();
+    });
+    expect(screen.queryByText(/Nothing could be scheduled\./)).toBeNull();
+    expect(screen.getByText(/Couldn’t fit:\s*Space Mountain$/)).toBeTruthy();
+    expect(screen.getByText(/• ⚠️ California Grill is booked to run past closing time/)).toBeTruthy();
+    expect(screen.getByText(/• ⚠️ A booked item runs past closing time/)).toBeTruthy();
+  });
+
   it('opens schedule settings modal, changes walking pace, early entry, extended evening, and after-hours, and dispatches PATCH /trips/:id on Done', async () => {
     let optimizePayload: any = null;
     let patchPayload: any = null;

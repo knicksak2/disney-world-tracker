@@ -260,6 +260,12 @@ graph TD
 
 **Validates: Requirements 11.6**
 
+### Property 25: A fixed item running past close never blocks flexible scheduling
+
+*For any* day containing a fixed item whose simulated completion is after its close, `optimize` still returns that fixed item at its booked time with a `fixed_past_close:<id>` warning, and every Flexible_Item is either scheduled (completing no later than its close) or listed in `unfittedItemIds` — none is lost. The fixed item contributes `FIXED_PAST_CLOSE_PENALTY_PER_MIN` (100) per minute past close to the search cost instead of an infinite cost. A fixed item that finishes before close emits no `fixed_past_close` warning. The Schedule Builder names every unfitted item and, for an empty result, says nothing could be scheduled (R4.17).
+
+**Validates: Requirements 3.20, 4.17**
+
 ## Error Handling
 
 - **Prediction_Service fallback/failure:** the optimizer uses whatever snapshot is returned (including a model-only fallback for far-future dates) and never fails for want of live data (R1.3).

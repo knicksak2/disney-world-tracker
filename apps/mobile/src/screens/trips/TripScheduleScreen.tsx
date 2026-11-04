@@ -297,6 +297,13 @@ function formatOptimizationWarning(warningKey: string, items: readonly PlannedIt
   if (warningKey === 'over_constrained') {
     return 'Some lower-priority items could not be fitted into today’s timeline.';
   }
+  if (warningKey.startsWith('fixed_past_close:')) {
+    const itemId = warningKey.split(':')[1];
+    const item = items.find((i) => i.id === itemId);
+    return item
+      ? `⚠️ ${item.customTitle || item.experienceName} is booked to run past closing time`
+      : '⚠️ A booked item runs past closing time';
+  }
   if (warningKey.startsWith('lightning_lane:')) {
     const itemId = warningKey.split(':')[1];
     const item = items.find((i) => i.id === itemId);
@@ -1371,6 +1378,25 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                         • {formatOptimizationWarning(w, items)}
                       </Text>
                     ))}
+                  </View>
+                )}
+
+                {optResult && optResult.unfittedItemIds.length > 0 && (
+                  <View style={styles.warnings} testID="unfitted-items-notice">
+                    {optResult.items.length === 0 && (
+                      <Text style={styles.warningText}>
+                        • Nothing could be scheduled. Check this day’s start and end hours and any fixed reservations.
+                      </Text>
+                    )}
+                    <Text style={styles.warningText}>
+                      • Couldn’t fit:{' '}
+                      {optResult.unfittedItemIds
+                        .map((unfittedId) => {
+                          const unfitted = items.find((i) => i.id === unfittedId);
+                          return unfitted ? unfitted.customTitle || unfitted.experienceName : 'An item';
+                        })
+                        .join(', ')}
+                    </Text>
                   </View>
                 )}
 

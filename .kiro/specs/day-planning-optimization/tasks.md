@@ -414,6 +414,13 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
   - Separately from Task 24's fix, real dev data on today's date (Sep 19) surfaced a second, distinct gap: with the rope-drop bug fixed, Flight of Passage's modeled wait at ~9:15 AM read as 45 minutes (the historical hourly-average model for that hour), while the ride's actual live-posted wait at the same moment was 55 minutes — a real, today-specific crowd spike the model cannot see. Confirmed as a systematic (not one-off) gap via three further spot-checks the same morning: Zootopia (live 15 vs model 9), Expedition Everest (live 30 vs model 22), Na'vi River Journey (live 30 vs model 32, the one close match). `getDaySnapshot`'s existing R4.3 same-day correction (`crowd-calendar` spec) only nudges the PARK-WIDE crowd multiplier from the park-wide observed average; it had no mechanism to substitute one specific ride's own current live wait. Since `getDaySnapshot` is owned by `crowd-calendar`, the fix was built and shipped there as Requirement 4.5 / Property 20 / Task 22, NOT in this spec — `predictionService` now substitutes a fresh, `Operating`, numeric live standby wait into the current-hour bucket only, for today's requests, falling back to the model otherwise. This planning-optimization task is retained only as a pointer; no code lives here.
   - _Requirements: (see crowd-calendar R4.5)_
 
+- [x] 26. A fixed item past close no longer makes the day un-optimizable (Property 25)
+  - **Root cause:** `simulate` in `optimizer.ts` returned `cost: Infinity` for any sequence where an item completed after close, including fixed items. Every candidate sequence contains the fixed items, so a booking that ran past close (e.g. 8:30 PM, 90-minute dinner vs the default 9:00 PM close) rejected all candidates; `optimize` returned `items: []` with every item unfitted, the optimize route persisted nothing, and removing a flexible ride changed nothing. The mobile screen rendered only `optResult.items`, so the day looked empty, with a single generic `over_constrained` line and no item names.
+  - 26.1 `optimizer.ts`: a fixed item past close charges `FIXED_PAST_CLOSE_PENALTY_PER_MIN` (100) per minute and emits `fixed_past_close:<id>`; flexible items keep the hard close. Test `optimizer.fixedPastClose.test.ts` (4 unit cases + Property 25, 100 runs, tagged), verified to fail against the pre-fix code.
+    - _Requirements: 3.20_
+  - 26.2 `TripScheduleScreen.tsx`: `unfitted-items-notice` naming unfitted items, an explicit "Nothing could be scheduled" line for an empty result, and a `fixed_past_close:<id>` message. Tests in `TripScheduleScreen.test.tsx` (two cases).
+    - _Requirements: 4.17_
+
 ## Notes
 
 - Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
@@ -446,7 +453,9 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     { "id": 16, "tasks": ["22.1", "22.2", "22.3", "22.4", "22.5", "22.6", "22.7", "22.8"] },
     { "id": 17, "tasks": ["23.1", "23.2", "23.3"] },
     { "id": 18, "tasks": ["23.4", "23.5", "23.6"] },
-    { "id": 19, "tasks": ["24"] }
+    { "id": 19, "tasks": ["24"] },
+    { "id": 20, "tasks": ["26.1"] },
+    { "id": 21, "tasks": ["26.2"] }
   ]
 }
 ```

@@ -97,6 +97,8 @@ export const DEFAULT_WALKTHROUGH_DUR = 25;
 export const DEFAULT_PLAY_AREA_DUR = 30;
 export const DEFAULT_GAME_DUR = 20;
 export const SAME_KIND_ADJACENCY_PENALTY = 500;
+/** Cost per minute a fixed item runs past its close (R3.20); mirrors the soft-window rate. */
+export const FIXED_PAST_CLOSE_PENALTY_PER_MIN = 100;
 const ROPE_DROP_WINDOW_MINUTES = 30;
 const ROPE_DROP_WALKON_MINS = 5;
 
@@ -519,7 +521,14 @@ function simulate(
       (hasAfterHoursTicket && item.operatesDuringTicketedEvent === true ? 180 : 0);
 
     if (completion > itemEndMins) {
-      return { cost: Infinity, result: null };
+      if (!item.isFixed) return { cost: Infinity, result: null };
+      // A fixed item is a booking the user already holds (e.g. an 8:30 PM
+      // signature dinner that ends after a 9:00 PM close). Rejecting every
+      // sequence that contains it made the whole day un-optimizable, so charge
+      // a graded penalty and warn instead (R3.20). Flexible items still
+      // cannot complete after close.
+      penalty += (completion - itemEndMins) * FIXED_PAST_CLOSE_PENALTY_PER_MIN;
+      warnings.add(`fixed_past_close:${item.id}`);
     }
 
     resultItems.push({
