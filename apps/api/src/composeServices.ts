@@ -139,6 +139,7 @@ import { createPinShowcaseRepo } from './services/pins/showcaseRepo.js';
 
 import { createFoodItemRepo, createFoodItemLogRepo } from './services/foodLog/repo.js';
 import { createUserSubmittedLocationRepo } from './services/foodLog/locations.js';
+import { createRestaurantVisitPort } from './services/foodLog/restaurantVisitPort.js';
 import {
   createFoodListRepo,
   createFoodListItemRepo,
@@ -1049,6 +1050,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     purgeFeedForLog: (logId, userId) => tripRepo.purgeFeedForLog(logId, userId),
   };
 
+  // Feature: unified-dining-logging (Task 2.1)
+  // Structural RestaurantVisitPort ensuring a catalog restaurant visit exists on visitedOn
+  // when a Food_Item_Log is created, delegating Trip-linked creates to tripLogPort.
+  const restaurantVisitPort = createRestaurantVisitPort({
+    pool,
+    addExperienceLog: (i) => experienceLogRepo.addLog(i),
+    logToTrip: (i) => tripLogPort.logToTrip(i),
+  });
+
   // --- Build app ------------------------------------------------------
   const app = buildServer(config, {
     catalog: {
@@ -1166,6 +1176,9 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       logs: {
         repo: foodItemLogRepo,
         requireSession: sessionMiddleware,
+        restaurantVisit: restaurantVisitPort,
+        awardPins,
+        onRodeWithTagCreated: emitRodeWithTagCreated,
         ...(photoService ? { photoLifecycle: photoService } : {}),
       },
       locations: {

@@ -21,6 +21,8 @@ export const createFoodItemLogInputSchema = z
     userTz: ianaTzSchema,
     rating: ratingValueSchema.nullable().optional(),
     note: noteBodySchema.nullable().optional(),
+    tripId: uuidSchema.nullable().optional(),
+    rodeWith: z.array(uuidSchema).optional(),
   })
   .strict();
 

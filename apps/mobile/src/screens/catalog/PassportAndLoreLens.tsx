@@ -94,6 +94,7 @@ export default function PassportAndLoreLens({
       {/* 1. ParkPassportCard (R17.1) */}
       <ParkPassportCard
         experienceId={experienceId}
+        category={category}
         completionQuery={completionQuery}
         ratingQuery={ratingQuery}
         noteQuery={noteQuery}

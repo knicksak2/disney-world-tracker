@@ -25,6 +25,7 @@ import {
 import { AppError } from '../../errors/AppError.js';
 import type { FoodItemLogRepo, FoodItemRepo } from './repo.js';
 import type { UserSubmittedLocationRepo } from './locations.js';
+import type { RestaurantVisitPort } from './restaurantVisitPort.js';
 
 // ---------------------------------------------------------------------------
 // Route Options
@@ -45,6 +46,18 @@ export interface FoodItemLogRoutesOptions {
   readonly photoLifecycle?: {
     softDeleteForTarget(kind: 'food_log' | 'trip', targetId: string): Promise<unknown>;
   } | undefined;
+  /**
+   * Optional port ensuring a catalog restaurant visit exists on `visitedOn`
+   * when a dish is logged (Feature: unified-dining-logging R1.2–R1.9).
+   */
+  readonly restaurantVisit?: RestaurantVisitPort;
+  readonly awardPins?: (userId: string) => Promise<readonly string[]>;
+  readonly onRodeWithTagCreated?: (e: {
+    readonly tagId: string;
+    readonly tripLogEntryId: string;
+    readonly taggedMemberId: string;
+    readonly taggingMemberId: string;
+  }) => void;
 }
 
 export interface UserSubmittedLocationRoutesOptions {
@@ -202,6 +215,29 @@ export function foodItemLogRoutes(
 
         validateNotFutureVisitDate(body.visitedOn, body.userTz, clock());
 
+        // Requirement 1.7: rodeWith without tripId is rejected with validation_failed.
+        if (body.rodeWith && body.rodeWith.length > 0 && !body.tripId) {
+          throw new AppError(
+            'validation_failed',
+            'Rode with tags can only be supplied when linking to a trip.',
+            { field: 'rodeWith' },
+          );
+        }
+
+        // Requirement 1.2-1.8: ensure the parent catalog restaurant has a visit on visitedOn
+        // BEFORE inserting the food_item_log so any Trip validation/permission/date error
+        // rejects cleanly without writing a partial dish log.
+        const visitResult = options.restaurantVisit
+          ? await options.restaurantVisit.ensureVisitForDishLog({
+              userId,
+              foodItemId,
+              visitedOn: body.visitedOn,
+              userTz: body.userTz,
+              tripId: body.tripId ?? null,
+              rodeWith: body.rodeWith ?? [],
+            })
+          : undefined;
+
         const log = await options.repo.addLog({
           userId,
           foodItemId,
@@ -211,8 +247,47 @@ export function foodItemLogRoutes(
           note: body.note ?? null,
         });
 
+        if (visitResult?.created && visitResult.tripLog && visitResult.pendingTags) {
+          for (const tag of visitResult.pendingTags) {
+            options.onRodeWithTagCreated?.({
+              tagId: tag.tagId,
+              tripLogEntryId: visitResult.tripLog.logEntryId,
+              taggedMemberId: tag.taggedMemberId,
+              taggingMemberId: userId,
+            });
+          }
+        }
+
+        let newlyAwardedPinIds: readonly string[] | undefined;
+        if (visitResult?.created && options.awardPins) {
+          try {
+            newlyAwardedPinIds = await options.awardPins(userId);
+          } catch (err) {
+            request.log.warn(
+              { err, userId, foodItemId },
+              'awardPins failed after dish auto-visit; continuing with empty newlyAwardedPinIds',
+            );
+            newlyAwardedPinIds = [];
+          }
+        }
+
         reply.code(201);
-        return log;
+        if (visitResult === undefined) {
+          return log;
+        }
+        return {
+          ...log,
+          restaurantVisit:
+            visitResult === null
+              ? null
+              : {
+                  experienceId: visitResult.experienceId,
+                  logId: visitResult.logId,
+                  created: visitResult.created,
+                  ...(visitResult.tripLog ? { tripLog: visitResult.tripLog } : {}),
+                },
+          ...(newlyAwardedPinIds !== undefined ? { newlyAwardedPinIds } : {}),
+        };
       },
     );
 

@@ -170,7 +170,7 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     expect(mockHandlers.onAddToPlan).not.toHaveBeenCalled();
   });
 
-  test('R19.4: Restaurant on both Today and Passport lenses renders Log dish & Reserve table', () => {
+  test('R19.4, unified-dining-logging R4.1: Restaurant on both Today and Passport lenses renders Log Visit & Reserve table', () => {
     const lenses: Array<'today' | 'passport'> = ['today', 'passport'];
 
     for (const lens of lenses) {
@@ -185,13 +185,13 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
       const primary = screen.getByTestId('dock-primary-action');
       const secondary = screen.getByTestId('dock-secondary-action');
 
-      expect(screen.getByText(/Log (a )?dish/i)).toBeTruthy();
+      expect(screen.getByText(/Log Visit/i)).toBeTruthy();
       expect(screen.getByText(/Reserve Table/i)).toBeTruthy();
-      expect(primary.props.accessibilityLabel).toBeTruthy();
+      expect(primary.props.accessibilityLabel).toBe('Log visit');
       expect(secondary.props.accessibilityLabel).toBeTruthy();
 
       fireEvent.press(primary);
-      expect(mockHandlers.onLogDish).toHaveBeenCalled();
+      expect(mockHandlers.onLogVisit).toHaveBeenCalled();
 
       fireEvent.press(secondary);
       expect(mockHandlers.onReserve).toHaveBeenCalled();
@@ -228,7 +228,7 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     expect(mockHandlers.onAddToPlan).toHaveBeenCalledTimes(1);
   });
 
-  test('R21.3: Quick Service restaurant renders Log a Dish & Add to Trip', () => {
+  test('R21.3, unified-dining-logging R4.1: Quick Service restaurant renders Log Visit & Add to Trip', () => {
     render(
       <FloatingActionDock
         category="Restaurant"
@@ -241,13 +241,13 @@ describe('FloatingActionDock (Requirements 19.1 - 19.7)', () => {
     const primary = screen.getByTestId('dock-primary-action');
     const secondary = screen.getByTestId('dock-secondary-action');
 
-    expect(screen.getByText('Log a Dish')).toBeTruthy();
+    expect(screen.getByText('Log Visit')).toBeTruthy();
     expect(screen.getByText('Add to Trip')).toBeTruthy();
-    expect(primary.props.accessibilityLabel).toBe('Log a Dish');
+    expect(primary.props.accessibilityLabel).toBe('Log visit');
     expect(secondary.props.accessibilityLabel).toBe('Add to trip');
 
     fireEvent.press(primary);
-    expect(mockHandlers.onLogDish).toHaveBeenCalledTimes(1);
+    expect(mockHandlers.onLogVisit).toHaveBeenCalledTimes(1);
 
     fireEvent.press(secondary);
     expect(mockHandlers.onAddToPlan).toHaveBeenCalledTimes(1);

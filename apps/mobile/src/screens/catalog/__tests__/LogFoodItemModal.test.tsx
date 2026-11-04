@@ -518,6 +518,229 @@ describe('LogFoodItemModal', () => {
     expect(screen.getByText('Maximum 2 photos per dish visit reached.')).toBeTruthy();
     expect(screen.getByTestId('log-food-add-photo-btn').props.accessibilityState.disabled).toBe(true);
   });
+
+  it('pre-selects single active trip, renders Dined with chips, and submits tripId + rodeWith when no restaurant visit exists on visitedOn (Requirements 2.1 - 2.5)', async () => {
+    const activeTrip = {
+      id: 'trip-1',
+      name: 'Fall Food & Wine',
+      status: 'active' as const,
+      startDate: '2020-01-01',
+      endDate: '2030-12-31',
+    };
+    const members = [
+      { userId: 'user-me', displayName: 'Me', avatarPreset: null, role: 'organizer' },
+      { userId: 'user-bob', displayName: 'Bob Diner', avatarPreset: null, role: 'member' },
+    ];
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/photos/config') return DEFAULT_PHOTO_CONFIG;
+      if (path === '/me/experiences/exp-100/logs') {
+        return { experienceId: 'exp-100', repeatCount: 0, logs: [] };
+      }
+      if (path === '/me/trips') {
+        return [{ status: 'active', trips: [activeTrip] }];
+      }
+      if (path === '/me') {
+        return { user: { id: 'user-me' } };
+      }
+      if (path === '/trips/trip-1/members') {
+        return members;
+      }
+      if (method === 'POST' && path === '/me/food-items/item-100/logs') {
+        return {
+          id: 'log-trip-1',
+          userId: 'user-me',
+          foodItemId: 'item-100',
+          visitedOn: '2026-11-04',
+          userTz: 'America/New_York',
+          loggedAt: '2026-11-04T18:00:00Z',
+          rating: 10,
+          note: null,
+          restaurantVisit: {
+            experienceId: 'exp-100',
+            experienceLogId: 'exp-log-1',
+            created: true,
+            tripLog: {
+              tripId: 'trip-1',
+              tripLogEntryId: 'tle-1',
+              completedPlannedItemIds: ['plan-1'],
+              rodeWithUserIds: ['user-bob'],
+            },
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const { queryClient } = renderWithClient(
+      <LogFoodItemModal foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />,
+    );
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    // Auto-visit banner is shown
+    expect(await screen.findByTestId('log-food-auto-visit-banner')).toBeTruthy();
+
+    // Single active trip covering today is pre-selected
+    const tripChip = await screen.findByTestId('log-food-trip-trip-1');
+    await waitFor(() => {
+      expect(tripChip.props.accessibilityState.selected).toBe(true);
+    });
+
+    // Dined with member chip renders and can be toggled
+    const bobChip = await screen.findByTestId('log-food-member-user-bob');
+    fireEvent.press(bobChip);
+
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'POST',
+        '/me/food-items/item-100/logs',
+        expect.objectContaining({
+          tripId: 'trip-1',
+          rodeWith: ['user-bob'],
+        }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['experience-logs', 'exp-100'],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['experience-completion', 'exp-100'],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['trips', 'feed', 'trip-1'],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['trips', 'trip-1', 'planned-items'],
+      });
+    });
+  });
+
+  it('allows opting out of the pre-selected trip by tapping "No trip" (Requirement 2.2)', async () => {
+    const activeTrip = {
+      id: 'trip-1',
+      name: 'Fall Food & Wine',
+      status: 'active' as const,
+      startDate: '2020-01-01',
+      endDate: '2030-12-31',
+    };
+
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (path === '/photos/config') return DEFAULT_PHOTO_CONFIG;
+      if (path === '/me/experiences/exp-100/logs') {
+        return { experienceId: 'exp-100', repeatCount: 0, logs: [] };
+      }
+      if (path === '/me/trips') {
+        return [{ status: 'active', trips: [activeTrip] }];
+      }
+      if (path === '/me') return { user: { id: 'user-me' } };
+      if (path === '/trips/trip-1/members') return [];
+      if (method === 'POST' && path === '/me/food-items/item-100/logs') {
+        return {
+          id: 'log-notrip',
+          userId: 'user-me',
+          foodItemId: 'item-100',
+          visitedOn: '2026-11-04',
+          userTz: 'America/New_York',
+          loggedAt: '2026-11-04T18:00:00Z',
+          rating: null,
+          note: null,
+        };
+      }
+      return undefined;
+    });
+
+    renderWithClient(
+      <LogFoodItemModal foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />,
+    );
+
+    const tripChip = await screen.findByTestId('log-food-trip-trip-1');
+    await waitFor(() => {
+      expect(tripChip.props.accessibilityState.selected).toBe(true);
+    });
+
+    // Opt out by pressing "No trip"
+    fireEvent.press(screen.getByTestId('log-food-trip-none'));
+    expect(screen.getByTestId('log-food-trip-none').props.accessibilityState.selected).toBe(true);
+    expect(screen.queryByTestId('log-food-rode-with-section')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('submit-log-food-item-btn'));
+
+    await waitFor(() => {
+      const postCall = apiRequestMock.mock.calls.find(
+        ([m, p]) => m === 'POST' && p === '/me/food-items/item-100/logs',
+      );
+      expect(postCall).toBeDefined();
+      expect(postCall![2]).not.toHaveProperty('tripId');
+      expect(postCall![2]).not.toHaveProperty('rodeWith');
+    });
+  });
+
+  it('shows existing-visit badge and omits Trip/member chips when restaurant visit already exists on visitedOn (Requirement 2.4)', async () => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const yyyy = parts.find((p) => p.type === 'year')!.value;
+    const mm = parts.find((p) => p.type === 'month')!.value;
+    const dd = parts.find((p) => p.type === 'day')!.value;
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    apiRequestMock.mockImplementation(async (_method, path) => {
+      if (path === '/photos/config') return DEFAULT_PHOTO_CONFIG;
+      if (path === '/me/experiences/exp-100/logs') {
+        return {
+          experienceId: 'exp-100',
+          repeatCount: 1,
+          logs: [
+            {
+              id: 'existing-log-1',
+              experienceId: 'exp-100',
+              userId: 'user-me',
+              visitedOn: todayStr,
+              userTz: tz,
+              loggedAt: `${todayStr}T12:00:00Z`,
+              rating: 8,
+              note: null,
+            },
+          ],
+        };
+      }
+      if (path === '/me/trips') {
+        return [
+          {
+            status: 'active',
+            trips: [
+              {
+                id: 'trip-1',
+                name: 'Fall Food & Wine',
+                status: 'active',
+                startDate: '2020-01-01',
+                endDate: '2030-12-31',
+              },
+            ],
+          },
+        ];
+      }
+      if (path === '/me') return { user: { id: 'user-me' } };
+      return undefined;
+    });
+
+    renderWithClient(
+      <LogFoodItemModal foodItem={MOCK_ITEM} visible={true} onClose={jest.fn()} />,
+    );
+
+    expect(await screen.findByTestId('log-food-existing-visit-badge')).toBeTruthy();
+    expect(
+      screen.getByText('✓ Restaurant visit already logged for this date'),
+    ).toBeTruthy();
+    expect(screen.queryByTestId('log-food-auto-visit-banner')).toBeNull();
+    expect(screen.queryByTestId('log-food-trip-section')).toBeNull();
+    expect(screen.queryByTestId('log-food-rode-with-section')).toBeNull();
+  });
 });
 
 /** Nearest painted `backgroundColor` at or above `node` (sheet surface lookup). */

@@ -27,6 +27,8 @@ import {
   reconcileDraft,
   ridingWithCandidates,
   ridingWithLabel,
+  type FoodItemDTO,
+  type InlineDishDraft,
   type LogDraft,
   type LogTripRef,
   type TripDTO,
@@ -41,6 +43,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { AppTheme } from '../../theme/theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
+import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import PinCelebrationModal from '../profile/PinCelebrationModal';
 import { invalidateAfterLog } from './invalidateAfterLog';
 import { useLogToastStore } from './logToastStore';
@@ -181,6 +184,8 @@ export default function LogExperienceSheet({
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inlineDishes, setInlineDishes] = useState<readonly InlineDishDraft[]>([]);
+  const [dishPickerVisible, setDishPickerVisible] = useState(false);
   const [celebratingPinIds, setCelebratingPinIds] = useState<
     readonly string[]
   >([]);
@@ -206,6 +211,8 @@ export default function LogExperienceSheet({
         tripId: lockedTripId ?? null,
         rodeWith: [],
       });
+      setInlineDishes([]);
+      setDishPickerVisible(false);
       setHint(null);
       setError(null);
       setBusy(false);
@@ -303,6 +310,43 @@ export default function LogExperienceSheet({
     if (error !== null) setError(null);
   }
 
+  function handleSelectDish(item: FoodItemDTO): void {
+    setInlineDishes((prev) => {
+      if (prev.some((d) => d.foodItemId === item.id)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          foodItemId: item.id,
+          name: item.name,
+          rating: null,
+          note: '',
+        },
+      ];
+    });
+    setDishPickerVisible(false);
+    if (error !== null) setError(null);
+  }
+
+  function handleDishRatingPress(foodItemId: string, value: number): void {
+    if (busy) return;
+    setInlineDishes((prev) =>
+      prev.map((d) =>
+        d.foodItemId === foodItemId
+          ? { ...d, rating: d.rating === value ? null : value }
+          : d,
+      ),
+    );
+    if (error !== null) setError(null);
+  }
+
+  function handleRemoveDish(foodItemId: string): void {
+    if (busy) return;
+    setInlineDishes((prev) => prev.filter((d) => d.foodItemId !== foodItemId));
+    if (error !== null) setError(null);
+  }
+
   function resetAndClose(): void {
     if (busy) return;
     onClose();
@@ -338,11 +382,35 @@ export default function LogExperienceSheet({
         readonly newlyAwardedPinIds?: readonly string[];
       }>('POST', submission.path, submission.body);
 
+      // Post each attached inline dish for the same visitedOn date (Requirement 3.4)
+      for (const dish of inlineDishes) {
+        const trimmedDishNote = dish.note.trim();
+        await apiRequest(
+          'POST',
+          `/me/food-items/${encodeURIComponent(dish.foodItemId)}/logs`,
+          {
+            visitedOn: draft.visitedOn,
+            userTz: tz,
+            rating: dish.rating,
+            note: trimmedDishNote.length > 0 ? trimmedDishNote : null,
+            tripId: null,
+          },
+        );
+      }
+
       // Invalidate queries
       invalidateAfterLog(queryClient, {
         experienceId,
         tripId: draft.tripId,
       });
+      if (inlineDishes.length > 0) {
+        void queryClient.invalidateQueries({
+          queryKey: ['experience-food-items', experienceId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ['scoped-food-item-logs', experienceId],
+        });
+      }
 
       // Prepare tagged names
       const membersList = membersQuery.data ?? [];
@@ -364,7 +432,7 @@ export default function LogExperienceSheet({
         message: toastMessage,
         tripId: draft.tripId,
         experienceId,
-        offerDishPrompt: offersDishPrompt(effectiveCategory),
+        offerDishPrompt: offersDishPrompt(effectiveCategory) && inlineDishes.length === 0,
       });
 
       onLogged?.();
@@ -648,6 +716,84 @@ export default function LogExperienceSheet({
                 </View>
               )}
 
+              {/* Inline dishes section for Restaurant experiences (Requirements 3.1 - 3.6) */}
+              {effectiveCategory === 'Restaurant' && (
+                <View testID={`${testIDPrefix}-dishes-section`}>
+                  <View style={styles.dishesHeaderRow}>
+                    <Text style={styles.fieldLabel}>Dishes you had (optional)</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Add a dish to this visit"
+                      disabled={busy}
+                      onPress={() => setDishPickerVisible(true)}
+                      style={styles.addDishButton}
+                      testID={`${testIDPrefix}-add-dish-btn`}
+                    >
+                      <Text style={styles.addDishButtonText}>+ Add dish</Text>
+                    </Pressable>
+                  </View>
+
+                  {inlineDishes.length > 0 && (
+                    <View style={styles.dishesList}>
+                      {inlineDishes.map((dish) => (
+                        <View
+                          key={dish.foodItemId}
+                          style={styles.dishCard}
+                          testID={`${testIDPrefix}-dish-row-${dish.foodItemId}`}
+                        >
+                          <View style={styles.dishCardHeader}>
+                            <Text style={styles.dishName} numberOfLines={1}>
+                              {dish.name}
+                            </Text>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Remove ${dish.name}`}
+                              disabled={busy}
+                              onPress={() => handleRemoveDish(dish.foodItemId)}
+                              testID={`${testIDPrefix}-remove-dish-${dish.foodItemId}`}
+                            >
+                              <Text style={styles.removeDishText}>✕</Text>
+                            </Pressable>
+                          </View>
+
+                          <View style={styles.dishRatingRow}>
+                            {RATING_VALUES.map((val) => {
+                              const selected = dish.rating === val;
+                              return (
+                                <Pressable
+                                  key={val}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Rate ${dish.name} ${val} out of 10`}
+                                  accessibilityState={{ selected, disabled: busy }}
+                                  disabled={busy}
+                                  onPress={() =>
+                                    handleDishRatingPress(dish.foodItemId, val)
+                                  }
+                                  style={[
+                                    styles.dishRatingBtn,
+                                    selected ? styles.pickerButtonSelected : null,
+                                  ]}
+                                  testID={`${testIDPrefix}-dish-rating-${dish.foodItemId}-${val}`}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.dishRatingBtnText,
+                                      selected ? styles.pickerButtonTextSelected : null,
+                                    ]}
+                                  >
+                                    {val}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Error text */}
               {error !== null && (
                 <Text style={styles.errorText} testID={`${testIDPrefix}-error`}>
@@ -687,6 +833,15 @@ export default function LogExperienceSheet({
         </View>
       </KeyboardAvoidingView>
       </Modal>
+
+      {effectiveCategory === 'Restaurant' && (
+        <FoodItemPickerModal
+          experienceId={experienceId}
+          visible={dishPickerVisible}
+          onClose={() => setDishPickerVisible(false)}
+          onSelectFoodItem={handleSelectDish}
+        />
+      )}
 
       {celebratingPinIds.length > 0 && (
         <PinCelebrationModal
@@ -856,6 +1011,73 @@ const useStyles = makeStyles((t: AppTheme) => ({
   helperText: {
     ...t.typography.meta,
     color: t.color.textSecondary,
+  },
+  dishesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: t.spacing.xs,
+  },
+  addDishButton: {
+    paddingHorizontal: t.spacing.md,
+    paddingVertical: t.spacing.xs,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  addDishButtonText: {
+    ...t.typography.meta,
+    color: t.color.primaryFg,
+    fontWeight: '700',
+  },
+  dishesList: {
+    gap: t.spacing.sm,
+  },
+  dishCard: {
+    padding: t.spacing.sm,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+    gap: t.spacing.xs,
+  },
+  dishCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dishName: {
+    ...t.typography.subtitle,
+    color: t.color.textPrimary,
+    flex: 1,
+    marginRight: t.spacing.sm,
+  },
+  removeDishText: {
+    ...t.typography.body,
+    color: t.color.textSecondary,
+    paddingHorizontal: 4,
+  },
+  dishRatingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  dishRatingBtn: {
+    minWidth: 28,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: t.radius.sm,
+    borderWidth: 1,
+    borderColor: t.color.borderStrong,
+    backgroundColor: t.color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dishRatingBtnText: {
+    ...t.typography.meta,
+    color: t.color.textPrimary,
+    fontWeight: '600',
   },
   actionRow: {
     flexDirection: 'row',

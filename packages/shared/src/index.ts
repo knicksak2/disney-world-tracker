@@ -282,6 +282,8 @@ export type {
   FoodItemLogDTO,
   FoodItemLogHistoryDTO,
   CreateFoodItemLogInputDTO,
+  FoodLogRestaurantVisitDTO,
+  CreateFoodItemLogResponseDTO,
   UpdateFoodItemLogInputDTO,
   FoodItemLogWithContextDTO,
   UserSubmittedLocationDTO,
@@ -952,5 +954,13 @@ export type {
   DraftHint,
   LogSubmission,
 } from './unifiedLogging.js';
+
+// Unified dining & dish logging (unified-dining-logging).
+export {
+  hasVisitOnDate,
+  groupDishesByVisitDate,
+} from './diningLogging.js';
+export type { InlineDishDraft } from './diningLogging.js';
+
 
 

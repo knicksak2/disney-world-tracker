@@ -52,6 +52,7 @@ jest.mock('expo-secure-store', () => ({
 
 import ParkPassportCard from '../ParkPassportCard';
 import RestaurantDishLogCard from '../RestaurantDishLogCard';
+import VisitHistoryTimeline from '../VisitHistoryTimeline';
 import { PASSPORT } from '../ParkPassportCard.palette';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
@@ -696,6 +697,120 @@ describe('ParkPassportCard (Requirements 17.1 - 17.8)', () => {
       expect(screen.getByText('9.5 / 10')).toBeTruthy();
     });
     expect(screen.queryByText('3.0 / 10')).toBeNull();
+  });
+
+  test('unified-dining-logging R4.2, R4.3: displays logged dishes matching each visit date inside the visit history timeline', async () => {
+    const { client } = createQueryClient();
+    const history: ExperienceVisitHistoryDTO = {
+      experienceId: EXPERIENCE_ID,
+      repeatCount: 2,
+      logs: [
+        makeLog({ id: 'log-may-1', visitedOn: '2026-05-01', rating: 9, note: 'Great dinner' }),
+        makeLog({ id: 'log-may-2', visitedOn: '2026-05-02', rating: 8, note: null }),
+      ],
+    };
+    const dishLogs: FoodItemLogWithContextDTO[] = [
+      {
+        id: 'dish-1',
+        userId: 'user-1',
+        foodItemId: 'item-1',
+        foodItemName: 'Dole Whip',
+        visitedOn: '2026-05-01',
+        userTz: 'America/New_York',
+        loggedAt: '2026-05-01T12:00:00Z',
+        rating: 10,
+        note: null,
+        currentlyOnMenu: true,
+        restaurantName: 'Aloha Isle',
+        locationName: null,
+      },
+      {
+        id: 'dish-2',
+        userId: 'user-1',
+        foodItemId: 'item-2',
+        foodItemName: 'Pineapple Upside-Down Cake',
+        visitedOn: '2026-05-01',
+        userTz: 'America/New_York',
+        loggedAt: '2026-05-01T12:05:00Z',
+        rating: null,
+        note: null,
+        currentlyOnMenu: true,
+        restaurantName: 'Aloha Isle',
+        locationName: null,
+      },
+    ];
+    stubVisitSummary(
+      { [EXPERIENCE_ID]: { repeatCount: 2, ratedCount: 2, averageRating: 8.5 } },
+      (method, path) => {
+        if (
+          method === 'GET' &&
+          path === `/experiences/${encodeURIComponent(EXPERIENCE_ID)}/food-item-logs/mine`
+        ) {
+          return dishLogs;
+        }
+        return undefined;
+      },
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <ParkPassportCard
+          experienceId={EXPERIENCE_ID}
+          category="Restaurant"
+          completionQuery={emptyQuery()}
+          ratingQuery={emptyQuery()}
+          noteQuery={emptyQuery()}
+          logsQuery={dataQuery(history)}
+          initialExpanded
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('visit-dishes-log-may-1')).toBeTruthy();
+    });
+
+    expect(screen.getByText('🍽️ Dole Whip')).toBeTruthy();
+    expect(screen.getByText('★ 10/10')).toBeTruthy();
+    expect(screen.getByText('🍽️ Pineapple Upside-Down Cake')).toBeTruthy();
+    // Visit on 2026-05-02 had no dishes logged
+    expect(screen.queryByTestId('visit-dishes-log-may-2')).toBeNull();
+  });
+
+  test('unified-dining-logging R4.2, R4.3: VisitHistoryTimeline displays logged dishes matching each visit date when foodLogs is provided', () => {
+    const logs: ExperienceLogDTO[] = [
+      makeLog({ id: 'vht-log-1', visitedOn: '2026-05-01', rating: 9, note: null }),
+    ];
+    const dishLogs: FoodItemLogWithContextDTO[] = [
+      {
+        id: 'vht-dish-1',
+        userId: 'user-1',
+        foodItemId: 'item-1',
+        foodItemName: 'Tonga Toast',
+        visitedOn: '2026-05-01',
+        userTz: 'America/New_York',
+        loggedAt: '2026-05-01T09:00:00Z',
+        rating: 10,
+        note: null,
+        currentlyOnMenu: true,
+        restaurantName: 'Kona Cafe',
+        locationName: null,
+      },
+    ];
+
+    render(
+      <VisitHistoryTimeline
+        experienceId={EXPERIENCE_ID}
+        logs={logs}
+        foodLogs={dishLogs}
+        onDeleted={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('visit-history-toggle'));
+    expect(screen.getByTestId('visit-dishes-vht-log-1')).toBeTruthy();
+    expect(screen.getByText('🍽️ Tonga Toast')).toBeTruthy();
+    expect(screen.getByText('★ 10/10')).toBeTruthy();
   });
 
   // Feature: dark-mode — (c) converted literals (B2)

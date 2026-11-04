@@ -59,6 +59,7 @@ This feature introduces a durable, per-restaurant dish catalog (`food_items`) se
 3. IF a request to log a Food_Item supplies a `visited_on` calendar date strictly later than the current calendar date in the request's `user_tz`, THE Food_Log_Service SHALL reject the request with HTTP `400` and error code `food_log_future_date` without creating any `Food_Item_Log` row, mirroring the `experience_logs` future-date guard (`log_future_date`).
 4. IF `foodItemId` does not reference an existing `Food_Item`, THE Food_Log_Service SHALL reject the request with HTTP `404` and error code `food_item_not_found`.
 5. THE Food_Log_Service SHALL NOT write to `completions`, `ratings`, or `experience_logs` when a `Food_Item_Log` is created — Food_Item_Log is a separate stream from the Experience-level activity log and does not affect Restaurant_Experience completion/rating stats.
+   - *Extended by `unified-dining-logging` (Requirement 1):* For a `Food_Item` scoped to a catalog `Restaurant_Experience`, creating a `Food_Item_Log` now ensures an unrated `Experience_Log` and canonical `Completion` exist for that restaurant on `visited_on` (and optionally links to a Trip when `tripId` is supplied), while still never copying the dish `rating` or `note` to the restaurant's `ratings` or `experience_logs`.
 
 ### Requirement 4: Query and Delete Food Item Visit History
 

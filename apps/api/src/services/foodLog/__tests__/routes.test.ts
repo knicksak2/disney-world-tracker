@@ -1039,4 +1039,112 @@ describe('foodLog routes', () => {
       expect(res.json()).toEqual([]);
     });
   });
+
+  describe('Unified Dining Auto-Visit (Requirement 1)', () => {
+    it('rejects rodeWith without tripId with 400 validation_failed and writes nothing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/me/food-items/${FOOD_ITEM_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-06-15',
+          userTz: 'America/New_York',
+          rodeWith: ['77777777-7777-4777-8777-777777777777'],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('validation_failed');
+      expect(logRepo.addCalls).toHaveLength(0);
+    });
+
+    it('invokes restaurantVisit port, dispatches tag notices, and returns restaurantVisit + newlyAwardedPinIds', async () => {
+      const tripId = '88888888-8888-4888-8888-888888888888';
+      const friendId = '99999999-9999-4999-8999-999999999999';
+      const expLogId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const entryId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+      const tagId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+      const notices: unknown[] = [];
+      const customApp = Fastify({ logger: false });
+      registerErrorHandler(customApp);
+      await customApp.register(
+        foodItemLogRoutes({
+          repo: logRepo as unknown as FoodItemLogRepo,
+          requireSession: stubRequireSession,
+          clock: () => FIXED_NOW,
+          restaurantVisit: {
+            async ensureVisitForDishLog(input) {
+              expect(input).toEqual({
+                userId: USER_ID,
+                foodItemId: FOOD_ITEM_ID,
+                visitedOn: '2026-06-15',
+                userTz: 'America/New_York',
+                tripId,
+                rodeWith: [friendId],
+              });
+              return {
+                experienceId: EXPERIENCE_ID,
+                logId: expLogId,
+                created: true,
+                tripLog: {
+                  tripId,
+                  logEntryId: entryId,
+                  taggedCount: 1,
+                },
+                pendingTags: [{ tagId, taggedMemberId: friendId }],
+              };
+            },
+          },
+          awardPins: async () => ['pin-dining-1'],
+          onRodeWithTagCreated: (n) => notices.push(n),
+        }),
+      );
+      await customApp.ready();
+
+      const res = await customApp.inject({
+        method: 'POST',
+        url: `/me/food-items/${FOOD_ITEM_ID}/logs`,
+        headers: { 'x-test-user-id': USER_ID },
+        payload: {
+          visitedOn: '2026-06-15',
+          userTz: 'America/New_York',
+          rating: 10,
+          tripId,
+          rodeWith: [friendId],
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toEqual({
+        id: LOG_ID,
+        userId: USER_ID,
+        foodItemId: FOOD_ITEM_ID,
+        visitedOn: '2026-06-15',
+        userTz: 'America/New_York',
+        loggedAt: '2026-06-15T12:00:00.000Z',
+        rating: 10,
+        note: null,
+        restaurantVisit: {
+          experienceId: EXPERIENCE_ID,
+          logId: expLogId,
+          created: true,
+          tripLog: {
+            tripId,
+            logEntryId: entryId,
+            taggedCount: 1,
+          },
+        },
+        newlyAwardedPinIds: ['pin-dining-1'],
+      });
+      expect(notices).toEqual([
+        {
+          tagId,
+          tripLogEntryId: entryId,
+          taggedMemberId: friendId,
+          taggingMemberId: USER_ID,
+        },
+      ]);
+    });
+  });
 });

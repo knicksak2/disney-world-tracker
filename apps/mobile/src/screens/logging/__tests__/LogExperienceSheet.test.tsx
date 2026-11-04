@@ -499,4 +499,95 @@ describe('LogExperienceSheet', () => {
       );
     });
   });
+
+  it('attaches dishes inline for Restaurant, posts each dish after the visit log, and suppresses offerDishPrompt on toast (Requirements 3.1 - 3.6)', async () => {
+    mockApiRequest.mockImplementation(async (method, path) => {
+      if (path === '/me') return { user: { id: 'user-caller' } };
+      if (path === '/me/trips') return [{ status: 'active', trips: [] }];
+      if (path === '/experiences/exp-sm/food-items') {
+        return {
+          items: [
+            {
+              id: 'dish-dole-whip',
+              experienceId: 'exp-sm',
+              locationId: null,
+              name: 'Dole Whip',
+              price: '$5.99',
+              source: 'menu_sync',
+              currentlyOnMenu: true,
+            },
+            {
+              id: 'dish-churro',
+              experienceId: 'exp-sm',
+              locationId: null,
+              name: 'Churro',
+              price: '$6.49',
+              source: 'menu_sync',
+              currentlyOnMenu: true,
+            },
+          ],
+          menus: [],
+        };
+      }
+      if (path.startsWith('/me/food-items/') && method === 'GET') {
+        return { foodItemId: 'dish-dole-whip', repeatCount: 0, logs: [] };
+      }
+      if (method === 'POST') return { newlyAwardedPinIds: [] };
+      return {};
+    });
+
+    renderSheet({
+      experience: { name: 'Aloha Isle', category: 'Restaurant' },
+    });
+
+    // Dishes section is rendered for Restaurant
+    expect(await screen.findByTestId('log-visit-dishes-section')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('log-visit-add-dish-btn'));
+
+    // Pick Dole Whip from FoodItemPickerModal
+    const doleWhipRow = await screen.findByTestId('food-item-row-dish-dole-whip');
+    fireEvent.press(doleWhipRow);
+
+    // Dish row appears in LogExperienceSheet
+    expect(await screen.findByTestId('log-visit-dish-row-dish-dole-whip')).toBeTruthy();
+    expect(screen.getByText('Dole Whip')).toBeTruthy();
+
+    // Rate Dole Whip 9/10
+    fireEvent.press(screen.getByTestId('log-visit-dish-rating-dish-dole-whip-9'));
+
+    // Also add Churro and then remove it to test removal (Requirement 3.3)
+    fireEvent.press(screen.getByTestId('log-visit-add-dish-btn'));
+    fireEvent.press(await screen.findByTestId('food-item-row-dish-churro'));
+    expect(await screen.findByTestId('log-visit-dish-row-dish-churro')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('log-visit-remove-dish-dish-churro'));
+    expect(screen.queryByTestId('log-visit-dish-row-dish-churro')).toBeNull();
+
+    // Submit the restaurant visit
+    fireEvent.press(screen.getByTestId('log-visit-submit'));
+
+    await waitFor(() => {
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        'POST',
+        '/me/experiences/exp-sm/logs',
+        expect.objectContaining({
+          visitedOn: TODAY,
+        }),
+      );
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        'POST',
+        '/me/food-items/dish-dole-whip/logs',
+        expect.objectContaining({
+          visitedOn: TODAY,
+          rating: 9,
+          note: null,
+          tripId: null,
+        }),
+      );
+    });
+
+    // Toast suppresses offerDishPrompt because a dish was already attached inline (Requirement 3.5)
+    const toast = useLogToastStore.getState().current;
+    expect(toast).toBeTruthy();
+    expect(toast?.offerDishPrompt).toBe(false);
+  });
 });

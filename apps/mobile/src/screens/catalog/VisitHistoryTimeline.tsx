@@ -9,7 +9,7 @@
 // issues `DELETE /me/experiences/:id/logs/:logId` and calls `onDeleted` so the
 // parent can refresh the dependent queries.
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -18,7 +18,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import type { ExperienceLogDTO } from '@dwt/shared';
+import {
+  groupDishesByVisitDate,
+  type ExperienceLogDTO,
+  type FoodItemLogWithContextDTO,
+} from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
@@ -28,6 +32,8 @@ export interface VisitHistoryTimelineProps {
   readonly experienceId: string;
   /** Visit logs newest-first (the server orders visited_on DESC, logged_at DESC). */
   readonly logs: readonly ExperienceLogDTO[];
+  /** Optional scoped dish logs to display under each matching visit date. */
+  readonly foodLogs?: readonly FoodItemLogWithContextDTO[] | undefined;
   /** Invoked after a successful delete so the parent can invalidate queries. */
   readonly onDeleted: () => void;
 }
@@ -35,6 +41,7 @@ export interface VisitHistoryTimelineProps {
 export default function VisitHistoryTimeline({
   experienceId,
   logs,
+  foodLogs,
   onDeleted,
 }: VisitHistoryTimelineProps): JSX.Element | null {
   const styles = useStyles();
@@ -42,6 +49,11 @@ export default function VisitHistoryTimeline({
   const [expanded, setExpanded] = useState<boolean>(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const dishesByDate = useMemo(
+    () => groupDishesByVisitDate(foodLogs ?? []),
+    [foodLogs],
+  );
 
   const encodedId = encodeURIComponent(experienceId);
 
@@ -118,6 +130,25 @@ export default function VisitHistoryTimeline({
                 </View>
                 {log.note !== null && log.note.length > 0 ? (
                   <Text style={styles.itemNote}>{log.note}</Text>
+                ) : null}
+                {(dishesByDate.get(log.visitedOn)?.length ?? 0) > 0 ? (
+                  <View
+                    style={styles.dishesList}
+                    testID={`visit-dishes-${log.id}`}
+                  >
+                    {dishesByDate.get(log.visitedOn)!.map((dish) => (
+                      <View key={dish.id} style={styles.dishRow}>
+                        <Text style={styles.dishName}>
+                          {`🍽️ ${dish.foodItemName}`}
+                        </Text>
+                        {dish.rating !== null ? (
+                          <Text style={styles.dishRating}>
+                            {`★ ${dish.rating}/10`}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
                 ) : null}
               </View>
               {deletingId === log.id ? (
@@ -211,6 +242,26 @@ const useStyles = makeStyles((t) => ({
   itemNote: {
     ...t.typography.body,
     color: t.color.textSecondary,
+  },
+  dishesList: {
+    marginTop: 4,
+    gap: 2,
+  },
+  dishRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: t.spacing.xs,
+  },
+  dishName: {
+    ...t.typography.meta,
+    color: t.color.textPrimary,
+    flex: 1,
+  },
+  dishRating: {
+    ...t.typography.meta,
+    color: t.color.accent,
+    fontWeight: '700',
   },
   deleteButton: {
     padding: t.spacing.xs,

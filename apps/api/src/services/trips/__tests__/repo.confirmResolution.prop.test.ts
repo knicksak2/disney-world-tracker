@@ -176,11 +176,14 @@ describe('Feature: unified-experience-logging, Property 12: Collaborative Duplic
   it(
     'handles resolution "link" vs "new_log" and reports existingLogToday accurately',
     async () => {
-      const { pool } = buildPgMem();
+      const { db, pool } = buildPgMem();
       const emitRatingChanged = async () => {};
       const completions = createCompletionRepo(pool);
       const ratings = createRatingRepo({ pool, emitRatingChanged });
       const tripRepo = createTripRepo(pool, { completions, ratings });
+
+      const { bobId, aliceId, tripId, experienceId } = await seedRun(pool);
+      const backup = db.backup();
 
       await fc.assert(
         fc.asyncProperty(
@@ -189,7 +192,7 @@ describe('Feature: unified-experience-logging, Property 12: Collaborative Duplic
           fc.constantFrom<'link' | 'new_log'>('link', 'new_log'),
           fc.option(fc.integer({ min: 1, max: 10 }), { nil: undefined }),
           async (aliceAlreadyLogged, aliceLoggedToTrip, resolution, confirmRating) => {
-            const { bobId, aliceId, tripId, experienceId } = await seedRun(pool);
+            backup.restore();
 
             // 1. If Alice logged beforehand:
             if (aliceAlreadyLogged) {

@@ -187,7 +187,7 @@ Per `execution-discipline`: tests ship in the same task as the code, edit source
     - Write mobile tests in `apps/mobile/src/screens/trips/__tests__/TripFeedScreen.test.tsx`.
     - _Requirements: 15.3, 15.4, 15.6_
 
-- [ ] 11. Final checkpoint - full gate
+- [x] 11. Final checkpoint - full gate
   - Review `git diff` against the requirements: confirm every control, route field, and testID named in the design exists in source; no stray scripts or generated files
   - Run the full `npm run verify` once and paste the literal tail (per-workspace counts and exit code `0`)
   - Write the behavior-to-test map (every requirement behavior with its test file and specific assertion) in the completion message

@@ -98,11 +98,11 @@ export default function FloatingActionDock({
     secondaryIcon = 'add';
     secondaryHandler = () => setChoiceSheetVisible(true);
   } else if (isRestaurant) {
-    // R19.4, R21.3: Restaurant on both lenses
-    primaryLabel = 'Log a Dish';
-    primaryAccessibilityLabel = 'Log a Dish';
-    primaryIcon = 'restaurant';
-    primaryHandler = onLogDish;
+    // R19.4, R21.3, unified-dining-logging R4.1: Restaurant primary action opens LogExperienceSheet
+    primaryLabel = 'Log Visit';
+    primaryAccessibilityLabel = 'Log visit';
+    primaryIcon = 'checkmark-sharp';
+    primaryHandler = onLogVisit;
 
     if (isQuickService || (!onReserveTable && !onReserve)) {
       secondaryLabel = 'Add to Trip';

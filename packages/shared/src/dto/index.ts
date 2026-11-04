@@ -136,6 +136,8 @@ export type {
   FoodItemLogDTO,
   FoodItemLogHistoryDTO,
   CreateFoodItemLogInputDTO,
+  FoodLogRestaurantVisitDTO,
+  CreateFoodItemLogResponseDTO,
   UpdateFoodItemLogInputDTO,
   FoodItemLogWithContextDTO,
 } from './FoodItemLog.js';

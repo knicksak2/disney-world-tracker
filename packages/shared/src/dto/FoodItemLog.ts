@@ -26,6 +26,25 @@ export interface CreateFoodItemLogInputDTO {
   readonly userTz: string;
   readonly rating?: number | null;
   readonly note?: string | null;
+  readonly tripId?: string | null;
+  readonly rodeWith?: readonly string[];
+}
+
+export interface FoodLogRestaurantVisitDTO {
+  readonly experienceId: string;
+  readonly logId: string;
+  /** `true` when this dish log auto-created a new Experience_Log on `visitedOn`; `false` when one already existed. */
+  readonly created: boolean;
+  readonly tripLog?: {
+    readonly tripId: string;
+    readonly logEntryId: string;
+    readonly taggedCount: number;
+  };
+}
+
+export interface CreateFoodItemLogResponseDTO extends FoodItemLogDTO {
+  readonly restaurantVisit?: FoodLogRestaurantVisitDTO | null;
+  readonly newlyAwardedPinIds?: readonly string[];
 }
 
 export interface UpdateFoodItemLogInputDTO {

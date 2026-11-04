@@ -17,7 +17,7 @@
 //   - Preserves error indicators for completion, rating, and note queries independently (R17.8, R17.10).
 //   - Omits redundant legacy form controls on success (R17.10).
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -27,13 +27,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type {
-  CompletionDTO,
-  ExperienceLogDTO,
-  ExperienceVisitHistoryDTO,
-  NoteDTO,
-  RatingDTO,
-  VisitSummaryResponseDTO,
+import {
+  groupDishesByVisitDate,
+  type CompletionDTO,
+  type ExperienceCategory,
+  type ExperienceLogDTO,
+  type ExperienceVisitHistoryDTO,
+  type FoodItemLogWithContextDTO,
+  type NoteDTO,
+  type RatingDTO,
+  type VisitSummaryResponseDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
@@ -57,6 +60,8 @@ export interface QueryLike<T> {
 
 export interface ParkPassportCardProps {
   readonly experienceId: string;
+  readonly category?: ExperienceCategory | null | undefined;
+  readonly foodLogs?: readonly FoodItemLogWithContextDTO[] | undefined;
   readonly completionQuery: QueryLike<CompletionDTO | null>;
   readonly ratingQuery: QueryLike<RatingDTO | null>;
   readonly noteQuery: QueryLike<NoteDTO | null>;
@@ -70,6 +75,8 @@ export interface ParkPassportCardProps {
 
 export default function ParkPassportCard({
   experienceId,
+  category,
+  foodLogs: propFoodLogs,
   completionQuery,
   ratingQuery,
   noteQuery,
@@ -105,15 +112,36 @@ export default function ParkPassportCard({
   // batched visit-summary endpoint, not computed by reducing over `logs`.
   const visitSummaryQuery = useQuery({
     queryKey: ['visit-summary', experienceId] as const,
-    queryFn: () =>
-      apiRequest<VisitSummaryResponseDTO>(
+    queryFn: async () => {
+      const res = await apiRequest<VisitSummaryResponseDTO>(
         'GET',
         `/me/experiences/visit-summary?ids=${encodedId}`,
-      ),
+      );
+      return res ?? {};
+    },
   });
   const visitSummary = visitSummaryQuery.data?.[experienceId];
   const passportAverage = visitSummary?.averageRating ?? null;
   const ratedCount = visitSummary?.ratedCount ?? 0;
+
+  // Query scoped food item logs when category is Restaurant and propFoodLogs is not provided (Requirements 4.2, 4.3)
+  const scopedFoodLogsQuery = useQuery<readonly FoodItemLogWithContextDTO[]>({
+    queryKey: ['scoped-food-item-logs', experienceId],
+    queryFn: async () => {
+      const res = await apiRequest<readonly FoodItemLogWithContextDTO[]>(
+        'GET',
+        `/experiences/${encodedId}/food-item-logs/mine`,
+      );
+      return res ?? [];
+    },
+    enabled: category === 'Restaurant' && propFoodLogs === undefined,
+  });
+
+  const effectiveFoodLogs = propFoodLogs ?? scopedFoodLogsQuery.data ?? [];
+  const dishesByDate = useMemo(
+    () => groupDishesByVisitDate(effectiveFoodLogs),
+    [effectiveFoodLogs],
+  );
 
   const invalidateAfterLogChange = (): void => {
     void queryClient.invalidateQueries({
@@ -464,6 +492,26 @@ export default function ParkPassportCard({
                             <Text style={styles.visitNoteText}>
                               &ldquo;<Text style={styles.visitNoteText}>{log.note}</Text>&rdquo;
                             </Text>
+                          </View>
+                        ) : null}
+
+                        {(dishesByDate.get(log.visitedOn)?.length ?? 0) > 0 ? (
+                          <View
+                            style={styles.visitDishesList}
+                            testID={`visit-dishes-${log.id}`}
+                          >
+                            {dishesByDate.get(log.visitedOn)!.map((dish) => (
+                              <View key={dish.id} style={styles.visitDishRow}>
+                                <Text style={styles.visitDishName}>
+                                  {`🍽️ ${dish.foodItemName}`}
+                                </Text>
+                                {dish.rating !== null ? (
+                                  <Text style={styles.visitDishRating}>
+                                    {`★ ${dish.rating}/10`}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ))}
                           </View>
                         ) : null}
                       </View>
@@ -825,6 +873,30 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11,
     fontStyle: 'italic',
     color: PASSPORT[t.scheme].inkQuote,
+  },
+  visitDishesList: {
+    marginTop: 6,
+    gap: 3,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: PASSPORT[t.scheme].ribbonBorder,
+  },
+  visitDishRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  visitDishName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: PASSPORT[t.scheme].inkDeep,
+    flex: 1,
+  },
+  visitDishRating: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: PASSPORT[t.scheme].inkWarm,
   },
   logAnotherButton: {
     width: '100%',
