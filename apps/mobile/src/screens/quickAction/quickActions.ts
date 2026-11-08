@@ -13,7 +13,13 @@
 import type { Ionicons } from '@expo/vector-icons';
 
 export interface QuickAction {
-  readonly key: 'liveWaits' | 'logRide' | 'logSnack' | 'claimPins' | 'todaySchedule';
+  readonly key:
+    | 'liveWaits'
+    | 'logRide'
+    | 'logSnack'
+    | 'claimPins'
+    | 'todaySchedule'
+    | 'huntMickeys';
   readonly label: string;
   readonly icon: keyof typeof Ionicons.glyphMap;
 }
@@ -36,6 +42,12 @@ const ACTION_LOG_SNACK: QuickAction = {
   icon: 'restaurant-outline',
 };
 
+const ACTION_HUNT_MICKEYS: QuickAction = {
+  key: 'huntMickeys',
+  label: 'Hunt Hidden Mickeys',
+  icon: 'sparkles-outline',
+};
+
 const ACTION_CLAIM_PINS: QuickAction = {
   key: 'claimPins',
   label: 'Claim Pins',
@@ -52,21 +64,24 @@ const ACTION_TODAY_SCHEDULE: QuickAction = {
  * Total, order-preserving projection of the claimable pin count into the quick action list.
  * Pure, never duplicates keys, strictly preserves Requirement 4.2 ordering.
  */
-export function buildQuickActions(claimablePinCount: number): readonly QuickAction[] {
-  if (claimablePinCount > 0) {
-    return [
-      ACTION_LIVE_WAITS,
-      ACTION_LOG_RIDE,
-      ACTION_LOG_SNACK,
-      ACTION_CLAIM_PINS,
-      ACTION_TODAY_SCHEDULE,
-    ];
-  }
-
-  return [
+export function buildQuickActions(
+  claimablePinCount: number,
+  mickeysEnabled = false,
+): readonly QuickAction[] {
+  const actions: QuickAction[] = [
     ACTION_LIVE_WAITS,
     ACTION_LOG_RIDE,
     ACTION_LOG_SNACK,
-    ACTION_TODAY_SCHEDULE,
   ];
+
+  if (mickeysEnabled) {
+    actions.push(ACTION_HUNT_MICKEYS);
+  }
+
+  if (claimablePinCount > 0) {
+    actions.push(ACTION_CLAIM_PINS);
+  }
+
+  actions.push(ACTION_TODAY_SCHEDULE);
+  return actions;
 }

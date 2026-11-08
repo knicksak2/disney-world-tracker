@@ -29,6 +29,7 @@ function validBaseEnv(): NodeJS.ProcessEnv {
     SUPPORT_EMAIL: 'support@example.com',
     ADMIN_PANEL_USERNAME: 'admin-user',
     ADMIN_PANEL_PASSWORD: 'admin-password',
+    PHOTO_HARM_API_KEY: 'test-harm-api-key',
   };
 }
 

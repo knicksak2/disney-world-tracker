@@ -263,3 +263,26 @@ export {
   photoReportCreateSchema,
 } from './Photos.js';
 
+// Hidden Mickeys schemas
+export {
+  mickeyListQuerySchema,
+  mickeyHintBodySchema,
+  mickeyFindBodySchema,
+  mickeyVoteBodySchema,
+  mickeyReportBodySchema,
+  mickeySubmissionBodySchema,
+  seedMickeyEntrySchema,
+  aliasFileEntrySchema,
+} from './Mickeys.js';
+export type {
+  MickeyListQuery,
+  MickeyHintBody,
+  MickeyFindBody,
+  MickeyVoteBody,
+  MickeyReportBody,
+  MickeySubmissionBody,
+  SeedMickeyEntry,
+  AliasFileEntry,
+} from './Mickeys.js';
+
+

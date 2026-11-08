@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   BUDGET_DEFAULT_DINING_TIP_BPS,
   BUDGET_DEFAULT_TAX_BPS,
@@ -55,7 +56,7 @@ import {
   type PickerSelection,
 } from '../../components/menuItemPicker.pure';
 import { makeStyles } from '../../theme/makeStyles';
-import { usePalette } from '../../theme/useAppTheme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { BUDGET_LINE_FORM_MODAL } from './BudgetLineFormModal.palette';
 import {
   fetchPriceQuotes,
@@ -373,6 +374,13 @@ export function BudgetLineFormModal({
 }: BudgetLineFormModalProps): React.JSX.Element {
   const styles = useStyles();
   const palette = usePalette(BUDGET_LINE_FORM_MODAL);
+  const t = useAppTheme();
+  // The full-screen Modal draws edge-to-edge, so the header must clear the
+  // status bar / camera cutout itself or the Close button sits under it and
+  // can't be tapped. Read the context directly (as `GradientHeader` does) so
+  // this still renders where no SafeAreaProvider is mounted (tests).
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.xl + (insets?.top ?? 0);
 
   const createMutation = useCreateBudgetLine(tripId);
   const editMutation = useEditBudgetLine(tripId);
@@ -1732,7 +1740,7 @@ export function BudgetLineFormModal({
       >
         <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View testID={`${testID}-header`} style={[styles.header, { paddingTop: headerTopPadding }]}>
           <View style={styles.headerTitleWrap}>
             <Ionicons name="sparkles" size={18} color={palette.chipActiveBg} />
             <Text style={styles.title}>{isEdit ? 'Edit Budget Line' : 'Add Budget Line'}</Text>
@@ -3744,7 +3752,7 @@ export function BudgetLineFormModal({
         {showExpPicker ? (
           <View style={styles.pickerOverlayWrapper}>
             <View style={[styles.container, { backgroundColor: palette.pickerModalBg }]}>
-              <View style={styles.modalSubHeader}>
+              <View style={[styles.modalSubHeader, { paddingTop: headerTopPadding }]}>
                 <Text style={styles.title}>Select Restaurant</Text>
                 <Pressable
                   accessibilityRole="button"

@@ -62,6 +62,7 @@ import { useFavoritedExperiences } from './useFavoritedExperiences';
 import FavoriteToggle from './FavoriteToggle';
 import { calculateParkWaitAverage } from '../home/pulseCalculations';
 import { DESTINATION_VISUALS } from './destinationVisuals';
+import { useMickeyConfig } from '../mickeys/api';
 
 // ---------------------------------------------------------------------------
 // Constants & Asset Metadata
@@ -136,7 +137,16 @@ export default function ExploreHubScreen({
   const styles = useStyles();
   const t = useAppTheme();
   const pal = usePalette(EXPLORE);
+  const art = usePalette(EXPLORE_ART);
+  const hero = usePalette(EXPLORE_HERO);
   const navigation = passedNavigation;
+
+  const { data: mickeyConfig } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(mickeyConfig?.enabled);
+
+  const onNavigateHiddenMickeys = useCallback(() => {
+    navigation?.navigate('HiddenMickeys');
+  }, [navigation]);
 
   // Search state
   const [searchInput, setSearchInput] = useState('');
@@ -537,6 +547,55 @@ export default function ExploreHubScreen({
               onPress={() => onNavigatePark('Typhoon Lagoon')}
             />
           </View>
+
+          {/* 8. Hidden Mickeys Scavenger Hunt Entry (Requirement 13.3, 13.9) */}
+          {isMickeysEnabled && (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>SCAVENGER HUNT</Text>
+                <Text style={styles.sectionSub}>Find hidden details across the resort</Text>
+              </View>
+
+              <Pressable
+                style={styles.showcaseCard}
+                onPress={onNavigateHiddenMickeys}
+                accessibilityRole="button"
+                accessibilityLabel="Hidden Mickeys, search and discover hidden details"
+                testID="explore-hidden-mickeys-card"
+              >
+                <LinearGradient
+                  colors={[art.mickeyFallback0, art.mickeyFallback1, art.mickeyFallback2]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons
+                  name="sparkles"
+                  size={110}
+                  color={hero.mickeyWatermark}
+                  style={styles.showcaseWatermark}
+                />
+                <View style={styles.showcaseContent}>
+                  <View style={styles.showcaseTopRow}>
+                    <View style={styles.showcaseIconBadge}>
+                      <Text style={styles.showcaseIconText}>✨</Text>
+                    </View>
+                    <View style={styles.showcaseBadgeWrap}>
+                      <View style={styles.showcaseVenuePill}>
+                        <Text style={styles.showcaseVenuePillText}>Scavenger Hunt</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.showcaseBottomRow}>
+                    <Text style={styles.showcaseTitle}>Hidden Mickeys</Text>
+                    <Text style={styles.showcaseSub}>
+                      Search for camouflaged Mickey silhouettes throughout Disney World
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </>
+          )}
         </ScrollView>
       )}
     </ScreenContainer>

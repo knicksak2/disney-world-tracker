@@ -50,12 +50,14 @@ jest.mock('../../api/client', () => {
 
 const mockNavigateToTripDetail = jest.fn();
 const mockNavigateToTripsList = jest.fn();
+const mockNavigateToHiddenMickeys = jest.fn();
 
 jest.mock('../../navigation/navigationRef', () => ({
   __esModule: true,
   navigateToTripDetail: (...args: unknown[]) =>
     mockNavigateToTripDetail(...args),
   navigateToTripsList: (...args: unknown[]) => mockNavigateToTripsList(...args),
+  navigateToHiddenMickeys: (...args: unknown[]) => mockNavigateToHiddenMickeys(...args),
 }));
 
 const mockSetTripsListNotice = jest.fn();
@@ -342,6 +344,47 @@ describe('Active_Trip_Shortcut (R19.1, R19.4)', () => {
     await screen.findByTestId('active-trip-shortcut');
     expect(screen.getByText(/Next: Space Mountain/)).toBeTruthy();
     expect(screen.getByText(/Dining: Be Our Guest/)).toBeTruthy();
+  });
+
+  test('renders Hidden Mickeys status row on active vacation card and navigates on tap', async () => {
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/trips') {
+        return [{ status: 'active', trips: [TRIP_A] }];
+      }
+      if (path === '/mickeys/config') {
+        return { enabled: true, submissionEnabled: true, textScreenEnabled: true, maxClues: 3 };
+      }
+      if (path.includes('/mickeys')) {
+        return { members: [{ userId: 'u1', count: 2 }], mickeys: [{ mickeyId: 'm1' }, { mickeyId: 'm2' }] };
+      }
+      return [];
+    });
+
+    renderShortcut();
+
+    const mickeyShortcut = await screen.findByTestId('active-trip-mickey-shortcut');
+    expect(mickeyShortcut).toBeTruthy();
+    expect(screen.getByText('✨ Hidden Mickeys: 2 found this trip ›')).toBeTruthy();
+
+    fireEvent.press(mickeyShortcut);
+    expect(mockNavigateToHiddenMickeys).toHaveBeenCalled();
+  });
+
+  test('hides Hidden Mickeys status row when mickeys config is disabled', async () => {
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/me/trips') {
+        return [{ status: 'active', trips: [TRIP_A] }];
+      }
+      if (path === '/mickeys/config') {
+        return { enabled: false, submissionEnabled: false, textScreenEnabled: false, maxClues: 3 };
+      }
+      return [];
+    });
+
+    renderShortcut();
+
+    await screen.findByTestId('active-trip-shortcut');
+    expect(screen.queryByTestId('active-trip-mickey-shortcut')).toBeNull();
   });
 
   test('excludes mealPeriod dining items from rides queue so dining is never rendered as next ride', async () => {

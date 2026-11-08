@@ -203,6 +203,13 @@ import { createTicketPricesRepo } from './services/ticketPrices/repo.js';
 import { createTicketPriceClient } from './services/ticketPrices/ticketPriceClient.js';
 import { createTicketPricesService } from './services/ticketPrices/refreshService.js';
 import { createTripBudgetRepo } from './services/tripBudget/repo.js';
+import { DEFAULT_MICKEYS_CONFIG } from './config.js';
+import { DefaultMickeyRepo } from './services/mickeys/repo.js';
+import { HuntService } from './services/mickeys/service.js';
+import { SubmissionService } from './services/mickeys/submissionService.js';
+import { ReportService } from './services/mickeys/reportService.js';
+import { AdminMickeyService } from './services/mickeys/adminService.js';
+import { OpenAITextScreen } from './services/mickeys/adapters/openaiTextScreen.js';
 
 /**
  * Handle returned by {@link buildApp}. The `app` is a configured-but-unbound
@@ -226,14 +233,17 @@ export interface BuiltApp {
  * lazily during `ready()`, which `listen()` triggers. The caller (the
  * entrypoint) owns the `listen()` call.
  */
-export async function buildApp(config: AppConfig): Promise<BuiltApp> {
+export async function buildApp(
+  config: AppConfig,
+  options?: { pool?: DbPool; redis?: Redis },
+): Promise<BuiltApp> {
   // --- Backends -------------------------------------------------------
   // Shared Postgres pool (reads config.database.url internally).
-  const pool: DbPool = getPool();
+  const pool: DbPool = options?.pool ?? getPool();
   // Real Redis client. `new Redis(url)` matches what the lockout service
   // and the leaderboard cache expect (both accept the structural ioredis
   // surface), and what `runSync` needs for its NX coordination lock.
-  const redis = new Redis(config.redis.url);
+  const redis = options?.redis ?? new Redis(config.redis.url);
 
   // --- Repos ----------------------------------------------------------
   const aggregateRepo = createAggregateRepo(pool);
@@ -1059,6 +1069,30 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
     logToTrip: (i) => tripLogPort.logToTrip(i),
   });
 
+  // --- Hidden Mickeys wiring (hidden-mickeys spec) -------------------
+  const mickeysConfig = config.mickeys ?? DEFAULT_MICKEYS_CONFIG;
+  const mickeyRepo = new DefaultMickeyRepo(pool);
+  const huntService = new HuntService(pool, mickeyRepo, mickeysConfig);
+  const reportService = new ReportService({ pool, config: mickeysConfig });
+
+  let mickeyTextScreen: OpenAITextScreen | undefined;
+  if (mickeysConfig.textScreenEnabled && config.photos.harm.apiKey) {
+    mickeyTextScreen = new OpenAITextScreen({
+      apiKey: config.photos.harm.apiKey,
+      baseUrl: config.photos.harm.baseUrl,
+      model: config.photos.harm.model,
+      timeoutMs: config.photos.harm.timeoutMs,
+    });
+  }
+
+  const submissionService = new SubmissionService({
+    pool,
+    config: mickeysConfig,
+    textScreen: mickeyTextScreen,
+  });
+
+  const adminMickeyService = new AdminMickeyService({ pool });
+
   // --- Build app ------------------------------------------------------
   const app = buildServer(config, {
     catalog: {
@@ -1135,6 +1169,7 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       predictionService,
       // Award Squad/Social Pins to the confirming Tagged_Member (R2.3).
       awardPins,
+      getTripMickeys: (tripId: string) => huntService.getTripMickeys(tripId),
       ...(photoService ? { photoLifecycle: photoService } : {}),
       ...(feedPhotoPort ? { feedPhotoPort } : {}),
     },
@@ -1271,6 +1306,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
       basicAuth: adminBasicAuth,
       photos: adminPhotos,
       ticketPrices: adminTicketPrices,
+      mickeys: adminMickeyService,
+      pool,
+    },
+    mickeys: {
+      huntService,
+      submissionService,
+      reportService,
+      requireSession: sessionMiddleware,
+      config: mickeysConfig,
     },
     photos: {
       photoService,

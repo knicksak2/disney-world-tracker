@@ -143,6 +143,10 @@ import {
   type FavoriteRoutesOptions,
 } from './services/tracking/favorite/routes.js';
 import {
+  mickeyRoutes,
+  type MickeyRoutesOptions,
+} from './services/mickeys/routes.js';
+import {
   friendFoodRatingRoutes,
   type FriendFoodRatingRoutesOptions,
 } from './services/friendFoodRatings/routes.js';
@@ -328,6 +332,11 @@ export interface BuildServerServices {
    * Wires PUT/DELETE /me/experiences/:id/favorite and GET /me/favorites.
    */
   readonly favorite?: FavoriteRoutesOptions;
+  /**
+   * Hidden Mickeys routes (Feature: hidden-mickeys).
+   * Wires /mickeys, /mickeys/config, /mickeys/summary, and /me/mickeys/:id/*.
+   */
+  readonly mickeys?: MickeyRoutesOptions;
   /**
    * Friend_Food_Ratings_Service route options (Feature: friend-food-ratings).
    * Wires `GET /users/:userId/food-ratings` behind session authentication.
@@ -664,6 +673,10 @@ export function buildServer(
 
   if (services.favorite !== undefined) {
     void app.register(favoriteRoutes(services.favorite));
+  }
+
+  if (services.mickeys !== undefined) {
+    void app.register(mickeyRoutes(services.mickeys));
   }
 
   if (services.friendFoodRatings !== undefined) {

@@ -92,6 +92,12 @@ export function buildMigratedDb(): IMemoryDb {
     let sql = readFileSync(resolve(MIGRATIONS_DIR, name), 'utf8');
     sql = sql.replace(/CREATE INDEX[^;]+USING gin[^;]+;/gms, '');
     sql = sql.replace(/\s+AT\s+TIME\s+ZONE\s+('[^']*'|[A-Za-z_][\w.]*)/gimu, '');
+    // pg-mem bug: partial index on mickey_progress(mickey_id) WHERE found_at IS NOT NULL causes pg-mem
+    // to use the partial index for unpredicated queries on mickey_id, hiding rows with found_at IS NULL.
+    sql = sql.replace(
+      /CREATE INDEX IF NOT EXISTS mickey_progress_mickey_idx ON mickey_progress\(mickey_id\) WHERE found_at IS NOT NULL;/g,
+      'CREATE INDEX IF NOT EXISTS mickey_progress_mickey_idx ON mickey_progress(mickey_id);',
+    );
     db.public.none(sql);
   }
   return db;

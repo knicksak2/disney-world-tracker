@@ -343,6 +343,46 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     }));
   });
 
+  it('renders Hidden Mickeys scavenger hunt card below quick logging and navigates on tap', async () => {
+    queryClient.setQueryData(['mickeys', 'config'], {
+      enabled: true,
+      submissionEnabled: true,
+      textScreenEnabled: true,
+      maxClues: 3,
+    });
+    queryClient.setQueryData(['mickeys', 'summary', 'me'], {
+      overall: { total: 50, found: 12 },
+      byPark: [],
+      community: { found: 0 },
+    });
+
+    renderHome();
+
+    const card = await screen.findByTestId('home-hidden-mickeys-card');
+    expect(card).toBeTruthy();
+    expect(screen.getByText('HIDDEN MICKEYS HUNT')).toBeTruthy();
+    expect(await screen.findByText('12 of 50 Found')).toBeTruthy();
+
+    fireEvent.press(card);
+    expect(mockNavigate).toHaveBeenCalledWith('HiddenMickeys', expect.objectContaining({
+      initialPark: 'Magic Kingdom',
+    }));
+  });
+
+  it('hides Hidden Mickeys scavenger hunt card when config is disabled', async () => {
+    queryClient.setQueryData(['mickeys', 'config'], {
+      enabled: false,
+      submissionEnabled: false,
+      textScreenEnabled: false,
+      maxClues: 3,
+    });
+
+    renderHome();
+
+    await screen.findByTestId('home-theme-parks-section');
+    expect(screen.queryByTestId('home-hidden-mickeys-card')).toBeNull();
+  });
+
   it('omits Your Favorites section completely when zero favorited experiences exist (Requirements 2.7, 8.3a)', async () => {
     renderHome();
 

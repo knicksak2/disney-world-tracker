@@ -962,5 +962,82 @@ export {
 } from './diningLogging.js';
 export type { InlineDishDraft } from './diningLogging.js';
 
+// Hidden Mickeys (hidden-mickeys)
+export {
+  MICKEY_ZONES,
+  MICKEY_DIFFICULTIES,
+  MICKEY_STATUSES,
+  MICKEY_SOURCES,
+  MICKEY_CONFIDENCE_LABELS,
+  MICKEY_REPORT_REASONS,
+  MICKEY_REPORT_STATUSES,
+  MICKEY_SCOPES,
+  MICKEY_FOUND_FILTERS,
+  MICKEY_AREA_TYPES,
+  MICKEY_HINT_LEVELS,
+  MICKEY_CLUE1_MIN,
+  MICKEY_CLUE1_MAX,
+  MICKEY_CLUE2_MIN,
+  MICKEY_CLUE2_MAX,
+  MICKEY_REVEAL_MIN,
+  MICKEY_REVEAL_MAX,
+  MICKEY_NOTE_MAX,
+  MICKEY_REVIEW_NOTE_MAX,
+  MICKEY_LIST_DEFAULT_LIMIT,
+  MICKEY_LIST_MAX_LIMIT,
+  MICKEY_SEARCH_MIN,
+  MICKEY_SEARCH_MAX,
+  MICKEY_PHOTO_URL_MAX,
+  MICKEY_REPORT_REASON_LABELS,
+} from './constants/mickeys.js';
+export type {
+  MickeyZone,
+  MickeyDifficulty,
+  MickeyStatus,
+  MickeySource,
+  MickeyConfidenceLabel,
+  MickeyReportReason,
+  MickeyReportStatus,
+  MickeyScope,
+  MickeyFoundFilter,
+  MickeyAreaType,
+  MickeyHintLevel,
+} from './constants/mickeys.js';
+
+export type {
+  MickeyListItemDTO,
+  MickeyDetailDTO,
+  MickeyProgressDTO,
+  MickeyListPageDTO,
+  MickeySummaryDTO,
+  MickeySubmissionDTO,
+  FriendMickeyFindDTO,
+  FriendMickeyFindsPageDTO,
+  TripMickeysDTO,
+  MickeyClientConfigDTO,
+} from './dto/index.js';
+
+export {
+  mickeyListQuerySchema,
+  mickeyHintBodySchema,
+  mickeyFindBodySchema,
+  mickeyVoteBodySchema,
+  mickeyReportBodySchema,
+  mickeySubmissionBodySchema,
+  seedMickeyEntrySchema,
+  aliasFileEntrySchema,
+} from './schemas/index.js';
+export type {
+  MickeyListQuery,
+  MickeyHintBody,
+  MickeyFindBody,
+  MickeyVoteBody,
+  MickeyReportBody,
+  MickeySubmissionBody,
+  SeedMickeyEntry,
+  AliasFileEntry,
+} from './schemas/index.js';
+
+
 
 

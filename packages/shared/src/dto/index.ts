@@ -233,3 +233,17 @@ export type {
   BlockedUserDTO,
 } from './Photos.js';
 
+export type {
+  MickeyListItemDTO,
+  MickeyDetailDTO,
+  MickeyProgressDTO,
+  MickeyListPageDTO,
+  MickeySummaryDTO,
+  MickeySubmissionDTO,
+  FriendMickeyFindDTO,
+  FriendMickeyFindsPageDTO,
+  TripMickeysDTO,
+  MickeyClientConfigDTO,
+} from './Mickeys.js';
+
+

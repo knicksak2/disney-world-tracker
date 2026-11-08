@@ -1036,5 +1036,100 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       expect(HUB_SECTIONS).toHaveLength(10);
     });
   });
+
+  describe('Hidden Mickeys section (Task 10.8, R11.5)', () => {
+    test('renders empty state when no Hidden Mickeys found on trip', async () => {
+      apiRequestMock.mockImplementation((_method: string, url: string) => {
+        if (url === '/mickeys/config') {
+          return Promise.resolve({ enabled: true, submissionsEnabled: true });
+        }
+        if (url === `/trips/${TRIP_ID}/mickeys`) {
+          return Promise.resolve({ members: [], mickeys: [] });
+        }
+        return Promise.resolve(TRIP);
+      });
+
+      renderDetail(makeNavigation());
+
+      expect(await screen.findByTestId('trip-detail-mickeys-section')).toBeTruthy();
+      expect(await screen.findByTestId('trip-mickeys-empty')).toBeTruthy();
+      expect(
+        screen.getByText('No Hidden Mickeys found yet'),
+      ).toBeTruthy();
+    });
+
+    test('renders member counts and mickeys list, and navigates to detail on tap', async () => {
+      const navigation = makeNavigation();
+      apiRequestMock.mockImplementation((_method: string, url: string) => {
+        if (url === '/mickeys/config') {
+          return Promise.resolve({ enabled: true, submissionsEnabled: true });
+        }
+        if (url === `/trips/${TRIP_ID}/mickeys`) {
+          return Promise.resolve({
+            members: [
+              { userId: 'u1', displayName: 'Donald', avatarPreset: null, count: 2 },
+            ],
+            mickeys: [
+              {
+                mickeyId: 'm1',
+                clue1: 'Look at the gear pattern',
+                official: true,
+                experienceName: 'Space Mountain',
+                foundByCount: 1,
+              },
+            ],
+          });
+        }
+        return Promise.resolve(TRIP);
+      });
+
+      renderDetail(navigation);
+
+      expect(await screen.findByTestId('trip-detail-mickeys-section')).toBeTruthy();
+      expect(await screen.findByTestId('trip-mickeys-content')).toBeTruthy();
+      expect(screen.getByText('Donald')).toBeTruthy();
+      expect(screen.getByText('Look at the gear pattern')).toBeTruthy();
+      expect(screen.getByText(/Space Mountain/)).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('trip-mickey-item-m1'));
+      expect(navigation.navigate).toHaveBeenCalledWith('HiddenMickeyDetail', {
+        mickeyId: 'm1',
+      });
+    });
+
+    test('is hidden when GET /mickeys/config returns enabled: false', async () => {
+      apiRequestMock.mockImplementation((_method: string, url: string) => {
+        if (url === '/mickeys/config') {
+          return Promise.resolve({ enabled: false, submissionsEnabled: false });
+        }
+        return Promise.resolve(TRIP);
+      });
+
+      renderDetail(makeNavigation());
+
+      await waitFor(() => {
+        expect(screen.getByTestId('trip-detail-hub')).toBeTruthy();
+      });
+      expect(screen.queryByTestId('trip-detail-mickeys-section')).toBeNull();
+    });
+
+    test('does not crash and is hidden when GET /mickeys/config returns 404', async () => {
+      apiRequestMock.mockImplementation((_method: string, url: string) => {
+        if (url === '/mickeys/config') {
+          const { ApiError } = jest.requireActual('../../../api/client');
+          return Promise.reject(new ApiError({ status: 404, code: 'mickey_not_found', message: 'Not Found' }));
+        }
+        return Promise.resolve(TRIP);
+      });
+
+      renderDetail(makeNavigation());
+
+      await waitFor(() => {
+        expect(screen.getByTestId('trip-detail-hub')).toBeTruthy();
+      });
+      expect(screen.queryByTestId('trip-detail-mickeys-section')).toBeNull();
+    });
+  });
 });
+
 

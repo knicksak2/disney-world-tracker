@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { adminRoutes } from '../routes.js';
 import { createBasicAuthHook } from '../basicAuth.js';
 import { createAdminRepo } from '../repo.js';
-import type { AppConfig } from '../../../config.js';
+import { type AppConfig, DEFAULT_MICKEYS_CONFIG } from '../../../config.js';
 
 describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement 14)', () => {
   const username = 'admin-user';
@@ -180,6 +180,7 @@ describe('Admin Panel - Configuration Visibility & Secret Redaction (Requirement
       menuFreshnessMs: 86400000,
       syncIntervalMs: 86400000,
     },
+    mickeys: DEFAULT_MICKEYS_CONFIG,
   };
 
   it('GET /admin/config renders non-secret fields and NEVER contains any sentinel secret values', async () => {

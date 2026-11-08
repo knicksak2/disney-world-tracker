@@ -69,6 +69,9 @@ import {
   EXPERIENCE_CATEGORIES,
   PARKS,
   filterAndRankExperiences,
+  normalizeSearchText,
+  scoreExperienceSearch,
+  tokenizeSearchQuery,
   type ExperienceCategory,
   type ExperienceDTO,
   type Park,
@@ -461,7 +464,9 @@ describe('catalog presentation — Property 6: filter, group, and sort', () => {
                 expect(e.category).toBe(filter.category);
               }
               if (trimmedQ !== null) {
-                expect(e.name.toLowerCase().includes(trimmedQ)).toBe(true);
+                const normQ = normalizeSearchText(trimmedQ);
+                const tokens = tokenizeSearchQuery(trimmedQ);
+                expect(scoreExperienceSearch(e, normQ, tokens).tier).not.toBe('none');
               }
             }
           } finally {

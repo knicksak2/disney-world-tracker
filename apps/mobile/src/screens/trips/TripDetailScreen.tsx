@@ -73,6 +73,7 @@ import { formatParkTime } from '../catalog/live/parkTime';
 import AttachedFoodListsSection from './AttachedFoodListsSection';
 import AttachedExperienceListsSection from './AttachedExperienceListsSection';
 import GroupFavoritesSection from './GroupFavoritesSection';
+import TripMickeySection from './TripMickeySection';
 import TripDayParksSection, { isKnownPark } from './TripDayParksSection';
 import { getTodayWDW } from './wdwDate';
 import { tripDetailKeys } from './tripDetailQueryKeys';
@@ -1258,6 +1259,14 @@ export default function TripDetailScreen({
           startDate={trip.startDate}
           endDate={trip.endDate}
           dayTouringHours={trip.dayTouringHours}
+        />
+
+        {/* Hidden Mickeys tally section (R11.5, Task 10.8) */}
+        <TripMickeySection
+          tripId={tripId}
+          onSelectMickey={(mickeyId) => {
+            (navigation as any).navigate('HiddenMickeyDetail', { mickeyId });
+          }}
         />
 
         {/* Attached Food Lists section (R22, Task 24.6) */}

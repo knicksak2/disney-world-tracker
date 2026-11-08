@@ -363,6 +363,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
 
         {/* Zone 2: The Parks & Quick Logging */}
         <HomeThemeParksSection
+          currentPark={currentPark}
           onSelectPark={(park) =>
             navigation.navigate('Explore', {
               screen: 'DestinationScreen' as any,
@@ -383,6 +384,9 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             setPickerTab('dining');
             setPickerVisible(true);
           }}
+          onOpenHiddenMickeys={() =>
+            navigation.navigate('HiddenMickeys' as any, { initialPark: currentPark ?? undefined } as any)
+          }
         />
 
         {/* 4b. Your Favorites (R8, Task 10.2, 10.5) */}

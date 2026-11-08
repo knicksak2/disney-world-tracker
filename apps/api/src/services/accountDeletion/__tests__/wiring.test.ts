@@ -45,6 +45,7 @@ function config() {
     SUPPORT_EMAIL: 'support@example.com',
     ADMIN_PANEL_USERNAME: 'admin-user',
     ADMIN_PANEL_PASSWORD: 'admin-password',
+    PHOTO_HARM_API_KEY: 'wiring-test-photo-harm-key',
   });
 }
 

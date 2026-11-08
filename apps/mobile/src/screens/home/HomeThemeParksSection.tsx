@@ -22,8 +22,9 @@ import { apiRequest } from '../../api/client';
 import type { DestinationId } from '../catalog/destinations';
 import { DESTINATION_VISUALS } from '../catalog/destinationVisuals';
 import { calculateParkWaitAverage } from './pulseCalculations';
+import { useMickeyConfig, useMickeySummary } from '../mickeys/api';
 import { makeStyles } from '../../theme/makeStyles';
-import { usePalette } from '../../theme/useAppTheme';
+import { usePalette, useAppTheme } from '../../theme/useAppTheme';
 import { HOME_THEME_PARKS } from './HomeThemeParksSection.palette';
 
 const THEME_PARKS: readonly DestinationId[] = [
@@ -38,6 +39,8 @@ export interface HomeThemeParksSectionProps {
   readonly onOpenLiveWaits: () => void;
   readonly onOpenLogRide: () => void;
   readonly onOpenLogFood: () => void;
+  readonly onOpenHiddenMickeys?: (() => void) | undefined;
+  readonly currentPark?: DestinationId | null | undefined;
   readonly testID?: string;
 }
 
@@ -46,9 +49,16 @@ export default function HomeThemeParksSection({
   onOpenLiveWaits,
   onOpenLogRide,
   onOpenLogFood,
+  onOpenHiddenMickeys,
+  currentPark,
   testID = 'home-theme-parks-section',
 }: HomeThemeParksSectionProps): JSX.Element {
   const styles = useStyles();
+  const t = useAppTheme();
+
+  const { data: config } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(config?.enabled);
+  const { data: summary } = useMickeySummary(undefined, isMickeysEnabled);
 
   // Query destination counts to display experience counts per park
   const destinationsQuery = useQuery<{
@@ -131,6 +141,43 @@ export default function HomeThemeParksSection({
           </View>
         </Pressable>
       </View>
+
+      {/* 5. Hidden Mickeys Scavenger Hunt Banner (Home Screen Discovery) */}
+      {isMickeysEnabled && (
+        <Pressable
+          style={({ pressed }) => [styles.mickeyHuntCard, pressed && styles.pressed]}
+          onPress={onOpenHiddenMickeys}
+          accessibilityRole="button"
+          accessibilityLabel="Hidden Mickeys Scavenger Hunt"
+          testID="home-hidden-mickeys-card"
+        >
+          <View style={styles.mickeyHuntInner}>
+            <View style={styles.mickeyIconWrap}>
+              <Ionicons name="sparkles" size={20} color={t.color.primaryFg} />
+            </View>
+            <View style={styles.mickeyTextCol}>
+              <View style={styles.mickeyTitleRow}>
+                <Text style={styles.mickeyTitle}>HIDDEN MICKEYS HUNT</Text>
+                {summary?.overall ? (
+                  <View style={styles.mickeyBadge}>
+                    <Text style={styles.mickeyBadgeText}>
+                      {summary.overall.found} of {summary.overall.total} Found
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.mickeySubtitle} numberOfLines={1}>
+                {currentPark
+                  ? `Search for secret silhouettes in ${currentPark} today`
+                  : 'Search for secret silhouettes hidden in lines & rides'}
+              </Text>
+            </View>
+            <View style={styles.mickeyActionBtn}>
+              <Text style={styles.mickeyActionBtnText}>Hunt ➔</Text>
+            </View>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -376,6 +423,69 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11,
     color: t.color.textSecondary,
     marginTop: 1,
+  },
+  mickeyHuntCard: {
+    marginTop: 10,
+    backgroundColor: HOME_THEME_PARKS[t.scheme].huntCardBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: HOME_THEME_PARKS[t.scheme].huntCardBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  mickeyHuntInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mickeyIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: HOME_THEME_PARKS[t.scheme].huntIconBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mickeyTextCol: {
+    flex: 1,
+  },
+  mickeyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mickeyTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: t.color.textPrimary,
+    letterSpacing: 0.3,
+  },
+  mickeyBadge: {
+    backgroundColor: HOME_THEME_PARKS[t.scheme].huntBadgeBg,
+    paddingVertical: 1.5,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  mickeyBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: HOME_THEME_PARKS[t.scheme].huntBadgeText,
+  },
+  mickeySubtitle: {
+    fontSize: 11,
+    color: HOME_THEME_PARKS[t.scheme].huntSubtitle,
+    marginTop: 2,
+  },
+  mickeyActionBtn: {
+    backgroundColor: HOME_THEME_PARKS[t.scheme].huntActionBg,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  mickeyActionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: HOME_THEME_PARKS[t.scheme].huntActionText,
   },
 }));
 

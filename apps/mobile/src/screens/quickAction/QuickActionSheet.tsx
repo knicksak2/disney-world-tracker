@@ -27,11 +27,13 @@ import { deriveTodaysPark } from '../home/deriveTodaysPark';
 import { useLiveWaitsStore } from '../../state/liveWaitsStore';
 import { resolveDefaultLiveWaitsPark } from '../liveWaits/defaultPark';
 import {
+  navigateToHiddenMickeys,
   navigateToLiveWaits,
   navigateToPinBoard,
   navigateToTripSchedule,
   navigateToTripsList,
 } from '../../navigation/navigationRef';
+import { useMickeyConfig } from '../mickeys/api';
 import { buildQuickActions, type QuickAction } from './quickActions';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -89,11 +91,14 @@ export function QuickActionSheet({
       })
     : null;
 
+  const { data: mickeyConfig } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(mickeyConfig?.enabled);
+
   const claimablePinIds = (pinBoardQuery.data?.pins ?? [])
     .filter(isReadyToClaim)
     .map((p) => p.pinId);
 
-  const actions = buildQuickActions(claimableCount);
+  const actions = buildQuickActions(claimableCount, isMickeysEnabled);
 
   const handleActionPress = (action: QuickAction) => {
     onClose();
@@ -110,6 +115,10 @@ export function QuickActionSheet({
       }
       case 'logSnack': {
         onOpenExperiencePicker?.('dining');
+        break;
+      }
+      case 'huntMickeys': {
+        navigateToHiddenMickeys();
         break;
       }
       case 'claimPins': {

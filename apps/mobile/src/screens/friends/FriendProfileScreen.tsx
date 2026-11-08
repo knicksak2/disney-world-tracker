@@ -134,6 +134,9 @@ import {
 } from '../../hooks/useFriendProfile';
 import { useFriendFoodHighlights } from '../../hooks/useFriendFoodRatings';
 import { FriendFoodHighlightsRow } from './FriendFoodHighlightsRow';
+import FriendMickeySection from './FriendMickeySection';
+import { useMickeyConfig, useMickeySummary, useFriendMickeyFinds } from '../mickeys/api';
+import type { MickeySummaryDTO, FriendMickeyFindsPageDTO } from '@dwt/shared';
 import { useOwnCompletionsQuery } from '../../hooks/useOwnCompletions';
 import { useOwnStatsQuery } from '../../hooks/useOwnStats';
 import {
@@ -299,6 +302,10 @@ export default function FriendProfileScreen({
     retryOnMount: false,
   });
   const foodHighlightsQuery = useFriendFoodHighlights(friendId);
+  const { data: mickeyConfig } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(mickeyConfig?.enabled);
+  const mickeySummaryQuery = useMickeySummary(friendId, isMickeysEnabled);
+  const mickeyFindsQuery = useFriendMickeyFinds(friendId, isMickeysEnabled);
 
   // Phase 3 foundation (task 23.1): read the viewer's OWN stats and completions
   // alongside the friend reads above, so the Progress_Comparison (task 24) and
@@ -405,6 +412,9 @@ export default function FriendProfileScreen({
             profile={profileQuery.data}
             stats={statsQuery.data}
             showcaseQuery={showcaseQuery}
+            isMickeysEnabled={isMickeysEnabled}
+            mickeySummaryQuery={mickeySummaryQuery}
+            mickeyFindsQuery={mickeyFindsQuery}
             onRetryProfile={onRetryProfile}
             onRetryStats={onRetryStats}
             onOpenExperience={openExperience}
@@ -468,6 +478,9 @@ function OverviewMode({
   profile,
   stats,
   showcaseQuery,
+  isMickeysEnabled,
+  mickeySummaryQuery,
+  mickeyFindsQuery,
   onRetryProfile,
   onRetryStats,
   onOpenExperience,
@@ -479,6 +492,9 @@ function OverviewMode({
   readonly profile: ProfileDTO | undefined;
   readonly stats: StatsResponse | undefined;
   readonly showcaseQuery: UseQueryResult<PinShowcaseDTO, ApiError>;
+  readonly isMickeysEnabled: boolean;
+  readonly mickeySummaryQuery: UseQueryResult<MickeySummaryDTO, unknown>;
+  readonly mickeyFindsQuery: UseQueryResult<FriendMickeyFindsPageDTO, unknown>;
   readonly onRetryProfile: () => void;
   readonly onRetryStats: () => void;
   readonly onOpenExperience: (experienceId: string) => void;
@@ -536,6 +552,15 @@ function OverviewMode({
         friendId={friendId}
         displayName={profile?.displayName || fallbackName}
       />
+
+      {isMickeysEnabled && (
+        <FriendMickeySection
+          friendId={friendId}
+          displayName={profile?.displayName || fallbackName}
+          summaryQuery={mickeySummaryQuery}
+          findsQuery={mickeyFindsQuery}
+        />
+      )}
 
       <FriendShowcaseSection friendId={friendId} showcaseQuery={showcaseQuery} />
     </View>

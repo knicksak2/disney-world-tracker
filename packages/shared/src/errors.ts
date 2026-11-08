@@ -252,6 +252,14 @@ export const ERROR_CODES = [
   'photo_uploads_disabled',
   'photo_uploads_banned',
 
+  // -- Hidden Mickeys (hidden-mickeys) ----------------------------------
+  'mickey_not_found',
+  'mickey_text_rejected',
+  'mickey_submission_limit',
+  'mickey_submissions_banned',
+  'mickey_feature_disabled',
+  'mickey_report_forbidden',
+
   // -- Account deletion (account-deletion R2.4, R2.8, R12.10, R16.2, R16.5) ---
   // `reauth_failed` / `reauth_required` are 403, never 401, so `apiRequest`
   // does not sign the user out. `trip_party_deleted`: an expense or settlement
@@ -440,6 +448,14 @@ export const errorCodeToHttpStatus: { readonly [K in ErrorCode]: number } = {
   photo_target_full: 409,
   photo_uploads_disabled: 503,
   photo_uploads_banned: 403,
+
+  // Hidden Mickeys
+  mickey_not_found: 404,
+  mickey_text_rejected: 400,
+  mickey_submission_limit: 429,
+  mickey_submissions_banned: 403,
+  mickey_feature_disabled: 503,
+  mickey_report_forbidden: 403,
 
   // Account deletion (never 401)
   reauth_failed: 403,

@@ -125,13 +125,15 @@ export function GradientHeader({
         { paddingTop: topInset + basePadding },
       ]}
     >
-      {/* Decorative sparkles — purely visual, not interactive. */}
-      <Ionicons
-        name="sparkles"
-        size={14}
-        color="rgba(255,255,255,0.35)"
-        style={styles.sparkleTopRight}
-      />
+      {/* Decorative sparkles — purely visual, not interactive. Only render top-right sparkle if no right action slot occupies that area */}
+      {!right && (
+        <Ionicons
+          name="sparkles"
+          size={14}
+          color="rgba(255,255,255,0.35)"
+          style={styles.sparkleTopRight}
+        />
+      )}
       <Ionicons
         name="star"
         size={10}

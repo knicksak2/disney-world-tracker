@@ -634,4 +634,129 @@ describe('ExploreHubScreen — dark mode', () => {
       darkTheme.categoryVisual.Restaurant.tint,
     );
   });
+
+  describe('Hidden Mickeys Entry Point (Requirement 13.3, 13.9)', () => {
+    it('renders Hidden Mickeys scavenger hunt card when enabled and navigates on tap', async () => {
+      stubApi();
+      apiRequestMock.mockImplementation(async (_method, path) => {
+        if (path === '/mickeys/config') {
+          return { enabled: true, submissionsEnabled: true };
+        }
+        if (typeof path === 'string' && path.includes('/destinations')) {
+          return mockDestinationsResponse;
+        }
+        if (typeof path === 'string' && path.includes('/live')) {
+          return mockLiveSnapshot;
+        }
+        if (typeof path === 'string' && path.startsWith('/me/favorites')) {
+          return { experienceIds: ['exp-space'] };
+        }
+        if (path === '/me') {
+          return { user: { id: 'viewer', email: 'viewer@test.local' } };
+        }
+        if (typeof path === 'string' && path.endsWith('/completions')) {
+          return { entries: [] };
+        }
+        if (typeof path === 'string' && path.startsWith('/catalog')) {
+          return { experiences: createSampleExperiences(), staleCache: false };
+        }
+        return {};
+      });
+
+      const queryClient = makeQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <ExploreHubScreen navigation={mockNavigation} />
+          </NavigationContainer>
+        </QueryClientProvider>,
+      );
+
+      const card = await screen.findByTestId('explore-hidden-mickeys-card');
+      expect(card).toBeTruthy();
+      expect(screen.getByText('Hidden Mickeys')).toBeTruthy();
+      expect(screen.getByText('Scavenger Hunt')).toBeTruthy();
+
+      fireEvent.press(card);
+      expect(mockNavigate).toHaveBeenCalledWith('HiddenMickeys');
+    });
+
+    it('is hidden when GET /mickeys/config returns enabled: false', async () => {
+      stubApi();
+      apiRequestMock.mockImplementation(async (_method, path) => {
+        if (path === '/mickeys/config') {
+          return { enabled: false, submissionsEnabled: false };
+        }
+        if (typeof path === 'string' && path.includes('/destinations')) {
+          return mockDestinationsResponse;
+        }
+        if (typeof path === 'string' && path.includes('/live')) {
+          return mockLiveSnapshot;
+        }
+        if (typeof path === 'string' && path.startsWith('/me/favorites')) {
+          return { experienceIds: ['exp-space'] };
+        }
+        if (path === '/me') {
+          return { user: { id: 'viewer', email: 'viewer@test.local' } };
+        }
+        if (typeof path === 'string' && path.endsWith('/completions')) {
+          return { entries: [] };
+        }
+        if (typeof path === 'string' && path.startsWith('/catalog')) {
+          return { experiences: createSampleExperiences(), staleCache: false };
+        }
+        return {};
+      });
+
+      const queryClient = makeQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <ExploreHubScreen navigation={mockNavigation} />
+          </NavigationContainer>
+        </QueryClientProvider>,
+      );
+
+      expect(screen.queryByTestId('explore-hidden-mickeys-card')).toBeNull();
+    });
+
+    it('does not crash and is hidden when GET /mickeys/config returns 404', async () => {
+      stubApi();
+      apiRequestMock.mockImplementation(async (_method, path) => {
+        if (path === '/mickeys/config') {
+          throw new ApiError({ status: 404, code: 'mickey_not_found', message: 'Not Found' });
+        }
+        if (typeof path === 'string' && path.includes('/destinations')) {
+          return mockDestinationsResponse;
+        }
+        if (typeof path === 'string' && path.includes('/live')) {
+          return mockLiveSnapshot;
+        }
+        if (typeof path === 'string' && path.startsWith('/me/favorites')) {
+          return { experienceIds: ['exp-space'] };
+        }
+        if (path === '/me') {
+          return { user: { id: 'viewer', email: 'viewer@test.local' } };
+        }
+        if (typeof path === 'string' && path.endsWith('/completions')) {
+          return { entries: [] };
+        }
+        if (typeof path === 'string' && path.startsWith('/catalog')) {
+          return { experiences: createSampleExperiences(), staleCache: false };
+        }
+        return {};
+      });
+
+      const queryClient = makeQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <ExploreHubScreen navigation={mockNavigation} />
+          </NavigationContainer>
+        </QueryClientProvider>,
+      );
+
+      expect(screen.queryByTestId('explore-hidden-mickeys-card')).toBeNull();
+    });
+  });
 });

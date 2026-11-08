@@ -105,6 +105,7 @@ import { getTodayWdwDate } from './live/parkTime';
 import { isQuickServiceDining, liveSectionFor, NO_LIVE_SHAPE } from './gating';
 import FavoriteToggle from './FavoriteToggle';
 import { useFavoritedExperiences } from './useFavoritedExperiences';
+import { useMickeyConfig, useMickeyList } from '../mickeys/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -902,6 +903,13 @@ export default function ExperienceDetailScreen(): JSX.Element {
           land={experience.land ?? null}
           resortArea={experience.resortArea ?? null}
           aggregateRating={aggregateQ.data ?? null}
+          experienceId={experience.id}
+          onOpenHiddenMickeys={() =>
+            navigation.navigate('HiddenMickeys' as any, {
+              experienceId: experience.id,
+              initialPark: experience.park ?? undefined,
+            } as any)
+          }
         />
 
         {/* ------------------------------------------------------------ */}
@@ -1158,6 +1166,8 @@ function ExperienceHero({
   land,
   resortArea,
   aggregateRating,
+  experienceId,
+  onOpenHiddenMickeys,
 }: {
   readonly imageUrl: string | null;
   readonly category: ExperienceCategory;
@@ -1165,12 +1175,25 @@ function ExperienceHero({
   readonly land?: string | null;
   readonly resortArea?: string | null;
   readonly aggregateRating: AggregateRatingDTO | null;
+  readonly experienceId?: string | undefined;
+  readonly onOpenHiddenMickeys?: (() => void) | undefined;
 }): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
   const [failed, setFailed] = React.useState(false);
   const visual = t.categoryVisual[category];
   const hasImage = imageUrl != null && imageUrl.length > 0 && !failed;
+
+  const { data: config } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(config?.enabled);
+  const { data: listData } = useMickeyList(
+    { experienceId: experienceId ?? '', limit: 100 },
+    isMickeysEnabled && Boolean(experienceId),
+  );
+  const items = listData?.items ?? [];
+  const total = items.length;
+  const found = items.filter((i) => i.found).length;
+
   // A Resort's own representing row carries no `land`/`park` (it isn't inside
   // a specific park or land) — its Geographic Area is the resortArea instead.
   // Every other category keeps the existing land-then-park precedence.
@@ -1206,6 +1229,26 @@ function ExperienceHero({
           />
         </View>
       )}
+
+      {/* Top right floating Hidden Mickeys quest badge */}
+      {isMickeysEnabled && total > 0 ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.heroMickeyBadge,
+            pressed && styles.cardPressed,
+          ]}
+          onPress={onOpenHiddenMickeys}
+          accessibilityRole="button"
+          accessibilityLabel={`Hunt ${total} Hidden Mickeys here, ${found} found`}
+          hitSlop={6}
+          testID="experience-hero-mickey-badge"
+        >
+          <Ionicons name="sparkles" size={13} color={HERO[t.scheme].mickeyBadgeIcon} />
+          <Text style={styles.heroMickeyBadgeText}>
+            {found > 0 ? `${total} Mickeys (${found}) ›` : `${total} Mickeys ›`}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Gradient scrim overlay across the bottom */}
       <LinearGradient
@@ -1358,6 +1401,30 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  heroMickeyBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: HERO[t.scheme].mickeyBadgeBg,
+    borderWidth: 1,
+    borderColor: HERO[t.scheme].mickeyBadgeBorder,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    shadowColor: HERO[t.scheme].cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  heroMickeyBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: HERO[t.scheme].mickeyBadgeText,
   },
   heroLandPill: {
     flexDirection: 'row',

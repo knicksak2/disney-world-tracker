@@ -178,10 +178,9 @@ describe('ExperienceDetailScreen - Resort Recreation Experiences', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Painting on the Riviera')).toBeTruthy();
+      expect(screen.getByText('Resort Activity')).toBeTruthy();
+      expect(screen.getAllByText("Disney's Riviera Resort").length).toBeGreaterThanOrEqual(1);
     });
-
-    expect(screen.getByText('Resort Activity')).toBeTruthy();
-    expect(screen.getAllByText("Disney's Riviera Resort").length).toBeGreaterThanOrEqual(1);
 
     // Switch to My Passport & Lore lens to verify description
     fireEvent.press(screen.getByTestId('lens-tab-passport'));

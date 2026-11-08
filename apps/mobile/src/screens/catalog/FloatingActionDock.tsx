@@ -61,7 +61,7 @@ export default function FloatingActionDock({
   onAddToPlan,
   onRateMostRecent: _onRateMostRecent,
   onRateVisit: _onRateVisit,
-  onLogDish,
+  onLogDish: _onLogDish,
   onReserve,
   onReserveTable,
   onAddToExperienceList,

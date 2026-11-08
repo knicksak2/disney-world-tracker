@@ -369,4 +369,19 @@ export function navigateToTripFeed(params: { readonly tripId: string }): boolean
   return true;
 }
 
+/**
+ * Navigate to the root-stack `HiddenMickeys` screen.
+ */
+export function navigateToHiddenMickeys(params?: {
+  readonly experienceId?: string;
+  readonly initialPark?: string;
+}): boolean {
+  if (!navigationRef.isReady()) {
+    return false;
+  }
+  navigationRef.navigate('HiddenMickeys' as any, params as any);
+  return true;
+}
+
+
 

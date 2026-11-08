@@ -5,6 +5,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import type { MenuDTO, PriceQuoteDTO } from '@dwt/shared';
 
 import { BudgetLineFormModal } from '../BudgetLineFormModal';
@@ -1409,5 +1410,37 @@ describe('BudgetLineFormModal (Task 18.2, Requirements 2.1-2.7, 14.8, 14.12, 22.
     fireEvent.press(screen.getByLabelText('dining'));
     expect(screen.queryByText(/Prices from Disney's website/)).toBeNull();
     expect(screen.queryByDisplayValue('572.00')).toBeNull();
+  });
+
+  it('header clears the status bar / camera cutout so the Close button is tappable', () => {
+    const topInset = 48;
+    renderWithClient(
+      <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: 0, left: 0, right: 0 }}>
+        <BudgetLineFormModal
+          visible={true}
+          tripId={tripId}
+          initialDraft={{ category: 'dining' }}
+          onCancel={jest.fn()}
+        />
+      </SafeAreaInsetsContext.Provider>
+    );
+
+    const header = StyleSheet.flatten(screen.getByTestId('budget-line-form-modal-header').props.style);
+    // Base padding (theme spacing.xl) plus the full top inset.
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    expect(screen.getByLabelText('Cancel')).toBeTruthy();
+
+    // Without a provider (zero inset) the header is strictly shorter.
+    screen.unmount();
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        initialDraft={{ category: 'dining' }}
+        onCancel={jest.fn()}
+      />
+    );
+    const noInset = StyleSheet.flatten(screen.getByTestId('budget-line-form-modal-header').props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

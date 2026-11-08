@@ -1087,6 +1087,7 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
             <a href="/admin/notifications" class="dropdown-item ${activePath === '/admin/notifications' ? 'active' : ''}">🔔 Push Delivery Visibility</a>
             <a href="/admin/config" class="dropdown-item ${activePath === '/admin/config' ? 'active' : ''}">⚙️ System Configuration</a>
             <div class="dropdown-group-title">User Operations</div>
+            <a href="/admin/mickeys" class="dropdown-item ${activePath.startsWith('/admin/mickeys') ? 'active' : ''}">🐭 Hidden Mickeys</a>
             <a href="/admin/users" class="dropdown-item ${activePath === '/admin/users' ? 'active' : ''}">👤 User & Support Lookup</a>
             <a href="/admin/accounts/lockouts" class="dropdown-item ${activePath === '/admin/accounts/lockouts' ? 'active' : ''}">🔒 Account Lockouts</a>
             <a href="/admin/growth" class="dropdown-item ${activePath === '/admin/growth' ? 'active' : ''}">📈 Growth & Activity</a>

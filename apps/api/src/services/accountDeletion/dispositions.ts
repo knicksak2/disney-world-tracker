@@ -210,6 +210,15 @@ export const DISPOSITIONS: readonly DispositionEntry[] = [
   e('trip_traveler_profiles', 'member_id', 'delete', 4, ['id'], 'cascade', true, {
     note: 'Personal attributes of a departing person; nothing depends on the row.',
   }),
+
+  // -- hidden mickeys (hidden-mickeys spec) ----------------------------------------------------
+  e('hidden_mickeys', 'submitter_id', 'nullify', 4, ['id'], 'set_null', true, {
+    note: 'Submitter reference nulled on delete; approved Mickey remains in catalog.',
+  }),
+  e('mickey_progress', 'user_id', 'delete', 4, ['mickey_id'], 'cascade', false),
+  e('mickey_still_there_votes', 'user_id', 'delete', 4, ['mickey_id'], 'cascade', false),
+  e('mickey_reports', 'user_id', 'delete', 4, ['mickey_id'], 'cascade', false),
+  e('mickey_submission_bans', 'user_id', 'delete', 4, ['user_id'], 'cascade', false),
 ];
 
 /**

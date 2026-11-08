@@ -30,6 +30,7 @@ import { LORE } from './PassportAndLoreLens.palette';
 import ParkPassportCard from './ParkPassportCard';
 import RestaurantDishLogCard from './RestaurantDishLogCard';
 import AboutSection from './AboutSection';
+import ExperienceMickeySection from './ExperienceMickeySection';
 import type { TagGroup } from './infoTags';
 import { formatCommunityAggregate } from './aggregateFormat';
 
@@ -111,6 +112,9 @@ export default function PassportAndLoreLens({
         onMyLoggedItems={onMyLoggedItems}
         onAddToList={onAddToList}
       />
+
+      {/* Hidden Mickeys Hunt Section */}
+      <ExperienceMickeySection experienceId={experienceId} />
 
       {/* 3. Field Guide Card (Lore, Imagineer Notes, Community Rating, Specs) */}
       <Card style={styles.guideCard} testID="passport-lore-field-guide">

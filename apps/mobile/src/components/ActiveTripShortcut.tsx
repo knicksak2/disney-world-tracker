@@ -40,10 +40,12 @@ import type { Park, PlannedItemDTO, TripDTO, TripStatus } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import {
+  navigateToHiddenMickeys,
   navigateToTripDetail,
   navigateToTripsList,
   navigateToTripSchedule,
 } from '../navigation/navigationRef';
+import { useMickeyConfig, useTripMickeys } from '../screens/mickeys/api';
 import { setTripsListNotice } from '../navigation/tripsListNotice';
 import { tripsListKeys } from '../screens/trips/TripsListScreen';
 import { tripPlannedListKeys } from '../screens/trips/TripPlannedListScreen';
@@ -165,6 +167,14 @@ export default function ActiveTripShortcut(): JSX.Element | null {
 
   const plannedItems = plannedItemsQuery.data ?? [];
   const todayStr = getTodayWDW();
+
+  const { data: mickeysConfig } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(mickeysConfig?.enabled);
+  const tripMickeysQuery = useTripMickeys(
+    single?.id ?? '',
+    isMickeysEnabled && Boolean(single?.id),
+  );
+  const tripMickeysFound = tripMickeysQuery.data?.mickeys?.length ?? 0;
 
   // Derive day numbers (e.g. Day 1 of 11) using calendar dates
   const { currentDay, totalDays } = useMemo(() => {
@@ -374,6 +384,26 @@ export default function ActiveTripShortcut(): JSX.Element | null {
                     }`
                   : '🍽️ Dining: Tap to add dining'}
               </Text>
+
+              {isMickeysEnabled && (
+                <Pressable
+                  onPress={(e) => {
+                    e?.stopPropagation?.();
+                    navigateToHiddenMickeys({ initialPark: (todayPark as any) ?? undefined });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Hunt Hidden Mickeys"
+                  hitSlop={4}
+                  style={styles.mickeyRow}
+                  testID="active-trip-mickey-shortcut"
+                >
+                  <Text style={styles.mickeyText} numberOfLines={1}>
+                    {tripMickeysFound > 0
+                      ? `✨ Hidden Mickeys: ${tripMickeysFound} found this trip ›`
+                      : '✨ Hidden Mickeys: Tap to hunt nearby ›'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </LinearGradient>
@@ -598,6 +628,14 @@ const useStyles = makeStyles((t) => ({
     fontSize: 10.5,
     color: t.color.textSecondary,
     marginTop: 3,
+  },
+  mickeyRow: {
+    marginTop: 4,
+  },
+  mickeyText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: t.color.primaryFg,
   },
   pressed: {
     opacity: 0.9,

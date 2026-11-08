@@ -373,6 +373,45 @@ const envSchema = z.object({
   PHOTOS_VISION_FIELDS_RETENTION_DAYS: permissivePhotoNumber(30),
   PHOTOS_EXIF_POLICY: z.string().default('log'),
   PHOTOS_EXIF_SCAN_BYTES: permissivePhotoNumber(65536),
+
+  // ---------------------------------------------------------------------------
+  // Hidden Mickeys (hidden-mickeys spec)
+  // ---------------------------------------------------------------------------
+  MICKEYS_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  MICKEYS_SUBMISSIONS_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  MICKEYS_SUBMISSION_MODE: z
+    .enum(['publish', 'review'])
+    .default('publish'),
+  MICKEYS_TEXT_SCREEN_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return true;
+      if (typeof val === 'boolean') return val;
+      return val === 'true' || val === '1';
+    }),
+  MICKEYS_SUBMISSIONS_PER_DAY: permissivePhotoNumber(5),
+  MICKEYS_REPORT_AUTOHIDE: permissivePhotoNumber(3),
+  MICKEYS_COMMUNITY_VERIFIED_MIN: permissivePhotoNumber(3),
+  MICKEYS_CONFIDENCE_PRIOR_VALUE: permissivePhotoNumber(0.9),
+  MICKEYS_CONFIDENCE_PRIOR_WEIGHT: permissivePhotoNumber(3),
+  MICKEYS_CONFIDENCE_HALF_LIFE_DAYS: permissivePhotoNumber(90),
+  MICKEYS_CONFIDENCE_CONFIRMED_MIN: permissivePhotoNumber(0.65),
+  MICKEYS_CONFIDENCE_UNCERTAIN_MIN: permissivePhotoNumber(0.4),
 })
   .superRefine((data, ctx) => {
     if (data.TRIP_BOOKING_CRON_SECRET) {
@@ -702,6 +741,28 @@ const envSchema = z.object({
         message: 'TICKET_PRICES_USER_AGENT must be non-empty, at most 200 characters, and non-browser',
       });
     }
+
+    // -------------------------------------------------------------------------
+    // Hidden Mickeys validation (hidden-mickeys spec Requirement 14.2, Task 1.5)
+    // -------------------------------------------------------------------------
+    if (data.MICKEYS_ENABLED && data.MICKEYS_SUBMISSIONS_ENABLED && data.MICKEYS_SUBMISSION_MODE === 'publish') {
+      if (!data.MICKEYS_TEXT_SCREEN_ENABLED) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['MICKEYS_TEXT_SCREEN_ENABLED'],
+          message:
+            'MICKEYS_TEXT_SCREEN_ENABLED must be true when MICKEYS_SUBMISSIONS_ENABLED is true and MICKEYS_SUBMISSION_MODE is publish',
+        });
+      }
+      if (!data.PHOTO_HARM_API_KEY || data.PHOTO_HARM_API_KEY.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PHOTO_HARM_API_KEY'],
+          message:
+            'PHOTO_HARM_API_KEY is required when MICKEYS_SUBMISSIONS_ENABLED is true and MICKEYS_SUBMISSION_MODE is publish',
+        });
+      }
+    }
   });
 
 type EnvShape = z.infer<typeof envSchema>;
@@ -797,7 +858,38 @@ export interface AppConfig {
     // Infrequent static-sync cadence, floored at 24h (R9).
     readonly syncIntervalMs: number;
   };
+  readonly mickeys?: MickeysConfig;
 }
+
+export interface MickeysConfig {
+  readonly enabled: boolean;
+  readonly submissionsEnabled: boolean;
+  readonly submissionMode: 'publish' | 'review';
+  readonly textScreenEnabled: boolean;
+  readonly submissionsPerDay: number;
+  readonly reportAutohide: number;
+  readonly communityVerifiedMin: number;
+  readonly confidencePriorValue: number;
+  readonly confidencePriorWeight: number;
+  readonly confidenceHalfLifeDays: number;
+  readonly confidenceConfirmedMin: number;
+  readonly confidenceUncertainMin: number;
+}
+
+export const DEFAULT_MICKEYS_CONFIG: MickeysConfig = {
+  enabled: true,
+  submissionsEnabled: true,
+  submissionMode: 'publish',
+  textScreenEnabled: true,
+  submissionsPerDay: 5,
+  reportAutohide: 3,
+  communityVerifiedMin: 3,
+  confidencePriorValue: 0.9,
+  confidencePriorWeight: 3,
+  confidenceHalfLifeDays: 90,
+  confidenceConfirmedMin: 0.65,
+  confidenceUncertainMin: 0.4,
+};
 
 export interface TicketPricesConfig {
   readonly enabled: boolean;
@@ -925,7 +1017,7 @@ export class ConfigError extends Error {
 // Accepting an injected `env` keeps `loadConfig` pure and trivially testable
 // without monkey-patching `process.env`.
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { mickeys: MickeysConfig } {
   const parsed = envSchema.safeParse(env);
 
   if (!parsed.success) {
@@ -1101,6 +1193,50 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       diningMenuBaseUrl: data.DISNEY_DINING_MENU_BASE_URL,
       menuFreshnessMs: data.MENU_FRESHNESS_MS,
       syncIntervalMs: data.CATALOG_SYNC_INTERVAL_MS,
+    },
+    mickeys: {
+      enabled: data.MICKEYS_ENABLED,
+      submissionsEnabled: data.MICKEYS_SUBMISSIONS_ENABLED,
+      submissionMode: data.MICKEYS_SUBMISSION_MODE,
+      textScreenEnabled: data.MICKEYS_TEXT_SCREEN_ENABLED,
+      submissionsPerDay:
+        Number.isInteger(data.MICKEYS_SUBMISSIONS_PER_DAY) && data.MICKEYS_SUBMISSIONS_PER_DAY > 0
+          ? data.MICKEYS_SUBMISSIONS_PER_DAY
+          : 5,
+      reportAutohide:
+        Number.isInteger(data.MICKEYS_REPORT_AUTOHIDE) && data.MICKEYS_REPORT_AUTOHIDE > 0
+          ? data.MICKEYS_REPORT_AUTOHIDE
+          : 3,
+      communityVerifiedMin:
+        Number.isInteger(data.MICKEYS_COMMUNITY_VERIFIED_MIN) && data.MICKEYS_COMMUNITY_VERIFIED_MIN > 0
+          ? data.MICKEYS_COMMUNITY_VERIFIED_MIN
+          : 3,
+      confidencePriorValue:
+        Number.isFinite(data.MICKEYS_CONFIDENCE_PRIOR_VALUE) &&
+        data.MICKEYS_CONFIDENCE_PRIOR_VALUE >= 0 &&
+        data.MICKEYS_CONFIDENCE_PRIOR_VALUE <= 1
+          ? data.MICKEYS_CONFIDENCE_PRIOR_VALUE
+          : 0.9,
+      confidencePriorWeight:
+        Number.isFinite(data.MICKEYS_CONFIDENCE_PRIOR_WEIGHT) && data.MICKEYS_CONFIDENCE_PRIOR_WEIGHT > 0
+          ? data.MICKEYS_CONFIDENCE_PRIOR_WEIGHT
+          : 3,
+      confidenceHalfLifeDays:
+        Number.isFinite(data.MICKEYS_CONFIDENCE_HALF_LIFE_DAYS) && data.MICKEYS_CONFIDENCE_HALF_LIFE_DAYS > 0
+          ? data.MICKEYS_CONFIDENCE_HALF_LIFE_DAYS
+          : 90,
+      confidenceConfirmedMin:
+        Number.isFinite(data.MICKEYS_CONFIDENCE_CONFIRMED_MIN) &&
+        data.MICKEYS_CONFIDENCE_CONFIRMED_MIN >= 0 &&
+        data.MICKEYS_CONFIDENCE_CONFIRMED_MIN <= 1
+          ? data.MICKEYS_CONFIDENCE_CONFIRMED_MIN
+          : 0.65,
+      confidenceUncertainMin:
+        Number.isFinite(data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN) &&
+        data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN >= 0 &&
+        data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN <= 1
+          ? data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN
+          : 0.4,
     },
   };
 }

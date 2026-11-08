@@ -82,6 +82,7 @@ import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import CreateFoodListModal from '../foodLists/CreateFoodListModal';
 import CreateExperienceListModal from '../experienceLists/CreateExperienceListModal';
 import { MyPhotosEntry } from './MyPhotosEntry';
+import { useMickeyConfig, useMickeySummary } from '../mickeys/api';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
@@ -121,6 +122,9 @@ export default function CollectionScreen(): JSX.Element {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const { count: claimableCount } = useClaimablePinsBadge();
+  const { data: mickeyConfig } = useMickeyConfig();
+  const isMickeysEnabled = Boolean(mickeyConfig?.enabled);
+  const { data: mickeySummary } = useMickeySummary(undefined, isMickeysEnabled);
 
   const [activeTab, setActiveTab] = useState<VaultSubTab>('pins');
   const [detailPinId, setDetailPinId] = useState<string | null>(null);
@@ -636,6 +640,30 @@ export default function CollectionScreen(): JSX.Element {
                 </View>
               </View>
             </Card>
+
+            {/* Hidden Mickeys Vault Progress Card (Requirement 13.3) */}
+            {isMickeysEnabled && (
+              <Card style={styles.directoryCard} testID="vault-hidden-mickeys-card">
+                <View style={styles.directoryHeader}>
+                  <View style={styles.directoryInfo}>
+                    <Text style={styles.directoryTitle}>Hidden Mickeys</Text>
+                    <Text style={styles.directoryCount}>
+                      {mickeySummary?.overall?.found ?? 0} of {mickeySummary?.overall?.total ?? 0} Official Found
+                      {mickeySummary?.community?.found ? ` · ${mickeySummary.community.found} Community` : ''}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.viewBoardBtn}
+                    onPress={() => (navigation as any).navigate('HiddenMickeys')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Explore Hidden Mickeys"
+                    testID="vault-hidden-mickeys-link"
+                  >
+                    <Text style={styles.viewBoardBtnText}>Hunt ➔</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            )}
 
             {/* Badges in Reach / Next Pin Goals Card */}
             {pinsInReach.length > 0 && (

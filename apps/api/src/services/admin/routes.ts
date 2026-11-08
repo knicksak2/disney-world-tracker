@@ -20,6 +20,9 @@ import type { IntelligenceRepo } from '../intelligence/IntelligenceRepo.js';
 import type { PinRepo } from '../pins/repo.js';
 import { registerPhotoRoutes } from './photoRoutes.js';
 import { registerTicketPriceRoutes } from './ticketPriceRoutes.js';
+import { registerMickeyRoutes } from './mickeyRoutes.js';
+import type { AdminMickeyService } from '../mickeys/adminService.js';
+import type { DbPool } from '../../db/pool.js';
 import type {
   AdminTicketPricesPort,
   AdminTicketPricesState,
@@ -73,6 +76,8 @@ export interface AdminRoutesOptions {
   readonly basicAuth: preHandlerHookHandler;
   readonly photos?: AdminPhotoPort | undefined;
   readonly ticketPrices?: AdminTicketPricesPort | undefined;
+  readonly mickeys?: AdminMickeyService | undefined;
+  readonly pool?: DbPool | undefined;
 }
 
 export interface AdminSectionLink {
@@ -188,6 +193,14 @@ export const ADMIN_SECTIONS: readonly AdminSectionLink[] = [
     category: 'User Operations & Security',
     icon: '📸',
     badge: 'Content Moderation',
+  },
+  {
+    path: '/admin/mickeys',
+    title: 'Hidden Mickeys',
+    description: 'Review pending submissions, soft-hidden reports, ready-to-promote community entries, and inactive rides.',
+    category: 'User Operations & Security',
+    icon: '🐭',
+    badge: 'Content & Moderation',
   },
 ];
 
@@ -1946,5 +1959,12 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
     // Ticket Prices Management & Diagnostics (Task 10.1)
     // -------------------------------------------------------------------------
     await registerTicketPriceRoutes(fastify, options);
+
+    // -------------------------------------------------------------------------
+    // Hidden Mickeys Review Queue & Operations (Task 7.2)
+    // -------------------------------------------------------------------------
+    if (options.mickeys || options.pool) {
+      await registerMickeyRoutes(fastify, options);
+    }
   };
 }

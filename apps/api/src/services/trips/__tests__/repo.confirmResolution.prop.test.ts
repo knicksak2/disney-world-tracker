@@ -226,7 +226,7 @@ describe('Feature: unified-experience-logging, Property 12: Collaborative Duplic
             // 2. Bob logs the ride with Alice tagged:
             const bobLog = await tripRepo.logCompletion(tripId, bobId, {
               experienceId,
-              visitedOn: '2026-11-04',
+              completedOn: '2026-11-04',
               rodeWith: [aliceId],
             });
             const tagId = bobLog.pendingTags[0]!.tagId;

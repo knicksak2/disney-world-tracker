@@ -42,6 +42,7 @@ const HERO_VALUES = {
   admissionBorder: 'rgba(16, 185, 129, 0.45)',
   admissionText: '#D1FAE5',
   resortsCta: '#93C5FD',
+  mickeyWatermark: 'rgba(255, 255, 255, 0.08)',
 } as const;
 
 export const EXPLORE_HERO = definePalette({
@@ -57,6 +58,9 @@ const ART_VALUES = {
   waterFallback0: '#052930',
   waterFallback1: '#00838f',
   waterFallback2: '#17a2b8',
+  mickeyFallback0: '#1e1b4b',
+  mickeyFallback1: '#312e81',
+  mickeyFallback2: '#4338ca',
 } as const;
 
 // artwork — mode-invariant

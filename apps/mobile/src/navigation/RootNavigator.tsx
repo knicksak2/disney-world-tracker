@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AttentionItemRef, ExperienceCategory, Park } from '@dwt/shared';
+import type { AttentionItemRef, ExperienceCategory, MickeyZone, Park } from '@dwt/shared';
 
 import { setOnUnauthorizedCallback } from '../api/client';
 import { useSessionStore } from '../state/sessionStore';
@@ -26,6 +26,10 @@ import FoodListDiscoveryScreen from '../screens/foodLists/FoodListDiscoveryScree
 import ExperienceListDetailScreen from '../screens/experienceLists/ExperienceListDetailScreen';
 import ExperienceListDiscoveryScreen from '../screens/experienceLists/ExperienceListDiscoveryScreen';
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import HiddenMickeysScreen from '../screens/mickeys/HiddenMickeysScreen';
+import HiddenMickeyDetailScreen from '../screens/mickeys/HiddenMickeyDetailScreen';
+import SubmitMickeyScreen from '../screens/mickeys/SubmitMickeyScreen';
+import MySubmissionsScreen from '../screens/mickeys/MySubmissionsScreen';
 import AccountRestoredNotice from '../components/AccountRestoredNotice';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
@@ -97,6 +101,17 @@ export type RootStackParamList = {
   YouAndCrew: NavigatorScreenParams<YouAndCrewStackParamList> | undefined;
   NotificationCenter: { focusRef?: AttentionItemRef } | undefined;
   PinShowcase?: { userId?: string; readOnly?: boolean };
+  HiddenMickeys?: {
+    experienceId?: string;
+    park?: Park;
+    areaType?: 'Park' | 'Resort';
+    zone?: MickeyZone;
+    scope?: 'all' | 'official' | 'community';
+    found?: 'all' | 'found' | 'unfound';
+  };
+  HiddenMickeyDetail: { mickeyId: string };
+  SubmitMickey?: { experienceId?: string };
+  MySubmissions: undefined;
 };
 
 declare global {
@@ -282,6 +297,26 @@ function RootStackNavigator(): JSX.Element {
       <RootStack.Screen
         name="PinShowcase"
         component={require('../screens/profile/PinShowcaseScreen').default}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="HiddenMickeys"
+        component={HiddenMickeysScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="HiddenMickeyDetail"
+        component={HiddenMickeyDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="SubmitMickey"
+        component={SubmitMickeyScreen}
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="MySubmissions"
+        component={MySubmissionsScreen}
         options={{ headerShown: false }}
       />
     </RootStack.Navigator>

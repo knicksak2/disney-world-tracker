@@ -87,6 +87,10 @@ export async function createWorld(chunkRows: number = CHUNK_ROWS): Promise<World
         log_id: (await s.insertRow('experience_logs', { user_id: BOB.id })).id,
         member_id: BOB.id,
       }),
+      hidden_mickeys: async () => ({
+        source: 'seed',
+        official: true,
+      }),
     },
   });
   for (const p of [SUBJECT, BOB, CAROL, DAVE]) {
@@ -208,6 +212,12 @@ const SPECIAL: Readonly<Record<string, Special>> = {
     return retained;
   },
   'photos.owner_id': (w, id) => w.seeder.insertRow('photos', { owner_id: id, status: 'approved', harm_verdict: 'pass', vision_verdict: 'pass', full_etag: 'f', thumb_etag: 't' }),
+  'hidden_mickeys.submitter_id': (w, id) =>
+    w.seeder.insertRow('hidden_mickeys', {
+      submitter_id: id,
+      source: 'user',
+      official: false,
+    }),
 };
 
 async function shareFrom(w: World, senderId: string): Promise<Row> {

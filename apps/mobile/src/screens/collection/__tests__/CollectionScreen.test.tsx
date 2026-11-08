@@ -249,6 +249,10 @@ describe('CollectionScreen — Disney Vault Hub', () => {
               name="Stats"
               component={() => <DummyScreen testID="screen-stats" />}
             />
+            <Stack.Screen
+              name="HiddenMickeys"
+              component={() => <DummyScreen testID="screen-hidden-mickeys" />}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </QueryClientProvider>,
@@ -313,6 +317,77 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       expect(screen.getByTestId('vault-seg-lists')).toBeTruthy();
     });
     expect(screen.queryByTestId('vault-seg-badge-lists')).toBeNull();
+  });
+
+  it('renders Hidden Mickeys Vault progress card and navigates to HiddenMickeys (Requirement 13.3)', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/mickeys/config') return { enabled: true, submissionsEnabled: true } as never;
+      if (path === '/mickeys/summary') return {
+        overall: { found: 12, total: 50 },
+        byPark: {},
+        community: { found: 3 },
+      } as never;
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection') return mockFoodLists as never;
+      if (path === '/me/experience-lists/collection') return mockExperienceLists as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
+    renderCollection();
+
+    const card = await screen.findByTestId('vault-hidden-mickeys-card');
+    expect(card).toBeTruthy();
+    expect(await screen.findByText(/12 of 50 Official Found/)).toBeTruthy();
+    expect(await screen.findByText(/3 Community/)).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('vault-hidden-mickeys-link'));
+    expect(await screen.findByTestId('screen-hidden-mickeys')).toBeTruthy();
+  });
+
+  it('hides Hidden Mickeys Vault progress card when GET /mickeys/config returns enabled: false', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/mickeys/config') return { enabled: false, submissionsEnabled: false } as never;
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection') return mockFoodLists as never;
+      if (path === '/me/experience-lists/collection') return mockExperienceLists as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
+    renderCollection();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('collection-pins-view')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('vault-hidden-mickeys-card')).toBeNull();
+  });
+
+  it('does not crash and hides Hidden Mickeys Vault progress card when GET /mickeys/config returns 404', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/mickeys/config') {
+        const { ApiError } = jest.requireActual('../../../api/client');
+        throw new ApiError({ status: 404, code: 'mickey_not_found', message: 'Not Found' });
+      }
+      if (path === '/me/pins') return mockBoardData as never;
+      if (path === '/me/pin-showcase') return mockShowcaseData as never;
+      if (path === '/me/food-item-logs') return mockFoodLogs as never;
+      if (path === '/me/food-lists/collection') return mockFoodLists as never;
+      if (path === '/me/experience-lists/collection') return mockExperienceLists as never;
+      if (path === '/me/stats?percentile=true') return mockStats as never;
+      return {} as never;
+    });
+
+    renderCollection();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('collection-pins-view')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('vault-hidden-mickeys-card')).toBeNull();
   });
 
   it('renders claimable count banner when claimableCount > 0 and navigates to PinBoard with celebratePinIds', async () => {

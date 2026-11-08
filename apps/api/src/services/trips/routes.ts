@@ -221,6 +221,10 @@ export interface TripRoutesOptions {
    */
   readonly feedPhotoPort?: FeedPhotoPort;
   /**
+   * Optional Hidden Mickeys tally hook (Requirement 11.1).
+   */
+  readonly getTripMickeys?: ((tripId: string) => Promise<import('@dwt/shared').TripMickeysDTO>) | undefined;
+  /**
    * Optional clock for deterministic visit date validation in tests.
    * Defaults to `() => new Date()`.
    */
@@ -1737,6 +1741,24 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
 
     // -------------------------------------------------------------------
     // GET /me/trips — list the caller's own Trips (R16.1)
+    // -------------------------------------------------------------------
+    // GET /trips/:id/mickeys (hidden-mickeys R11.1 - R11.4)
+    // -------------------------------------------------------------------
+    app.get<{ Params: { id: string } }>(
+      '/trips/:id/mickeys',
+      { preHandler: requireSession },
+      async (request, reply) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        await assertTripMember(pool, userId, id);
+        if (!options.getTripMickeys) {
+          throw new AppError('mickey_feature_disabled', 'Hidden Mickeys service is unavailable.');
+        }
+        const tally = await options.getTripMickeys(id);
+        reply.code(200).send(tally);
+      },
+    );
+
     // -------------------------------------------------------------------
     // No membership gate: this lists the authenticated caller's own Trips, so
     // the `/me/...` pattern applies (mirrors `POST /me/trips`). The repo returns

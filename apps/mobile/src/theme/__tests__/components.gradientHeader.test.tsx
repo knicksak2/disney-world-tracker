@@ -27,6 +27,7 @@
 
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from 'react-native';
 
@@ -116,6 +117,21 @@ describe('GradientHeader — accessible back control (Requirements 2.4, 2.5, 3.6
     expect(screen.getByText('Magic Kingdom')).toBeTruthy();
     expect(screen.getByText('Cinderella Castle · 114 Experiences')).toBeTruthy();
     expect(screen.getByText('RightSlot')).toBeTruthy();
+    // When right slot is provided, top-right sparkle is suppressed to avoid collision
+    const iconsWithRight = screen.UNSAFE_queryAllByType(Ionicons);
+    expect(iconsWithRight.some((icon) => icon.props.name === 'sparkles')).toBe(false);
+  });
+
+  it('renders top-right sparkle when right slot is omitted', () => {
+    render(
+      <GradientHeader
+        title="EPCOT"
+        subtitle="World Celebration"
+      />,
+    );
+
+    const icons = screen.UNSAFE_queryAllByType(Ionicons);
+    expect(icons.some((icon) => icon.props.name === 'sparkles')).toBe(true);
   });
 
   it('standardizes header title typography to compact 22pt scale by default', () => {
