@@ -22,7 +22,9 @@ Decisions taken after that check:
 These depend on changes that had not shipped when this runbook was written. Fill them in from the commits that shipped them.
 
 ```
-FIX_DATE          = ____   (first forecasted_at after the pairing fix deployed, UTC)
+FIX_DATE          = 2026-11-13T06:00:00Z   (fix 4c25bbd pushed to develop ~05:20 UTC, Render
+                    auto-deploys develop; the daily capture runs ~12:00 UTC, so the first fixed
+                    capture is the 2026-11-13 run. Step 0 confirms the deploy actually took.)
 PROMOTION_DATE    = ____   (first forecasted_at after 3A promotion deployed, UTC)
 Promoted parks    = ____   (expected: Magic Kingdom, Hollywood Studios; env var name: ____)
 RAW_COL / RAW_ERR = ____   (log columns holding the uncorrected prediction and its error after promotion)
