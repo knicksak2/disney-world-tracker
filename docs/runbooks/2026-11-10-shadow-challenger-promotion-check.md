@@ -83,25 +83,65 @@ If either verdict is "Hold," don't touch any code or spec file this run — just
 ## Record here
 
 ```
-Date run:
-Lead-1 challenger_sample_count ready (>=30)?  rides ready = ____  total points = ____
-Lead-3 ready?  rides ready = ____  total points = ____
-Lead-7 ready?  rides ready = ____  total points = ____
+Date run: 2026-11-12 ET (hosted Neon DB, apps/api/.env.dev). Scored window 2026-10-14..2026-11-11, 9,496 scored log rows.
+Lead-1 challenger_sample_count ready (>=30)?  rides ready = 37 of 41  total points = 3533
+Lead-3 ready?  rides ready = 37 of 41  total points = 3261
+Lead-7 ready?  rides ready = 37 of 41  total points = 2702
+  (Not ready: Meet Ariel at Her Grotto, ~21 pts, plus 3 MNSSHP meet-and-greets that are seasonal and finished.)
 
-Step 3A (all parks) — served_mae vs challenger_mae by lead:
-  lead 1: served ____  challenger ____
-  lead 3: served ____  challenger ____
-  lead 7: served ____  challenger ____
-  Verdict: promote / hold / do-not-promote
+Step 2 (wait_forecast_accuracy, challenger_sample_count >= 30, 37 rides, both challengers mixed):
+  lead 1: served 13.78  challenger 10.81  (bias 8.28 -> 3.78)  challenger better on 32/37 rides
+  lead 3: served 13.72  challenger 11.14  (bias 8.04 -> 4.31)  31/37
+  lead 7: served 14.43  challenger 12.16  (bias 8.96 -> 6.03)  28/37
 
-Step 4 (MK/AK only) — served_mae vs challenger_mae by lead:
-  lead 1: served ____  challenger ____
-  lead 3: served ____  challenger ____
-  lead 7: served ____  challenger ____
-  Verdict: promote / hold / do-not-promote
+By park (accuracy table), served / challenger, lead 1 / 3 / 7:
+  MK   16.18/10.63  15.88/11.24  17.20/12.21   (15/15 rides better at every lead)
+  HS   12.90/11.12  12.91/10.82  13.62/11.82   (8/9, 8/9, 7/9)
+  EPCOT 14.16/12.84 14.32/13.35  14.31/14.20   (5/6, 4/6, 4/6)
+  AK    9.46/9.05    9.59/9.43    9.65/10.72   (4/7, 4/7, 2/7)
 
-Action taken this run: (none / 3A promoted / Step 4 promoted / both / postponed)
-If promoted: commit(s), spec sections amended, tests changed:
-If held or not promoted: next check-in date:
+Attribution from wait_forecast_log: per (ride, lead, forecasted_at) batch, a constant
+predicted-challenger offset = 3A; a constant ratio = Step 4. Row-level MAE on scored rows
+in batches cleanly identified as 3A, served / challenger:
+  MK    l1 17.12/10.95  l3 16.56/10.86  l7 18.94/11.65
+  HS    l1 13.47/11.46  l3 14.10/12.20  l7 14.88/13.22
+  EPCOT l1 14.94/13.89  l3 13.59/13.53  l7 15.31/16.19
+  AK    l1  8.70/10.68  l3  8.76/11.21  l7  8.98/12.62
+
+Step 3A (all parks) — clean read is EPCOT + HS (accuracy table above):
+  lead 1: served EPCOT 14.16 / HS 12.90  challenger EPCOT 12.84 / HS 11.12
+  lead 3: served EPCOT 14.32 / HS 12.91  challenger EPCOT 13.35 / HS 10.82
+  lead 7: served EPCOT 14.31 / HS 13.62  challenger EPCOT 14.20 / HS 11.82
+  Verdict: meets the "promote" bar overall (2.3-3.0 min lower MAE at every lead, 28-32 of
+  37 rides better). The gain is not uniform: MK large, HS clear, EPCOT mixed by lead 7,
+  AK WORSE at every lead on clean 3A rows. Promotion is pending the owner's decision.
+  Options are all-parks promotion, or promotion excluding AK.
+
+Step 4 (MK/AK only) — only 4 rides (1 AK, 3 MK), 132 scored rows. 3A covers every
+mature ride, so Step 4 fires only on rides 3A has not reached 30 samples on.
+  lead 1: served AK 7.74 / MK 28.75  challenger AK 7.06 / MK 21.21  (n=23 / 16)
+  lead 3: served AK 7.40 / MK 27.91  challenger AK 6.59 / MK 20.02  (n=36 / 22)
+  lead 7: served AK 6.05 / MK 17.23  challenger AK 6.48 / MK  9.89  (n=22 / 13)
+  Verdict: hold. Too few rides and rows to judge.
+
+Action taken this run: none (3A promotion decision pending with owner; no code or spec changed)
+If promoted: commit(s), spec sections amended, tests changed: n/a
+If held or not promoted: next check-in date: 2026-12-15, see
+  2026-12-15-holiday-correction-and-shadow-parks-check.md. Decided after this run: fix the
+  pairing bug, promote 3A for MK and HS only, keep EPCOT/AK in shadow. Step 4 is dormant and
+  will never accrue much data while 3A owns the shared column (see anomaly 2).
 Anything anomalous:
+  1. Pairing defect: about 26% of batches (961 of 3,711) are neither a constant offset nor a
+     constant ratio, and some show offsets above the 15-min clamp (e.g. predicted 43 ->
+     challenger 16). IntelligenceRepo.upsertWaitForecastLogs ON CONFLICT updates only
+     challenger_wait_minutes (COALESCE), not predicted_wait_minutes. So when the daily job
+     runs twice on the same day, the stored challenger comes from a different run's
+     prediction than the stored served value. Those rows are not a like-for-like comparison.
+     The clean-3A table above excludes them.
+  2. Step 4 starves by design: it only gets rows 3A left null. That limits it to new or
+     seasonal rides (MNSSHP meet-and-greets, Ariel). Its "two cycles then abandon" rule
+     will trigger from lack of data, not from a negative result.
+  3. AK disagrees between sources: the accuracy table shows a small 3A gain at leads 1/3,
+     while clean 3A log rows show 3A worse at all leads. The accuracy row mixes in the
+     unpaired rows and Step 4 rows.
 ```

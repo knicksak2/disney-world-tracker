@@ -56,6 +56,14 @@ describe('scrubSharePayload', () => {
   it('Property 20: pinShowcase gets the replacement id and the placeholder name; no other key changes', () => {
     fc.assert(
       fc.property(pinShowcaseArb, fc.uuid(), (payload, replacementId) => {
+        // The residue checks below look for the real id/name anywhere in the output,
+        // and the output legitimately contains replacementId. fc.uuid() shrinks
+        // toward the all-zero UUID, so two independent draws collided
+        // (replacementId === ownerId) and failed with no scrub defect; a name such
+        // as '000000' can likewise appear inside the replacement UUID. A real
+        // tombstone id never equals or embeds the deleted user's id or name.
+        fc.pre(replacementId !== payload.ownerId);
+        fc.pre(!replacementId.includes(payload.ownerDisplayName));
         const original = structuredClone(payload);
         const out = scrubSharePayload(payload, replacementId) as Record<string, unknown>;
         expect(out.ownerId).toBe(replacementId);
@@ -67,7 +75,22 @@ describe('scrubSharePayload', () => {
         expect(JSON.stringify(out)).not.toContain(original.ownerId);
         expect(JSON.stringify(out)).not.toContain(original.ownerDisplayName);
       }),
-      RUNS,
+      {
+        ...RUNS,
+        // The shrunk counterexample from the 2026-11-12 flaky full-suite failure,
+        // pinned so the collision is exercised on every run, not just when the
+        // random draw happens to hit it.
+        examples: [
+          [
+            {
+              kind: 'pinShowcase',
+              ownerId: '00000000-0000-1000-8000-000000000000',
+              ownerDisplayName: '!    !',
+            },
+            '00000000-0000-1000-8000-000000000000',
+          ],
+        ],
+      },
     );
   });
 

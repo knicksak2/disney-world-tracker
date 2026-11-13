@@ -143,7 +143,14 @@ describe('HiddenMickeysScreen (Tasks 10.3 & 10.10, Requirements 2.1, 2.2, 13.1, 
         return undefined as never;
       }
       if (path.startsWith('/mickeys')) {
-        return { items: mockItems, nextCursor: null } as never;
+        // Filter by zone like the server does, so a
+        // test can assert which query's data is on screen. That matters when a
+        // filter returns to an earlier query: useMickeyList's 60 s staleTime
+        // may legitimately serve it from cache with no new request.
+        const params = new URLSearchParams(path.split('?')[1] ?? '');
+        const zone = params.get('zone');
+        const items = mockItems.filter((item) => !zone || item.zone === zone);
+        return { items, nextCursor: null } as never;
       }
       return {} as never;
     });
@@ -181,22 +188,32 @@ describe('HiddenMickeysScreen (Tasks 10.3 & 10.10, Requirements 2.1, 2.2, 13.1, 
     renderScreen();
 
     await screen.findByText('Look closely at the gears on the clock');
+    const listPaths = () =>
+      mockApiRequest.mock.calls.map((c) => c[1]).filter((p) => p.startsWith('/mickeys?') || p === '/mickeys');
+    // The unfiltered list was requested without a zone.
+    expect(listPaths().some((p) => !p.includes('zone='))).toBe(true);
 
-    // Tap Queue zone pill
+    // Tap Queue zone pill -> new query with zone=queue; only the queue Mickey shows.
     fireEvent.press(screen.getByLabelText('Filter by Queue zone'));
     await waitFor(() => {
-      const calls = mockApiRequest.mock.calls.filter((c) => c[1].startsWith('/mickeys'));
-      const lastCall = calls[calls.length - 1]!;
-      expect(lastCall[1]).toContain('zone=queue');
+      const paths = listPaths();
+      expect(paths[paths.length - 1]).toContain('zone=queue');
     });
-
-    // Tap All zone pill
-    fireEvent.press(screen.getByLabelText('Filter by all zones'));
+    // Wait for the filtered list itself, not just the old rows disappearing
+    // (they also vanish while the new query is loading).
     await waitFor(() => {
-      const calls = mockApiRequest.mock.calls.filter((c) => c[1].startsWith('/mickeys'));
-      const lastCall = calls[calls.length - 1]!;
-      expect(lastCall[1]).not.toContain('zone=');
+      expect(screen.getByText('Look closely at the gears on the clock')).toBeTruthy();
+      expect(screen.queryByText('Hidden in the floral carpet pattern')).toBeNull();
     });
+    expect(screen.queryByText('Scratched onto the railing near exit')).toBeNull();
+
+    // Tap All zone pill -> back on the unfiltered query (served from cache or
+    // refetched without a zone; either is correct), so every zone shows again.
+    fireEvent.press(screen.getByLabelText('Filter by all zones'));
+    expect(await screen.findByText('Hidden in the floral carpet pattern')).toBeTruthy();
+    expect(screen.getByText('Scratched onto the railing near exit')).toBeTruthy();
+    expect(screen.getByText('Glowing star cluster above the launch tunnel')).toBeTruthy();
+    expect(listPaths().filter((p) => p.includes('zone=') && !p.includes('zone=queue'))).toEqual([]);
   });
 
   it('composes park tab, found filter, and zone pill in the query params', async () => {

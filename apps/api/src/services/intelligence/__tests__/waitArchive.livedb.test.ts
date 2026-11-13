@@ -486,15 +486,46 @@ describe.skipIf(!DB_AVAILABLE)('wait_forecast_log SQL guarantees (live Postgres)
     expect(new Date(r[0]!.forecasted_at).toISOString()).toBe('2026-08-26T12:00:00.000Z');
   });
 
-  it('lets a challenger be attached later without disturbing the frozen prediction', async () => {
+  it('lets a challenger be attached later when it was derived from the same served prediction', async () => {
     await repo.upsertWaitForecastLogs([log()]);
     await repo.upsertWaitForecastLogs([
-      log({ predicted_wait_minutes: 99, challenger_wait_minutes: 44 }),
+      log({ predicted_wait_minutes: 52, challenger_wait_minutes: 44 }),
     ]);
 
     const r = await rows();
     expect(r[0]!.predicted_wait_minutes).toBeCloseTo(52, 4);
     expect(r[0]!.challenger_wait_minutes).toBeCloseTo(44, 4);
+  });
+
+  // Regression (2026-11-10 runbook, anomaly 1): a same-day re-run must not pair
+  // the frozen served value with a challenger computed from a DIFFERENT served
+  // value — R18.5 scores the challenger "on identical inputs" (Property 22).
+  it('does NOT attach a challenger derived from a different served prediction', async () => {
+    await repo.upsertWaitForecastLogs([log({ predicted_wait_minutes: 52 })]);
+    await repo.upsertWaitForecastLogs([
+      log({ predicted_wait_minutes: 99, challenger_wait_minutes: 84 }),
+    ]);
+
+    const r = await rows();
+    expect(r[0]!.predicted_wait_minutes).toBeCloseTo(52, 4);
+    expect(r[0]!.challenger_wait_minutes).toBeNull();
+  });
+
+  it('does NOT overwrite an existing challenger on a repeat capture', async () => {
+    await repo.upsertWaitForecastLogs([
+      log({ predicted_wait_minutes: 52, challenger_wait_minutes: 40 }),
+    ]);
+    await repo.upsertWaitForecastLogs([
+      log({ predicted_wait_minutes: 99, challenger_wait_minutes: 84 }),
+    ]);
+    await repo.upsertWaitForecastLogs([
+      log({ predicted_wait_minutes: 52, challenger_wait_minutes: 44 }),
+    ]);
+
+    const r = await rows();
+    // The pair stays exactly as first issued: 52 served, 40 challenger.
+    expect(r[0]!.predicted_wait_minutes).toBeCloseTo(52, 4);
+    expect(r[0]!.challenger_wait_minutes).toBeCloseTo(40, 4);
   });
 
   it('keeps an existing challenger when a later capture supplies none', async () => {

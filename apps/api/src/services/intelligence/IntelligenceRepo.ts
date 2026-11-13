@@ -676,9 +676,16 @@ export class IntelligenceRepo {
    * `predicted_wait_minutes` and `forecasted_at` are deliberately absent from the
    * ON CONFLICT UPDATE clause: accuracy must be measured against the forecast as
    * issued, so a re-run on the same day must NOT overwrite an earlier capture
-   * with a fresher number. Only the challenger column is updatable, and only
-   * when a challenger value is actually supplied — `COALESCE` keeps an existing
-   * challenger rather than nulling it out (R18.5).
+   * with a fresher number.
+   *
+   * The challenger is frozen WITH the served prediction it was derived from,
+   * because R18.5 scores it "on identical inputs" (Property 22: it must equal a
+   * function of the stored `predicted_wait_minutes`). So a repeat capture may
+   * only fill a challenger that is still null, and only when its served
+   * prediction is identical to the stored one. It never overwrites an existing
+   * challenger, and never nulls one out. Previously a same-day re-run
+   * overwrote the challenger with one derived from a different served value,
+   * leaving ~26% of batches unpaired (2026-11-10 runbook, anomaly 1).
    */
   async upsertWaitForecastLogs(rows: WaitForecastLogRow[]): Promise<void> {
     if (rows.length === 0) return;
@@ -694,8 +701,10 @@ export class IntelligenceRepo {
          $1::uuid[], $2::date[], $3::int[], $4::int[], $5::real[], $6::timestamptz[], $7::real[]
        ) AS t(experience_id, date, hour, lead_days, predicted_wait_minutes, forecasted_at, challenger_wait_minutes)
        ON CONFLICT (experience_id, date, hour, lead_days) DO UPDATE SET
-         challenger_wait_minutes =
-           COALESCE(EXCLUDED.challenger_wait_minutes, wait_forecast_log.challenger_wait_minutes)`,
+         challenger_wait_minutes = EXCLUDED.challenger_wait_minutes
+       WHERE wait_forecast_log.challenger_wait_minutes IS NULL
+         AND EXCLUDED.challenger_wait_minutes IS NOT NULL
+         AND EXCLUDED.predicted_wait_minutes = wait_forecast_log.predicted_wait_minutes`,
       [
         deduped.map(r => r.experience_id),
         deduped.map(r => toDateKey(r.date)),
