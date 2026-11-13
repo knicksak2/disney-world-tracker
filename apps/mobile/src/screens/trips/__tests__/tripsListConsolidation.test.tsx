@@ -72,6 +72,8 @@ const ACTIVE_TRIP: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 function makeQueryClient(): QueryClient {

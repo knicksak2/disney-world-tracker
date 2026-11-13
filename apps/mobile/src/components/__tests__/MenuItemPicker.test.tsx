@@ -321,4 +321,320 @@ describe('MenuItemPicker (Task 17.3, Requirements 9.1-9.10)', () => {
       { name: 'Child', priceCents: 4000, quantity: 1 },
     ]);
   });
+
+  it('deselects an item when decreasing quantity from 1 to 0 via stepper', () => {
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Select Caesar Salad
+    const saladRow = screen.getByLabelText('Caesar Salad');
+    fireEvent.press(saladRow);
+
+    expect(screen.getByText('Subtotal: $14.00')).toBeTruthy();
+    expect(screen.getByText('1 item selected')).toBeTruthy();
+
+    // Decrease quantity from 1 -> 0
+    const decBtn = screen.getByLabelText('Decrease quantity for Caesar Salad');
+    fireEvent.press(decBtn);
+
+    // Item should be deselected cleanly
+    expect(screen.getByText('Subtotal: $0.00')).toBeTruthy();
+    expect(screen.queryByLabelText('Decrease quantity for Caesar Salad')).toBeNull();
+  });
+
+  it('deselects an item when pressing the Remove button', () => {
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Select Caesar Salad
+    fireEvent.press(screen.getByLabelText('Caesar Salad'));
+    expect(screen.getByText('Subtotal: $14.00')).toBeTruthy();
+
+    // Press Remove button
+    const removeBtn = screen.getByLabelText('Remove Caesar Salad');
+    fireEvent.press(removeBtn);
+
+    expect(screen.getByText('Subtotal: $0.00')).toBeTruthy();
+    expect(screen.queryByLabelText('Remove Caesar Salad')).toBeNull();
+  });
+
+  it('filters items in real time via search input and shows empty state', () => {
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    const searchInput = screen.getByTestId('menu-search-input');
+
+    // Search for "Cocktail"
+    fireEvent.changeText(searchInput, 'Cocktail');
+
+    expect(screen.getByLabelText('Magical Cocktail')).toBeTruthy();
+    expect(screen.queryByLabelText('Caesar Salad')).toBeNull();
+
+    // Search for nonexistent item
+    fireEvent.changeText(searchInput, 'Waffles');
+    expect(screen.getByText('No menu items found')).toBeTruthy();
+
+    // Reset filters button
+    fireEvent.press(screen.getByLabelText('Reset filters and search'));
+    expect(screen.getByLabelText('Caesar Salad')).toBeTruthy();
+  });
+
+  it('filters items using filter chips (Priced Items vs Drinks)', () => {
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Filter to Priced Items only (hides priceless items like Market Fresh Catch)
+    fireEvent.press(screen.getByLabelText('Filter priced items only'));
+    expect(screen.getByLabelText('Caesar Salad')).toBeTruthy();
+    expect(screen.queryByLabelText('Market Fresh Catch')).toBeNull();
+
+    // Filter to Drinks & Cocktails
+    fireEvent.press(screen.getByLabelText('Filter drinks and cocktails'));
+    expect(screen.getByLabelText('Magical Cocktail')).toBeTruthy();
+    expect(screen.queryByLabelText('Caesar Salad')).toBeNull();
+
+    // Return to All
+    fireEvent.press(screen.getByLabelText('Filter all items'));
+    expect(screen.getByLabelText('Caesar Salad')).toBeTruthy();
+    expect(screen.getByLabelText('Market Fresh Catch')).toBeTruthy();
+  });
+
+  it('clears all selections via Clear All button in footer', () => {
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Select Caesar Salad
+    fireEvent.press(screen.getByLabelText('Caesar Salad'));
+    expect(screen.getByText('1 item selected')).toBeTruthy();
+
+    // Press Clear All
+    const clearAllBtn = screen.getByLabelText('Clear all selections');
+    fireEvent.press(clearAllBtn);
+
+    expect(screen.getByText('0 items selected')).toBeTruthy();
+    expect(screen.getByText('Subtotal: $0.00')).toBeTruthy();
+    expect(screen.queryByLabelText('Clear all selections')).toBeNull();
+  });
+
+  it('filters by meal (Breakfast vs Dinner), separates rates, and suppresses duplicate price lines & included feast food items', () => {
+    const multiMealMenus: MenuDTO[] = [
+      {
+        menuType: 'Breakfast',
+        groups: [
+          {
+            name: "'Ohana Breakfast Pricing",
+            items: [
+              { name: '$58 per adult, plus tax and gratuity' },
+              { name: '$36 per child (Guests ages 3-9), plus tax and gratuity' },
+            ],
+          },
+          {
+            name: "All-You-Care-To-Enjoy 'Ohana Breakfast",
+            items: [
+              { name: 'Freshly Made Pineapple-Coconut Breakfast Bread' },
+              { name: 'Fresh Fruit' },
+              { name: "'Ohana Breakfast Skillet" },
+            ],
+          },
+          {
+            name: 'Breakfast Specialties',
+            type: 'Beverage',
+            items: [
+              { name: 'Lapu Lapu', priceCents: 2400 },
+            ],
+          },
+        ],
+      },
+      {
+        menuType: 'Dinner',
+        groups: [
+          {
+            name: "'Ohana Dinner Pricing",
+            items: [
+              { name: '$69 per adult, plus tax and gratuity' },
+              { name: '$46 per child (Guests ages 3-9), plus tax and gratuity' },
+            ],
+          },
+          {
+            name: "All-You-Care-To-Enjoy 'Ohana Dinner",
+            items: [
+              { name: "'Ohana Dinner Skillet" },
+              { name: "'Ohana Bread Pudding" },
+            ],
+          },
+          {
+            name: 'Dinner Specialties',
+            type: 'Alcoholic Beverage',
+            items: [
+              { name: 'Cold Brew Martini', priceCents: 1800 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    render(
+      <MenuItemPicker
+        menus={multiMealMenus}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Initial meal is Breakfast: shows Breakfast buffet rates ($58 Adult, $36 Child)
+    expect(screen.getByText('Prix Fixe & Buffet Pricing — Breakfast')).toBeTruthy();
+    expect(screen.getByLabelText('Adult: $58.00')).toBeTruthy();
+    expect(screen.getByLabelText('Child: $36.00')).toBeTruthy();
+
+    // Duplicate pricing announcement rows ($58 per adult...) do NOT appear as item checkboxes
+    expect(screen.queryByLabelText('$58 per adult, plus tax and gratuity')).toBeNull();
+
+    // Included feast food items (Fresh Fruit, Skillet) are hidden from default view
+    expect(screen.queryByLabelText('Fresh Fruit')).toBeNull();
+    expect(screen.queryByLabelText("'Ohana Breakfast Skillet")).toBeNull();
+
+    // Billable drink shows
+    expect(screen.getByLabelText('Lapu Lapu')).toBeTruthy();
+
+    // Switch to Dinner tab
+    fireEvent.press(screen.getByLabelText('Filter by Dinner menu'));
+
+    // Header updates to Dinner and shows Dinner buffet rates ($69 Adult, $46 Child)
+    expect(screen.getByText('Prix Fixe & Buffet Pricing — Dinner')).toBeTruthy();
+    expect(screen.getByLabelText('Adult: $69.00')).toBeTruthy();
+    expect(screen.getByLabelText('Child: $46.00')).toBeTruthy();
+    expect(screen.queryByLabelText('Adult: $58.00')).toBeNull();
+
+    // Dinner drink shows, Dinner feast items hidden
+    expect(screen.getByLabelText('Cold Brew Martini')).toBeTruthy();
+    expect(screen.queryByLabelText("'Ohana Dinner Skillet")).toBeNull();
+
+    // Tap "Feast Items (Included)" chip to view feast components
+    fireEvent.press(screen.getByLabelText('Filter included feast items'));
+    expect(screen.getByLabelText("'Ohana Dinner Skillet")).toBeTruthy();
+    expect(screen.getByLabelText("'Ohana Bread Pudding")).toBeTruthy();
+
+    // Switch to All Meals tab: shows both Breakfast and Dinner rates clearly labeled
+    fireEvent.press(screen.getByLabelText('Filter by All meals'));
+    expect(screen.getByLabelText('Breakfast — Adult: $58.00')).toBeTruthy();
+    expect(screen.getByLabelText('Breakfast — Child: $36.00')).toBeTruthy();
+    expect(screen.getByLabelText('Dinner — Adult: $69.00')).toBeTruthy();
+    expect(screen.getByLabelText('Dinner — Child: $46.00')).toBeTruthy();
+  });
+
+  it('preserves buffet tier selection when choosing drinks and computes combined subtotal (Requirement 9.12)', () => {
+    const confirmSpy = jest.fn();
+    const multiMealMenus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        groups: [
+          {
+            name: "'Ohana Dinner Pricing",
+            items: [
+              { name: '$69 per adult, plus tax and gratuity' },
+              { name: '$46 per child (Guests ages 3-9), plus tax and gratuity' },
+            ],
+          },
+          {
+            name: 'Specialty Cocktails',
+            type: 'Alcoholic Beverage',
+            items: [
+              { name: 'Lapu Lapu', priceCents: 2400 },
+              { name: 'Backscratcher', priceCents: 1800 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    render(
+      <MenuItemPicker
+        menus={multiMealMenus}
+        onConfirm={confirmSpy}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // 1. Select Adult buffet tier ($69.00)
+    fireEvent.press(screen.getByLabelText('Adult: $69.00'));
+    // Increment Adult quantity to 2
+    fireEvent.press(screen.getByLabelText('Increase quantity for Adult'));
+
+    expect(screen.getByText('Subtotal: $138.00')).toBeTruthy();
+    expect(screen.getByText('2 items selected')).toBeTruthy();
+
+    // 2. Select drinks without losing Adult selection
+    fireEvent.press(screen.getByLabelText('Lapu Lapu'));
+    expect(screen.getByText('Subtotal: $162.00')).toBeTruthy();
+    expect(screen.getByText('3 items selected')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Backscratcher'));
+    expect(screen.getByText('Subtotal: $180.00')).toBeTruthy();
+    expect(screen.getByText('4 items selected')).toBeTruthy();
+
+    // Verify Adult checkbox is STILL checked with quantity 2
+    expect(screen.getByLabelText('Adult: $69.00')).toBeTruthy();
+    expect(screen.getByLabelText('Decrease quantity for Adult')).toBeTruthy();
+
+    // 3. Confirm selection yields both tier(s) and items
+    fireEvent.press(screen.getByLabelText('Confirm selection'));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    const selection = confirmSpy.mock.calls[0]![0];
+
+    expect(selection.tier).toEqual({
+      name: 'Adult',
+      priceCents: 6900,
+      quantity: 2,
+    });
+    expect(selection.tiers).toEqual([
+      { name: 'Adult', priceCents: 6900, quantity: 2 },
+    ]);
+    expect(selection.items).toEqual([
+      {
+        name: 'Lapu Lapu',
+        priceCents: 2400,
+        priceLabel: null,
+        quantity: 1,
+        isAlcohol: true,
+      },
+      {
+        name: 'Backscratcher',
+        priceCents: 1800,
+        priceLabel: null,
+        quantity: 1,
+        isAlcohol: true,
+      },
+    ]);
+
+    // Budget price ref projects all into items to satisfy menuPriceRefSchema
+    const priceRef = selectionToBudgetPriceRef(selection);
+    const parsed = menuPriceRefSchema.safeParse(priceRef);
+    expect(parsed.success).toBe(true);
+    expect(priceRef.items).toHaveLength(3);
+  });
 });

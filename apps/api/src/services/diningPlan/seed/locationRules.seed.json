@@ -1,0 +1,318 @@
+[
+  {
+    "name": "Cinderella's Royal Table",
+    "upstreamEntityId": "90002464;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": true,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-11-09",
+    "sourceNote": "Disney Dining Plans page 2026-11-09: 2 table-service meals per person; gratuity included"
+  },
+  {
+    "name": "Be Our Guest Restaurant",
+    "upstreamEntityId": "16660079;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person, no meal period given (a 2019 answer said dinner only)"
+  },
+  {
+    "name": "Akershus Royal Banquet Hall",
+    "upstreamEntityId": "90002066;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 1,
+    "creditCostByPeriod": { "lunch": 2, "dinner": 2 },
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals at lunch and dinner"
+  },
+  {
+    "name": "Le Cellier Steakhouse",
+    "upstreamEntityId": "90001798;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "The Hollywood Brown Derby",
+    "aliases": ["Hollywood Brown Derby"],
+    "upstreamEntityId": "90002245;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Tiffins Restaurant",
+    "aliases": ["Tiffins"],
+    "upstreamEntityId": "18069632;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "The BOATHOUSE",
+    "aliases": ["Boathouse", "The BOATHOUSE: Great Food, Waterfront Dining, Dream Boats"],
+    "upstreamEntityId": "17936197;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person (a WDWNT article of 2025-12 said it left the 2026 plans; the later Disney answer governs)"
+  },
+  {
+    "name": "Jaleo by José Andrés",
+    "aliases": ["Jaleo"],
+    "upstreamEntityId": "19063652;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Morimoto Asia",
+    "upstreamEntityId": "17936194;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 1,
+    "creditCostByPeriod": { "dinner": 2 },
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals at dinner"
+  },
+  {
+    "name": "Paddlefish",
+    "upstreamEntityId": "18457125;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Cítricos",
+    "aliases": ["Citricos"],
+    "upstreamEntityId": "90001378;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Narcoossee's",
+    "upstreamEntityId": "90001983;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Story Book Dining at Artist Point with Snow White",
+    "aliases": ["Artist Point"],
+    "upstreamEntityId": "90001248;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Hoop-Dee-Doo Musical Revue",
+    "upstreamEntityId": "80010856;entityType=Dinner-Show",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": true,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person; Disney Dining Plans page 2026-11-09: gratuity included"
+  },
+  {
+    "name": "Jiko - The Cooking Place",
+    "aliases": ["Jiko"],
+    "upstreamEntityId": "90001778;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Topolino's Terrace - Flavors of the Riviera",
+    "aliases": ["Topolino's Terrace"],
+    "upstreamEntityId": "19233597;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 1,
+    "creditCostByPeriod": { "dinner": 2 },
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals at dinner"
+  },
+  {
+    "name": "Flying Fish",
+    "upstreamEntityId": "90001548;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person"
+  },
+  {
+    "name": "Yachtsman Steakhouse",
+    "upstreamEntityId": "90002412;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-07-20",
+    "sourceNote": "planDisney 2026-07-20: 2 table-service meals per person (closed for refurbishment on that date)"
+  },
+  {
+    "name": "Private Dining at Disney's Grand Floridian Resort & Spa",
+    "aliases": ["Private Dining"],
+    "upstreamEntityId": "22878;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": true,
+    "ruleStatus": "verified",
+    "verifiedAt": "2026-04-05",
+    "sourceNote": "planDisney 2026-04-05: 2 table-service meals per person; Disney Dining Plans page 2026-11-09: gratuity included"
+  },
+  {
+    "name": "Cape Town Lounge and Wine Bar",
+    "upstreamEntityId": "13219;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): 2 table-service credits; confirm in the booking flow"
+  },
+  {
+    "name": "Toledo - Tapas, Steak & Seafood",
+    "upstreamEntityId": "19015837;entityType=restaurant",
+    "serviceType": "table_service",
+    "creditCost": 2,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): 2 table-service credits; confirm in the booking flow"
+  },
+  {
+    "name": "California Grill",
+    "upstreamEntityId": "90001336;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "Not on the plan per Disney Tourist Blog 2026-06 and The Magic For Less 2026-11; was 2 credits before its prix-fixe menu; may return in 2027, recheck yearly"
+  },
+  {
+    "name": "Victoria & Albert's",
+    "aliases": ["Chef's Table at Victoria & Albert's", "Queen Victoria's Room", "The Dining Room at Victoria & Albert's"],
+    "upstreamEntityId": "90002336;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "A 2019 planDisney answer: not available on the Disney Dining Plan; an old answer, so unverified"
+  },
+  {
+    "name": "Takumi-Tei",
+    "upstreamEntityId": "19317888;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "A 2020 planDisney answer: dining plans not accepted; an old answer, so unverified"
+  },
+  {
+    "name": "Space 220",
+    "aliases": ["Space 220 Restaurant"],
+    "upstreamEntityId": "19433706;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "La Cava del Tequila",
+    "upstreamEntityId": "348023;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "The Cake Bake Shop",
+    "aliases": ["The Cake Bake Shop Restaurant by Gwendolyn Rogers"],
+    "upstreamEntityId": "411827623;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "Summer House on the Lake",
+    "upstreamEntityId": "411854928;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "Wolfgang Puck Bar & Grill",
+    "aliases": ["Wolfgang Puck Bar and Grill"],
+    "upstreamEntityId": "19084067;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "Wine Bar George",
+    "aliases": ["Wine Bar George - A Restaurant & Bar"],
+    "upstreamEntityId": "18667615;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  },
+  {
+    "name": "STK Orlando",
+    "aliases": ["STK", "STK Steakhouse"],
+    "upstreamEntityId": "17957969;entityType=restaurant",
+    "serviceType": "not_eligible",
+    "creditCost": 1,
+    "gratuityIncluded": false,
+    "ruleStatus": "unverified",
+    "sourceNote": "The Magic For Less 2026-11 (third party only): does not accept the dining plan"
+  }
+]

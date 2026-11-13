@@ -136,3 +136,15 @@ This feature implements the lean, in-place legal compliance architecture (Option
 6. THE `RegisterScreen` SHALL show an unchecked-by-default checkbox row labelled "I am at least 13 years old" (`testID="register-age-confirm"`, `accessibilityRole="checkbox"`, `accessibilityLabel="I am at least 13 years old"`, `accessibilityState.checked` reflecting the state) above the "Create account" button.
 7. WHEN the user presses "Create account" while the checkbox is unchecked, THE `RegisterScreen` SHALL NOT call the API and SHALL show the message "You must be 13 or older to create an account." (`testID="register-age-error"`) beneath the checkbox row; the message SHALL clear when the box is checked.
 8. WHEN the checkbox is checked and the other fields are valid, THE `RegisterScreen` SHALL send `ageConfirmed: true` in the `POST /auth/register` body.
+
+### Requirement 9: Dining Plan figures are estimates (added by the `dining-plan-calculator` spec)
+
+**User Story:** As the operator, I want the Dining Plan calculator's figures presented as estimates and independent of Disney, so that users are not misled and the app stays within the posture of Requirement 1. This requirement is additive; the full behavior is in `.kiro/specs/dining-plan-calculator/requirements.md` (Requirement 21).
+
+#### Acceptance Criteria
+
+1. THE Dining Plan figures (plan costs, out-of-pocket meal costs, tax, tips, savings and the verdict) SHALL be user-facing estimates derived from public information (Disney's published plan entitlements and prices, and cached restaurant menus) and from rules and prices the operator enters in the Admin_Panel; THE App SHALL NOT present them as Disney's prices or Disney's advice.
+2. THE Trip and standalone Dining Plan screens SHALL show, above the fold of the result, the text "Estimate only. Not affiliated with or endorsed by Disney. Plan prices and rules change; confirm in the Disney booking flow before you buy." (dining-plan-calculator Requirement 21.1).
+3. THE screens SHALL label a figure based on an estimated menu basis "Estimate", a credit rule the operator has not verified "Unverified rule", and a plan price period without a verified date "price not yet verified", each in text with an icon (dining-plan-calculator Requirements 21.2, 21.3 and 22.1).
+4. THE calculator SHALL NOT display Disney logos or imagery; plan names SHALL be shown as text (dining-plan-calculator Requirement 21.4).
+5. THE existing non-affiliation statement and estimates disclaimers of the Terms_Of_Service (Requirement 1 and Requirement 7.2) SHALL continue to apply; this requirement adds no wording to `docs/terms-of-service.md` or `GET /terms`, because the in-app notice of criterion 2 is shown wherever the figures are.

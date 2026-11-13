@@ -51,7 +51,8 @@ jest.mock('../../../api/client', () => {
 
 import TripDetailScreen, { deriveGlanceCard, HUB_SECTIONS } from '../TripDetailScreen';
 import { ApiError, apiRequest as mockedApiRequest } from '../../../api/client';
-import type { TripDTO } from '@dwt/shared';
+import { addCalendarDays, type TripDTO, type TripStayDTO } from '@dwt/shared';
+import { getTodayWDW } from '../wdwDate';
 import { StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { DARK_TONAL, darkTheme } from '../../../theme/theme';
@@ -81,6 +82,8 @@ const TRIP: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 /** Section control testIDs paired with the route each opens (R18.1, R18.6). */
@@ -170,31 +173,175 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     }
   });
 
-  test('R21.1: renders the Resort(s) the party stayed at when the Trip records them', async () => {
-    apiRequestMock.mockResolvedValue({
+  describe("Where you're staying card (trip-lodging-stays R7.1 to R7.3, R7.7)", () => {
+    const BEACH: TripStayDTO = {
+      id: 'stay-beach',
+      position: 0,
+      lodgingKind: 'resort',
+      resortId: 'resort-beach',
+      placeName: null,
+      displayName: "Disney's Beach Club",
+      checkIn: '2024-05-01',
+      checkOut: '2024-05-03',
+      nights: 2,
+      partyKeys: ['m:me', 'g:guest-1'],
+    };
+    const UNDATED: TripStayDTO = {
+      id: 'stay-swan',
+      position: 1,
+      lodgingKind: 'partner_hotel',
+      resortId: null,
+      placeName: 'Swan Reserve',
+      displayName: 'Swan Reserve',
+      checkIn: null,
+      checkOut: null,
+      nights: null,
+      partyKeys: null,
+    };
+    const TRIP_WITH_STAYS: TripDTO = {
       ...TRIP,
-      resorts: [
-        { id: 'resort-contemporary', name: 'Contemporary' },
-        { id: 'resort-poly', name: 'Polynesian Village' },
+      resorts: [{ id: 'resort-beach', name: 'Beach Club' }],
+      stays: [BEACH, UNDATED],
+      stayWarnings: [
+        { code: 'trip_not_covered', from: '2024-05-03', to: '2024-05-05' },
+        { code: 'unscheduled', stayId: 'stay-swan' },
       ],
+    };
+
+    function mockHub(role: 'organizer' | 'member', trip: TripDTO = TRIP_WITH_STAYS): void {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return trip;
+        if (path === '/me') return { user: { id: 'me' } };
+        if (path === `/trips/${TRIP_ID}/members`) {
+          return [
+            { userId: 'me', displayName: 'Me', avatarPreset: null, role },
+            { userId: 'pal', displayName: 'Pal', avatarPreset: null, role: 'member' },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/guests`) {
+          return [{ id: 'guest-1', tripId: TRIP_ID, sponsorMemberId: 'me', name: 'Kid' }];
+        }
+        throw new Error(`unexpected path ${path}`);
+      });
+    }
+
+    test('renders compact 2-line summary inside hero card and expands on tap to show each stay, kind badge, "N of M people", and warnings', async () => {
+      mockHub('member');
+      renderDetail(makeNavigation());
+
+      const hero = await screen.findByTestId('trip-detail-hero');
+      const toggle = await within(hero).findByTestId('trip-stays-toggle');
+      expect(within(toggle).getByTestId('trip-stays-summary-eyebrow').props.children).toBe('STAYING AT');
+      expect(within(toggle).getByTestId('trip-stays-summary-count').props.children).toBe('(1 of 2 stays)');
+      // Leading "Disney's " is stripped from the display name.
+      expect(within(toggle).getByTestId('trip-stays-summary-title').props.children).toBe('Beach Club');
+      expect(within(toggle).getByTestId('trip-stays-summary-dates').props.children).toBe('May 1\u20133');
+      expect(within(toggle).getByTestId('trip-stays-warning-badge')).toBeTruthy();
+
+      // Collapsed by default so the hub stays compact.
+      expect(screen.queryByTestId('trip-stays-expanded')).toBeNull();
+
+      // Tap header to expand compact 1-line stay rows and warnings.
+      fireEvent.press(toggle);
+      const row = await screen.findByTestId('trip-stay-row-stay-beach');
+      expect(within(row).getByText('Beach Club')).toBeTruthy();
+      expect(within(row).getByTestId('trip-stay-dates-stay-beach').props.children).toBe('May 1\u20133 \u00b7 2n');
+      expect(within(row).queryByTestId('trip-stay-kind-badge-stay-beach')).toBeNull();
+      await waitFor(() =>
+        expect(within(row).getByTestId('trip-stay-caption-stay-beach').props.children).toBe('2 of 3 people'),
+      );
+
+      const undated = screen.getByTestId('trip-stay-row-stay-swan');
+      expect(within(undated).getByTestId('trip-stay-dates-stay-swan').props.children).toBe('Dates not set');
+      expect(within(undated).getByTestId('trip-stay-caption-stay-swan').props.children).toBe('Partner hotel');
+
+      expect(screen.getByText('May 3 to May 5 has no lodging recorded')).toBeTruthy();
+      expect(screen.getByText('Swan Reserve has no dates yet')).toBeTruthy();
+      // The old resort chip row is gone.
+      expect(screen.queryByTestId('trip-detail-resorts')).toBeNull();
+
+      // Tap again to collapse.
+      fireEvent.press(toggle);
+      expect(screen.queryByTestId('trip-stays-expanded')).toBeNull();
     });
 
-    renderDetail(makeNavigation());
+    test('a Member sees the expanded card read-only: no "Add dates" and no edit controls', async () => {
+      mockHub('member');
+      renderDetail(makeNavigation());
 
-    expect(await screen.findByTestId('trip-detail-resorts')).toBeTruthy();
-    expect(screen.getByTestId('trip-detail-resort-resort-contemporary')).toBeTruthy();
-    expect(screen.getByTestId('trip-detail-resort-resort-poly')).toBeTruthy();
-    expect(screen.getByText('Contemporary')).toBeTruthy();
-    expect(screen.getByText('Polynesian Village')).toBeTruthy();
-  });
+      fireEvent.press(await screen.findByTestId('trip-stays-toggle'));
+      await screen.findByTestId('trip-stay-row-stay-swan');
+      // Members have loaded (the party count needs them), so the role is known before asserting absence.
+      await waitFor(() => expect(screen.getByText('2 of 3 people')).toBeTruthy());
+      expect(screen.queryByTestId('trip-stay-add-dates-stay-swan')).toBeNull();
+      expect(screen.queryByTestId('trip-stay-edit-stay-beach')).toBeNull();
+      expect(screen.queryByTestId('trip-stays-add')).toBeNull();
+    });
 
-  test('R21.1: omits the Resort stay block when the Trip records none', async () => {
-    apiRequestMock.mockResolvedValue(TRIP); // TRIP.resorts === []
+    test('an Organizer gets "Add dates" on an undated stay when expanded, which opens the Trip edit form', async () => {
+      mockHub('organizer');
+      const navigation = makeNavigation();
+      renderDetail(navigation);
 
-    renderDetail(makeNavigation());
+      fireEvent.press(await screen.findByTestId('trip-stays-toggle'));
+      const addDates = await screen.findByTestId('trip-stay-add-dates-stay-swan');
+      expect(screen.queryByTestId('trip-stay-add-dates-stay-beach')).toBeNull(); // dated stays have no such action
+      fireEvent.press(addDates);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripEdit', { tripId: TRIP_ID });
+    });
 
-    await screen.findByTestId('trip-detail-hub');
-    expect(screen.queryByTestId('trip-detail-resorts')).toBeNull();
+    test("Summary header and Live Glance name tonight's stay: on a hand-off date, the incoming one (R7.1, R8.1, R8.5)", async () => {
+      const today = getTodayWDW();
+      const stayAt = (id: string, name: string, checkIn: string, checkOut: string): TripStayDTO => ({
+        ...BEACH,
+        id,
+        displayName: name,
+        resortId: `resort-${id}`,
+        checkIn,
+        checkOut,
+        partyKeys: null,
+      });
+      const splitTrip: TripDTO = {
+        ...TRIP,
+        startDate: addCalendarDays(today, -2),
+        endDate: addCalendarDays(today, 3),
+        stays: [
+          stayAt('out', "Disney's Pop Century", addCalendarDays(today, -2), today),
+          stayAt('in', "Disney's Riviera", today, addCalendarDays(today, 3)),
+        ],
+        stayWarnings: [],
+      };
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return splitTrip;
+        if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+        if (path === '/me') return { user: { id: 'me' } };
+        if (path === `/trips/${TRIP_ID}/members`) return [];
+        if (path === `/trips/${TRIP_ID}/feed`) return [];
+        throw new Error(`unexpected path ${path}`);
+      });
+
+      renderDetail(makeNavigation());
+
+      expect(await screen.findByTestId('trip-detail-glance-rest')).toBeTruthy();
+      expect(screen.getByText("Relax at Disney's Riviera or explore Disney Springs!")).toBeTruthy();
+
+      const toggle = await screen.findByTestId('trip-stays-toggle');
+      expect(within(toggle).getByTestId('trip-stays-summary-eyebrow').props.children).toBe('CHECK-IN TODAY');
+      expect(within(toggle).getByTestId('trip-stays-summary-count').props.children).toBe('(2 of 2 stays)');
+      expect(within(toggle).getByTestId('trip-stays-summary-title').props.children).toBe('Riviera');
+
+      fireEvent.press(toggle);
+      expect(await screen.findByTestId('trip-stay-tonight-in')).toBeTruthy();
+      expect(screen.queryByTestId('trip-stay-tonight-out')).toBeNull();
+    });
+
+    test('a Trip with no stays shows no card', async () => {
+      mockHub('member', TRIP);
+      renderDetail(makeNavigation());
+
+      await screen.findByTestId('trip-detail-hub');
+      expect(screen.queryByTestId('trip-stays-card')).toBeNull();
+    });
   });
 
   test('R3.8: an Organizer sees the Edit control, and it opens the TripEdit form', async () => {
@@ -1033,7 +1180,46 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
           icon: 'wallet-outline',
         }),
       );
-      expect(HUB_SECTIONS).toHaveLength(10);
+      // dining-plan-calculator R1.1: the Dining Plan section follows Budget.
+      expect(HUB_SECTIONS).toHaveLength(11);
+    });
+
+    // Feature: dining-plan-calculator, task 11.3 (Requirements 1.1, 19.1, 22.2).
+    test('the Dining Plan tile sits in the Finances tier below Budget + Expenses and opens TripDiningPlan', async () => {
+      apiRequestMock.mockResolvedValue(TRIP);
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      const diningRow = screen.getByTestId('trip-detail-finances-dining-row');
+      const tiles = React.Children.toArray(diningRow.props.children) as React.ReactElement<{ testID?: string }>[];
+      expect(tiles.map((c) => c.props.testID)).toEqual(['trip-detail-section-diningPlan']);
+
+      const tile = screen.getByTestId('trip-detail-section-diningPlan');
+      expect(tile.props.accessibilityLabel).toBe('Dining Plan: is the dining plan worth it? Compare plans for your meals.');
+      expect(within(tile).getByText('Dining Plan')).toBeTruthy();
+      expect(within(tile).getByText('Compare')).toBeTruthy();
+      expect(within(tile).getByText('Is the dining plan worth it? Compare plans for your meals.')).toBeTruthy();
+      const icon = within(tile).UNSAFE_getByType(Ionicons);
+      expect(icon.props.name).toBe('restaurant-outline');
+      expect(icon.props.color).toBe(HUB_TILE.light.financeIcon);
+
+      // The tile is inside the FINANCES tier, not the Prep strip.
+      expect(within(screen.getByTestId('trip-detail-tier-finances')).getByTestId('trip-detail-section-diningPlan')).toBeTruthy();
+
+      fireEvent.press(tile);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripDiningPlan', { tripId: TRIP_ID });
+
+      const budgetIndex = HUB_SECTIONS.findIndex((s) => s.key === 'budget');
+      expect(HUB_SECTIONS[budgetIndex + 1]).toEqual({
+        key: 'diningPlan',
+        route: 'TripDiningPlan',
+        title: 'Dining Plan',
+        body: 'Is the dining plan worth it? Compare plans for your meals.',
+        icon: 'restaurant-outline',
+        color: '#5b2a86',
+      });
     });
   });
 

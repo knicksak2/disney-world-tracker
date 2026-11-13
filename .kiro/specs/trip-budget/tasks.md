@@ -292,6 +292,29 @@ Verification tiers (from `.kiro/steering/execution-discipline.md`): while iterat
   - Also complete the operator launch gates in the Notes, which are manual and are NOT done by the agent: run the admin Diagnose three times at different times of day (once after 20:00 ET) before setting `TICKET_PRICES_ENABLED=true`, and obtain the owner's written confirmation that "option 1" included accepting the Terms-of-Use exposure (Requirement 21.8, round 5 L7; the decision record quotes the owner's message verbatim and the admin page shows the pending confirmation until it is removed).
   - _Requirements: all, including 13.2 (operator gate), 21.1, 21.2, 21.6 (decision record present in design.md), 21.8, 22.4 and 22.7 (guard and Jest conventions)_
 
+- [x] 22. Log a Budget_Line as an Expense (Requirement 23; added 2026-11-08)
+  - Read the design section "Log a Budget_Line as an Expense (Requirement 23)" and Property 51 first. No migration, no new permission action, no DTO change; Budget to Expense only.
+  - [x] 22.1 Link route and repo method (API + shared schema)
+    - Add `budgetLineLinkBodySchema` / `BudgetLineLinkBody` to `packages/shared/src/tripBudget.ts` (strict, `{ expenseId: uuid }`), then rebuild `packages/shared` before running API tests. Add `repo.linkExpense(tripId, lineId, expenseId)` and `PUT /trips/:id/budget/lines/:lineId/link` (authorize with `edit_budget` only) exactly as the design describes: row-locked read of the line, Trip check on the Expense, idempotent for the same id, `trip_validation_failed` for a different existing link, `UPDATE ... WHERE linked_expense_id IS NULL`.
+    - Tests: shared schema test (valid body; extra key and non-uuid rejected); `repo.link.test.ts` on pg-mem (sets and reads back `linked_expense_id`; other-Trip Expense rejected; same id twice is a no-op; different id on a linked line rejected and the first link kept; line of another Trip is `trip_not_found`; deleting the Expense nulls the link); `routes.link.test.ts` with `server.inject` (non-member and unknown Trip both `trip_forbidden`; a plain member who did not create the line can link; 204 on success; strict-schema `trip_validation_failed`); extend the Property 31 recording-pool test so the link operation issues no write against Expense tables.
+    - Also map `linked_expense_id` into the `StoredLine` in `repo.loadBudget` (it was selected but never copied, so `GET /budget` always reported `linkedExpenseId: null`; Requirement 23.14) and guard it with a read-back assertion in `repo.link.test.ts` and a `GET /budget` assertion in `routes.link.test.ts`.
+    - _Requirements: 23.5, 23.6, 23.7, 23.8, 23.13, 23.14_
+  - [x] 22.2 Pure draft mapper and API client
+    - Create `apps/mobile/src/screens/trips/budgetToExpenseDraft.ts` (`ExpenseFormDraft`, `budgetLineToExpenseDraft`) per the design formulas; add `linkBudgetLineExpense` and `useLinkBudgetLineExpense` to `budgetApi.ts`.
+    - Tests: `budgetToExpenseDraft.prop.test.ts` (fast-check, at least 100 runs, tagged `// Feature: trip-budget, Property 51: ...`) for Property 51(a) including that the built `exact` payload validates against `expenseCreateSchema`; unit cases for category mapping of all seven Budget_Categories, dining-only `experienceId`, 200-character description cut, null `plannedDate`; extend `budgetApi.test.ts` (the link call is `PUT` on the right path with `{ expenseId }`, and the hook invalidates `budgetKeys.detail`).
+    - _Requirements: 23.2, 23.5, 23.12_
+  - [x] 22.3 Expense form accepts a draft and reports the saved Expense
+    - In `ExpenseFormModal.tsx` add the optional `initialDraft` and `onSaved` props and the seed branch described in the design (keep the caller's entry in `exactShares`; seed key `'__draft__:' + budgetLineId`; the notice text with `testID="expense-form-draft-notice"`). Behavior with neither prop must be byte-for-byte unchanged.
+    - Tests: `ExpenseFormModal.budgetDraft.test.tsx` (renders the draft description, amount and per-person amounts and the notice; save posts to `POST /trips/:id/expenses` with the exact payload; changing the payer submits the old payer's amount as a share and omits the new payer's; `onSaved` is called with the created Expense after the POST; with no draft the form still opens empty), and the existing `ExpenseFormModal.menuPicker.test.tsx` and `TripExpensesScreen.test.tsx` stay green unmodified.
+    - _Requirements: 23.3, 23.4, 23.12; `trip-expenses` 17.1 to 17.4_
+  - [x] 22.4 Budget screen control and link flow
+    - In `TripBudgetScreen.tsx` add the "Log as expense" control on unlinked lines and the "Logged as expense" mark on linked lines, the `ExpenseFormModal` wiring (`members`/`guests` raw query data, `callerId` from `/me`, `initialDraft` from the mapper) and the link-after-save flow with the Requirement 23.9 failure text. Styles through `makeStyles`; one-off colours in `TripBudgetScreen.palette.ts`; `themeRetrofit.guard.test.ts` must pass without extending its allowlist.
+    - Tests: `TripBudgetScreen.logExpense.test.tsx` mocking only the network layer: pressing the control opens the form with the line's values and issues no POST; saving issues `POST /trips/:id/expenses` and then `PUT /trips/:id/budget/lines/:lineId/link` with the new Expense id, and the refetched Budget shows "Logged as expense" and no control; a failing PUT shows the 23.9 text and issues exactly one POST; a line that arrives with `linkedExpenseId` renders the mark and no control.
+    - _Requirements: 23.1, 23.9, 23.10, 23.11, 23.12_
+  - [x] 22.5 Verification gate for task 22
+    - Re-read the diff adversarially, produce the behavior-to-test map (start from Property 51), then run the full `npm run verify` once and paste the literal tail with per-workspace counts and exit code `0`. Leave this task unchecked if anything is incomplete.
+    - _Requirements: 23.1 to 23.14_
+
 ## Notes
 
 - **Kill switch discipline.** `TICKET_PRICES_ENABLED` stays false everywhere (including the deploy) until the operator has run the admin Diagnose action three times, at different times of day on different days, with all three passing. If any run returns 403, 429 or a WAF marker, leave it off, keep the user-entered path, and do not retry from the same IP.
@@ -317,6 +340,7 @@ Verification tiers (from `.kiro/steering/execution-discipline.md`): while iterat
 - **Terms-of-Use position.** See the design's Decision record. Revisit before any monetization or wide distribution.
 - **Mobile tests are Jest (`jest-expo`); api and shared tests are Vitest.** Do not cross them. Every new `.tsx` uses `makeStyles`/`useAppTheme`; one-off colours go in `*.palette.ts`; `themeRetrofit.guard.test.ts` must pass without extending its allowlist.
 - **Out of scope** (do not build without a spec amendment): Annual Pass and water-park single-day prices, discounted ticket prices, reseller prices, lodging and parking pricing, merchandise catalogs, Budget sharing beyond Trip members, Budget export, scheduled ticket refresh, admin price entry.
+- **Requirement 24 (`dining_plan:` Budget_Lines)** is implemented by `.kiro/specs/dining-plan-calculator/tasks.md` (task 7.4, through this Budget repo with no Budget code change), not by a task in this plan. It writes lines into the Budget and is not the out-of-scope Budget export above.
 
 ## Task Dependency Graph
 
@@ -346,7 +370,11 @@ Verification tiers (from `.kiro/steering/execution-discipline.md`): while iterat
     { "id": 20, "tasks": ["18.2", "18.3", "18.4"] },
     { "id": 21, "tasks": ["18.1"] },
     { "id": 22, "tasks": ["18.5", "19.1"] },
-    { "id": 23, "tasks": ["21"] }
+    { "id": 23, "tasks": ["21"] },
+    { "id": 24, "tasks": ["22.1", "22.2"] },
+    { "id": 25, "tasks": ["22.3"] },
+    { "id": 26, "tasks": ["22.4"] },
+    { "id": 27, "tasks": ["22.5"] }
   ]
 }
 ```

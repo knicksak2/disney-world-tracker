@@ -464,6 +464,29 @@ _(Extended by `unified-experience-logging`: feed `rode_with` entries carry `tagI
 4. WHEN a Trip is deleted, THE Trip_Service SHALL delete the Trip's Budget data through the same `ON DELETE CASCADE` path as other Trip-owned entities (Requirement 3.7).
 5. WHEN a Trip_Member leaves a Trip or is removed from it, THE Trip_Service SHALL delete that member's Traveler_Profile for the Trip (`trip_traveler_profiles`) in the same transaction as the membership deletion, and SHALL leave every Budget_Allocation naming that member unchanged; this changes no other departure behavior of Requirement 5 or Requirement 8.
 
+### Requirement 26: Lodging stays (added by the `trip-lodging-stays` spec)
+
+**User Story:** As an Organizer, I want to record each hotel booking of a Trip with its own dates, so that a split stay is modelled correctly and every feature knows where the party sleeps each night. This requirement is additive and leaves Requirement 21 unchanged. The behavior is defined in `.kiro/specs/trip-lodging-stays/requirements.md`; this section states only what the Trip_Service and the App must do.
+
+#### Acceptance Criteria
+
+1. THE Trip_Service SHALL store a Trip's lodging as up to 8 Stays (`trip_stays`), each with a lodging kind (Disney Resort, partner hotel or other lodging), a catalog Resort or a place name, optional check-in and check-out dates, and an optional list of the people on it, and SHALL return them on every Trip projection as `TripDTO.stays` with advisory `TripDTO.stayWarnings`.
+2. THE Trip_Service SHALL expose `PUT /trips/:id/stays`, authorized as the Organizer-only `edit_settings` action, which replaces the Trip's Stays atomically under the Trip row lock, keeps the id of every Stay named in the request, and rejects overlapping or invalid Stays with `trip_validation_failed` while accepting gaps and nights outside the Trip as warnings.
+3. THE Trip_Service SHALL keep `trip_resorts` (Requirement 21) equal to the distinct Resorts of the Trip's Stays after every change, so every existing reader of the Trip_Resort_Stay keeps working unchanged.
+4. WHEN `POST /trips` or `PATCH /trips/:id` still supplies `resortIds`, THE Trip_Service SHALL translate it into Stays (an equal set changes nothing; one Resort becomes one Stay spanning the Trip; several become undated Stays in order), and WHEN an edit moves the Trip dates, a single Stay that spanned the previous dates SHALL follow them.
+5. THE Trip_Detail_View SHALL show a "Where you're staying" card in place of the Resort chip row, read-only for a Member, and THE Trip_Edit screen SHALL edit the Stays through a Stay sheet saved with `PUT /trips/:id/stays` instead of sending `resortIds`.
+
+### Requirement 27: Dining Plan calculator (added by the `dining-plan-calculator` spec)
+
+**User Story:** As a Trip_Member, I want to work out from the Trip hub whether a Disney dining plan is worth it for the meals the group plans, so that we can decide before we book. This requirement is additive and changes no earlier requirement. The behavior is defined in `.kiro/specs/dining-plan-calculator/requirements.md`; this section states only what the Trip_Service and the App must do.
+
+#### Acceptance Criteria
+
+1. THE permission matrix (`services/trips/permissions.ts`) SHALL include the member actions `view_dining_plan` and `edit_dining_plan`, granted to Organizers and Members alike (dining-plan-calculator Requirement 16.2), and THE Dining Plan routes SHALL authorize with `assertTripMember` and `can`, answering `trip_forbidden` identically for a non-member and an unknown Trip (Requirement 15).
+2. THE Trip_Detail_View hub SHALL show a "Dining Plan" tile in its Finances tier, in a row below the Budget and Expenses tiles, and `HUB_SECTIONS` SHALL list the section `diningPlan` (title "Dining Plan", route `TripDiningPlan`, icon `restaurant-outline`) directly after `budget`; WHEN a Trip_Member taps the tile, THE App SHALL open the `TripDiningPlan` screen with the Trip's identifier.
+3. THE Trips tab stack SHALL register `TripDiningPlan` (param `tripId`) and the standalone `DiningPlanCalculator` screen (no params), and THE Trips_List_Screen SHALL offer an entry to the standalone calculator whether or not the User has Trips (dining-plan-calculator Requirement 20.1); the standalone calculator SHALL store nothing on the server.
+4. THE Trip's Dining Plan settings and meal entries (`trip_dining_plan_scenarios`, `trip_dining_plan_entries`) SHALL be deleted with the Trip through `ON DELETE CASCADE` (dining-plan-calculator Requirement 17.2), so the Trip deletions of Requirements 3 and 5 need no extra step, and the Dining Plan SHALL read the Trip's party and Stays (Requirement 26) without writing to them.
+
 ## Out of Scope (Future Work)
 
 - **Real-time group chat**: Live, real-time messaging within a Trip is deferred. Trip_Comments in Requirement 13 are not real-time chat.

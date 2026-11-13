@@ -288,8 +288,6 @@ export const CONTRAST_REQUIREMENTS: readonly ContrastRequirement[] = [
   // Dark-mode visual-verify pass (Requirement 9.12): emulator-found selected states.
   { label: 'Expense split-mode selected label on selected chip', fg: d.primaryFg, bg: FORM.dark.modeChipSelectedBg, min: TEXT },
   { label: 'Expense split-mode idle label on track', fg: d.textSecondary, bg: FORM.dark.lavenderWellAlt, min: TEXT },
-  { label: 'Expense matrix stepper active border vs pill', fg: FORM.dark.matrixPillActiveBorder, bg: d.surface, min: NON_TEXT },
-  { label: 'Expense matrix stepper active border vs inactive border', fg: FORM.dark.matrixPillActiveBorder, bg: FORM.dark.violetHairline, min: NON_TEXT },
   { label: 'LensSwitcher active label on active segment', fg: d.primaryFg, bg: LENS.dark.activeBg, min: TEXT },
   { label: 'LensSwitcher idle label on track', fg: LENS.dark.inactiveText, bg: LENS.dark.trackBg, min: TEXT },
   { label: 'Vault segment active label on active segment', fg: d.primaryFg, bg: COLLECTION.dark.segActiveBg, min: TEXT },

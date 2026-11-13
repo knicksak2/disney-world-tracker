@@ -360,6 +360,8 @@ const TRIP_DETAIL: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 describe('Trip_Summary screen — Send to friends (photo-uploads R15.1, R15.8, R26.3)', () => {

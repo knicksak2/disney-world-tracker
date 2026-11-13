@@ -9,6 +9,7 @@
  *   - createBudgetLine: POST /trips/:id/budget/lines -> 201 + BudgetLineDTO
  *   - editBudgetLine: PATCH /trips/:id/budget/lines/:lineId (full replace) -> 200 + BudgetLineDTO
  *   - deleteBudgetLine: DELETE /trips/:id/budget/lines/:lineId -> 204
+ *   - linkBudgetLineExpense: PUT /trips/:id/budget/lines/:lineId/link { expenseId } -> 204 (Requirement 23)
  *   - putTravelerProfile: PUT /trips/:id/budget/travelers -> 200 + TravelerProfileDTO
  *   - deleteTravelerProfile: DELETE /trips/:id/budget/travelers/:profileId -> 204
  *   - patchBudgetSettings: PATCH /trips/:id/budget/settings -> 200 + BudgetSettingsDTO
@@ -26,6 +27,7 @@ import type {
   BudgetLineDTO,
   BudgetLineInput,
   BudgetLineReplace,
+  BudgetLineLinkBody,
   TravelerProfileDTO,
   TravelerProfileInput,
   BudgetSettingsDTO,
@@ -85,6 +87,19 @@ export async function deleteBudgetLine(
   await apiRequest('DELETE', `/trips/${tripId}/budget/lines/${lineId}`);
 }
 
+/**
+ * Record that a Budget_Line was logged as an Expense (Requirement 23.5).
+ * Server: PUT /trips/:id/budget/lines/:lineId/link { expenseId } -> 204.
+ */
+export async function linkBudgetLineExpense(
+  tripId: string,
+  lineId: string,
+  expenseId: string,
+): Promise<void> {
+  const body: BudgetLineLinkBody = { expenseId };
+  await apiRequest('PUT', `/trips/${tripId}/budget/lines/${lineId}/link`, body);
+}
+
 export async function putTravelerProfile(
   tripId: string,
   input: TravelerProfileInput,
@@ -139,6 +154,17 @@ export function useEditBudgetLine(tripId: string) {
   return useMutation({
     mutationFn: ({ lineId, input }: { lineId: string; input: BudgetLineReplace }) =>
       editBudgetLine(tripId, lineId, input),
+    onSuccess: () => {
+      void invalidateBudgetQueries(queryClient, tripId);
+    },
+  });
+}
+
+export function useLinkBudgetLineExpense(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lineId, expenseId }: { lineId: string; expenseId: string }) =>
+      linkBudgetLineExpense(tripId, lineId, expenseId),
     onSuccess: () => {
       void invalidateBudgetQueries(queryClient, tripId);
     },

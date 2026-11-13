@@ -409,6 +409,16 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
         <NoticeBanner message={notice} onDismiss={clearTripsListNotice} />
       ) : null}
 
+      {/* dining-plan-calculator R20.1: the standalone calculator, no Trip needed. */}
+      <SecondaryButton
+        label="Dining Plan calculator"
+        icon="restaurant-outline"
+        onPress={() => navigation.navigate('DiningPlanCalculator')}
+        accessibilityLabel="Dining Plan calculator: is a dining plan worth it, without making a trip"
+        testID="trips-dining-calculator"
+        style={styles.calculatorBtn}
+      />
+
       {/* Empty state (R16.9): only after a successful read of zero Trips. */}
       {totalTrips === 0 ? (
         <View style={styles.center} testID="trips-empty">
@@ -857,6 +867,10 @@ function tripsErrorMessage(err: ApiError | null): string {
 // ---------------------------------------------------------------------------
 
 const useStyles = makeStyles((t) => ({
+  calculatorBtn: {
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+  },
   center: {
     flex: 1,
     alignItems: 'center',

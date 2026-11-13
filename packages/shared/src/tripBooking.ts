@@ -22,6 +22,8 @@ import {
 } from './enums.js';
 import { uuidSchema } from './schemas/primitives.js';
 import { tripCalendarDateSchema } from './trips.js';
+// Type-only: tripStays.ts imports this module's date helpers at runtime, so a value import here would be a cycle.
+import type { EffectiveStaySource } from './tripStays.js';
 
 export const BOOKING_RULES_VERSION = 1;
 
@@ -293,11 +295,23 @@ export interface BookingWindowDTO {
 export interface BookingTimelineDTO {
   readonly tripId: string;
   readonly rulesVersion: number;
-  readonly stayType: { readonly value: StayType; readonly source: 'auto' | 'override' };
+  /** `'stays'` when derived from the Trip's dated Stays (trip-lodging-stays R9.7); the trip-level override is then ignored. */
+  readonly stayType: { readonly value: StayType; readonly source: 'auto' | 'override' | 'stays' };
   readonly lightningLaneTiming: { readonly value: LightningLaneTiming; readonly source: 'auto' | 'override' };
-  readonly arrivalDate: { readonly value: string; readonly source: 'trip_start' | 'override' };
+  readonly arrivalDate: { readonly value: string; readonly source: 'trip_start' | 'override' | 'stays' };
   readonly muted: boolean; // viewer-specific ONLY (R3.1, R3.11)
   readonly windows: readonly BookingWindowDTO[];
+  /** The lodging segments the windows were derived from; empty when the Trip-level settings drove the derivation (R9.7). */
+  readonly stays: readonly BookingTimelineStayDTO[];
+}
+
+/** One lodging segment of a booking timeline (trip-lodging-stays R9.7). `stayId` is null for a synthesized segment. */
+export interface BookingTimelineStayDTO {
+  readonly stayId: string | null;
+  readonly lodgingKind: StayType;
+  readonly checkIn: string;
+  readonly checkOut: string;
+  readonly source: EffectiveStaySource;
 }
 
 export interface BookingSettingsDTO {

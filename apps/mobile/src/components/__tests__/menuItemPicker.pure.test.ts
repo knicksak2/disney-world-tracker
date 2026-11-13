@@ -11,6 +11,8 @@ import {
 import {
   buildPickerRows,
   isAlcoholicGroupType,
+  isInformationalDisclaimer,
+  isPricingAnnouncement,
   selectionSubtotalCents,
   selectionToBudgetPriceRef,
   selectionToExpenseItems,
@@ -107,6 +109,71 @@ describe('menuItemPicker.pure (Task 17.3, Property 27)', () => {
       expect(sections[1]!.groupName).toBe('Cocktails');
       expect(sections[1]!.items[0]!.isAlcohol).toBe(true);
       expect(sections[1]!.items[0]!.defaultPriceCents).toBe(1950);
+    });
+
+    it('identifies pricing announcements and disclaimers', () => {
+      expect(isPricingAnnouncement('$58 per adult, plus tax and gratuity', 'Breakfast')).toBe(true);
+      expect(isPricingAnnouncement('Any Item', "'Ohana Breakfast Pricing")).toBe(true);
+      expect(isPricingAnnouncement('Caesar Salad', 'Appetizers')).toBe(false);
+
+      expect(isInformationalDisclaimer('Guests must speak to a Cast Member about their allergy-friendly request')).toBe(true);
+      expect(isInformationalDisclaimer('Ask a cast member for daily specials')).toBe(true);
+      expect(isInformationalDisclaimer('Fresh Fruit')).toBe(false);
+    });
+
+    it('filters out pricing announcements and disclaimers, and tags unpriced feast items', () => {
+      const ohanaMenus: MenuDTO[] = [
+        {
+          menuType: 'Breakfast',
+          groups: [
+            {
+              name: "'Ohana Breakfast Pricing",
+              items: [
+                { name: '$58 per adult, plus tax and gratuity' },
+                { name: '$36 per child (Guests ages 3-9), plus tax and gratuity' },
+              ],
+            },
+            {
+              name: "All-You-Care-To-Enjoy 'Ohana Breakfast",
+              items: [
+                { name: 'Freshly Made Pineapple-Coconut Breakfast Bread' },
+                { name: 'Fresh Fruit' },
+                { name: "'Ohana Breakfast Skillet" },
+                { name: 'Guests must speak to a Cast Member about their allergy-friendly request' },
+              ],
+            },
+            {
+              name: 'Specialty Beverages',
+              type: 'Beverage',
+              items: [
+                { name: 'Stitch Smoothie', priceCents: 700 },
+              ],
+            },
+          ],
+        },
+      ];
+
+      const sections = buildPickerRows(ohanaMenus);
+
+      // Pricing group was stripped because all items were pricing announcements
+      expect(sections.some((s) => s.groupName === "'Ohana Breakfast Pricing")).toBe(false);
+
+      // Feast section items: disclaimer removed, food items marked isFeastItem: true
+      const feastSec = sections.find((s) => s.groupName === "All-You-Care-To-Enjoy 'Ohana Breakfast");
+      expect(feastSec).toBeDefined();
+      expect(feastSec!.items).toHaveLength(3); // 3 items (disclaimer omitted)
+      expect(feastSec!.items.map((i) => i.name)).toEqual([
+        'Freshly Made Pineapple-Coconut Breakfast Bread',
+        'Fresh Fruit',
+        "'Ohana Breakfast Skillet",
+      ]);
+      expect(feastSec!.items.every((i) => i.isFeastItem)).toBe(true);
+
+      // Specialty beverages are priced and not feast items
+      const drinkSec = sections.find((s) => s.groupName === 'Specialty Beverages');
+      expect(drinkSec).toBeDefined();
+      expect(drinkSec!.items[0]!.isFeastItem).toBe(false);
+      expect(drinkSec!.items[0]!.defaultPriceCents).toBe(700);
     });
   });
 
@@ -254,6 +321,58 @@ describe('menuItemPicker.pure (Task 17.3, Property 27)', () => {
       expect(ref.tier).toBeDefined();
       expect(ref.tier!.name.length).toBeLessThanOrEqual(40);
       expect(ref.tier!.priceCents).toBe(4900);
+
+      const parsed = menuPriceRefSchema.safeParse(ref);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('builds MenuPriceRef for combined tier and regular items projecting all as items', () => {
+      const ref = selectionToBudgetPriceRef({
+        tier: { name: 'Adult Dinner Buffet', priceCents: 6900, quantity: 2 },
+        items: [
+          { name: 'Lapu Lapu', priceCents: 2400, quantity: 1, isAlcohol: true },
+        ],
+      });
+
+      expect(ref.kind).toBe('menu');
+      expect(ref.tier).toBeUndefined();
+      expect(ref.items).toHaveLength(2);
+      expect(ref.items![0]).toEqual({
+        name: 'Adult Dinner Buffet',
+        priceCents: 6900,
+        priceLabel: null,
+        quantity: 2,
+      });
+      expect(ref.items![1]).toEqual({
+        name: 'Lapu Lapu',
+        priceCents: 2400,
+        priceLabel: null,
+        quantity: 1,
+        isAlcohol: true,
+      });
+
+      const parsed = menuPriceRefSchema.safeParse(ref);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('builds MenuPriceRef for multiple tiers with regular items', () => {
+      const ref = selectionToBudgetPriceRef({
+        tiers: [
+          { name: 'Adult', priceCents: 6900, quantity: 2 },
+          { name: 'Child', priceCents: 4600, quantity: 1 },
+        ],
+        items: [
+          { name: 'Lapu Lapu', priceCents: 2400, quantity: 1, isAlcohol: true },
+        ],
+      });
+
+      expect(ref.kind).toBe('menu');
+      expect(ref.items).toHaveLength(3);
+      expect(ref.items![0]!.name).toBe('Adult');
+      expect(ref.items![0]!.quantity).toBe(2);
+      expect(ref.items![1]!.name).toBe('Child');
+      expect(ref.items![1]!.quantity).toBe(1);
+      expect(ref.items![2]!.name).toBe('Lapu Lapu');
 
       const parsed = menuPriceRefSchema.safeParse(ref);
       expect(parsed.success).toBe(true);

@@ -153,3 +153,14 @@ No public Disney API returns a per-restaurant reservation-page URL or slug (conf
 4. THE Menu_Cache SHALL record a `shape_version` for each cached row (`MENU_SHAPE_VERSION` = 2 for rows written after this requirement, 1 for older rows).
 5. WHEN a Restaurant_Experience detail or menu is requested and its cached row has a `shape_version` below the current one, THE Catalog_Service SHALL treat the cache as stale and refetch through the Disney_Transport under the same rules as Requirements 1 and 2 (demand-driven, at most one Menu_Service request per request, never as a bulk job), and on failure SHALL serve the previous cached menu unchanged (Requirement 3.3).
 6. THE Menu_Screen display and its tests of Requirement 5 SHALL be unaffected by the new fields.
+
+### Requirement 9: Menu group classification and item price helpers (added by the `dining-plan-calculator` spec)
+
+**User Story:** As a developer of features that value meals from cached menus, I want shared helpers that classify a menu group and give an item's representative price, so that every feature reads a menu the same way. This requirement is additive and changes no displayed behavior; the consumer is `.kiro/specs/dining-plan-calculator` (design.md Components, Shared contracts).
+
+#### Acceptance Criteria
+
+1. THE `@dwt/shared` module `menuPricing.ts` SHALL export `classifyMenuGroup(group: { name?, type? }): MenuGroupClass`, returning one of `entree`, `kids`, `dessert`, `appetizer`, `beverage`, `alcohol` or `other` from the group's `type` and `name` (case-insensitive), where the first match wins in the order alcohol, kids, dessert, appetizer, beverage, entree, other, and the entree test reuses the entree heuristics of `computeMenuEstimatePerPerson`; it SHALL never throw.
+2. THE classification SHALL NOT treat alcohol-free wording (for example "Non-Alcoholic Drinks") as alcohol, and SHALL match `tea` only as a whole word, so that a group such as "Steaks" is not classed as a beverage.
+3. THE same module SHALL export `menuGroupItemCents(item: MenuItemDTO): number | null`, the item's representative integer cents (its `priceCents`, else the mean of its variant prices, else its parsed `price` string), or null when it has no positive price; it SHALL use the same resolver as `computeMenuEstimatePerPerson`, so both read an item's price identically.
+4. THE change SHALL be append-only: no existing export, `MenuDTO` field, projection or displayed menu text SHALL change, and every existing `menuPricing` test SHALL pass unmodified.

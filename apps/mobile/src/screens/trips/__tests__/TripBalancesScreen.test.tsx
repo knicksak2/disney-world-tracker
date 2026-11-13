@@ -83,6 +83,8 @@ const TRIP_FIXTURE: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 const MEMBERS_FIXTURE: TripMemberDTO[] = [

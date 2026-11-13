@@ -798,6 +798,11 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
       border-color: var(--primary);
     }
 
+    .btn-sm {
+      padding: 0.32rem 0.65rem;
+      font-size: 0.775rem;
+    }
+
     /* Code & Typography */
     .mono {
       font-family: var(--font-mono);
@@ -827,6 +832,29 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
       margin-bottom: 1rem;
     }
 
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+
+    .form-help {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+      line-height: 1.4;
+    }
+
     .form-input {
       background: var(--bg);
       border: 1px solid var(--border-light);
@@ -840,10 +868,154 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
+    .form-grid .form-input {
+      max-width: none;
+    }
+
+    .form-input-sm {
+      max-width: 130px;
+      padding: 0.38rem 0.6rem;
+      font-size: 0.825rem;
+    }
+
     .form-input:focus {
       outline: none;
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      margin-top: 0.2rem;
+      width: 1rem;
+      height: 1rem;
+      accent-color: var(--primary);
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .section-header-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .card-nested {
+      background: var(--card-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: 0.6rem;
+      padding: 1.25rem;
+      margin-top: 1.25rem;
+    }
+
+    .card-nested.editing {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+    }
+
+    .flash {
+      border-radius: 0.6rem;
+      padding: 0.9rem 1.15rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    .flash-info {
+      background: var(--info-bg);
+      border: 1px solid var(--info-border);
+    }
+
+    .flash-success {
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+    }
+
+    .flash-error {
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+    }
+
+    .flash-error ul {
+      margin: 0.4rem 0 0 1.25rem;
+    }
+
+    .filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.85rem 0 1rem;
+    }
+
+    .filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      text-decoration: none;
+    }
+
+    .filter-pill:hover {
+      color: var(--text);
+      border-color: var(--border-light);
+      text-decoration: none;
+    }
+
+    .filter-pill.active {
+      color: var(--primary);
+      background: var(--info-bg);
+      border-color: var(--info-border);
+    }
+
+    details.card-details > summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    details.card-details > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.card-details > summary .details-chevron::before {
+      content: '▸ ';
+      color: var(--primary);
+    }
+
+    details.card-details[open] > summary .details-chevron::before {
+      content: '▾ ';
+    }
+
+    details.card-details[open] > summary {
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
     }
 
     /* Error Box */

@@ -257,6 +257,21 @@ export const SOFT_REFERENCES: readonly { readonly where: string; readonly holds:
     fate: 'No user id or name; caption kept (A2). Inspected by the residual test.',
   },
   {
+    where: 'trip_stays.party_keys',
+    holds: "Person keys ('m:<member id>' / 'g:<guest id>') of the people staying at a lodging stay; text in a JSONB array",
+    fate: 'Not a foreign key to users. A key whose person has left matches no one and every consumer ignores it; the rows go with the Trip.',
+  },
+  {
+    where: 'trip_dining_plan_scenarios.settings (alcoholDrinkerKeys)',
+    holds: "Person keys ('m:<member id>' / 'g:<guest id>') of the Trip's alcohol drinkers; text in a JSONB array",
+    fate: 'Not a foreign key to users. Inert: the Dining Plan Party is built from visible members only, so a key of a deleted or departed person matches no one. No scrub required; the row goes with the Trip.',
+  },
+  {
+    where: 'trip_dining_plan_entries.excluded_keys',
+    holds: "Person keys ('m:<member id>' / 'g:<guest id>') of people not eating a planned meal; text in a JSONB array",
+    fate: 'Not a foreign key to users. Inert for the same reason as the settings keys. No scrub required; the rows go with the Trip.',
+  },
+  {
     where: 'trip_reactions.target_id and trip_comments.target_id',
     holds: 'Feed item or log entry ids',
     fate: 'Not user references.',

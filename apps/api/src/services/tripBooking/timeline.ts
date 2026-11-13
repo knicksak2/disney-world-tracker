@@ -13,6 +13,9 @@ import {
   WINDOW_KINDS,
   type BookingWindowDTO,
   type WindowRule,
+  effectiveStays,
+  type EffectiveStaySource,
+  type StayRecord,
 } from '@dwt/shared';
 
 export interface StoredBookingSettings {
@@ -26,6 +29,20 @@ export interface TimelineTripInput {
   readonly endDate: string;
   readonly hasResortStay: boolean; // ≥ 1 trip_resorts row
   readonly settings: StoredBookingSettings | null;
+  /**
+   * The Trip's lodging Stays (trip-lodging-stays R9.1). Omitted when the caller has none to give (the `trip_stays`
+   * table is absent); then, as for a Trip that resolves to a single legacy segment, the original derivation runs.
+   */
+  readonly stays?: readonly StayRecord[] | undefined;
+}
+
+/** One lodging segment the stays path derived windows from (R9.7). */
+export interface TimelineStaySegment {
+  readonly stayId: string | null;
+  readonly lodgingKind: StayType;
+  readonly checkIn: string;
+  readonly checkOut: string;
+  readonly source: EffectiveStaySource;
 }
 
 export interface DerivedWindow {
@@ -38,11 +55,13 @@ export interface DerivedWindow {
 
 export interface DerivedTimeline {
   readonly rulesVersion: number;
-  readonly stayType: { readonly value: StayType; readonly source: 'auto' | 'override' };
+  readonly stayType: { readonly value: StayType; readonly source: 'auto' | 'override' | 'stays' };
   readonly lightningLaneTiming: { readonly value: LightningLaneTiming; readonly source: 'auto' | 'override' };
-  readonly arrival: { readonly value: string; readonly source: 'trip_start' | 'override' };
+  readonly arrival: { readonly value: string; readonly source: 'trip_start' | 'override' | 'stays' };
   readonly stayDates: readonly string[];
   readonly windows: readonly DerivedWindow[];
+  /** Present only when the stays path ran (R9.7), so the legacy output is unchanged. */
+  readonly stays?: readonly TimelineStaySegment[];
 }
 
 export function resolveSettings(trip: TimelineTripInput): {
@@ -109,7 +128,69 @@ export function compareWindows(a: DerivedWindow, b: DerivedWindow): number {
   );
 }
 
+/**
+ * The booking timeline (trip-lodging-stays Requirement 9). A Trip whose lodging resolves to one `legacy_resorts` or
+ * `implicit_no_lodging` segment, or whose caller passes no `stays`, takes the original derivation unchanged
+ * (R9.4). Otherwise every Effective_Stay segment gets its own windows from its own lodging kind and check-in, and
+ * windows with the same `kind:dropOn` key are merged (R9.1 to R9.3). Pure; `BOOKING_RULES_VERSION` is unchanged (R9.9).
+ */
 export function deriveBookingTimeline(trip: TimelineTripInput): DerivedTimeline {
+  if (trip.stays === undefined) return deriveLegacyTimeline(trip);
+  const segments = effectiveStays({ startDate: trip.startDate, endDate: trip.endDate }, trip.stays);
+  const first = segments[0];
+  if (
+    first === undefined ||
+    (segments.length === 1 && (first.source === 'legacy_resorts' || first.source === 'implicit_no_lodging'))
+  ) {
+    return deriveLegacyTimeline(trip);
+  }
+
+  // Only the Lightning Lane timing override still applies per segment (R9.5); the trip-level stay type and check-in
+  // override are ignored once the Trip has a dated Stay (R9.6).
+  const timingOverride = trip.settings?.lightningLaneTiming ?? null;
+  const merged = new Map<string, DerivedWindow>();
+  const allDates = new Set<string>();
+  for (const g of segments) {
+    const stayDates = listCalendarDates(g.checkIn, g.checkOut);
+    for (const d of stayDates) allDates.add(d);
+    const timing = timingOverride ?? BOOKING_RULES.lightning_lane.defaultTimingByStayType[g.lodgingKind];
+    const produced = [
+      ...applyRule('dining', BOOKING_RULES.dining.byStayType[g.lodgingKind], stayDates, g.checkIn),
+      ...applyRule('lightning_lane', BOOKING_RULES.lightning_lane.byTiming[timing], stayDates, g.checkIn),
+    ];
+    for (const w of produced) {
+      const prior = merged.get(w.windowKey);
+      merged.set(
+        w.windowKey,
+        prior === undefined
+          ? w
+          : { ...prior, coveredDates: [...new Set([...prior.coveredDates, ...w.coveredDates])].sort() },
+      );
+    }
+  }
+
+  return {
+    rulesVersion: BOOKING_RULES_VERSION,
+    stayType: { value: first.lodgingKind, source: 'stays' },
+    lightningLaneTiming:
+      timingOverride !== null
+        ? { value: timingOverride, source: 'override' }
+        : { value: BOOKING_RULES.lightning_lane.defaultTimingByStayType[first.lodgingKind], source: 'auto' },
+    arrival: { value: first.checkIn, source: 'stays' },
+    stayDates: [...allDates].sort(),
+    windows: [...merged.values()].sort(compareWindows),
+    stays: segments.map((g) => ({
+      stayId: g.id,
+      lodgingKind: g.lodgingKind,
+      checkIn: g.checkIn,
+      checkOut: g.checkOut,
+      source: g.source,
+    })),
+  };
+}
+
+/** The original derivation, kept byte-for-byte (R9.4): one stay type, one arrival, the Trip's own dates. */
+export function deriveLegacyTimeline(trip: TimelineTripInput): DerivedTimeline {
   const r = resolveSettings(trip);
   const arrival = r.arrival.value;
   const stay = listCalendarDates(arrival, trip.endDate);

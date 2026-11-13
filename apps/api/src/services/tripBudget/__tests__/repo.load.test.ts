@@ -308,4 +308,38 @@ describe('TripBudgetRepo.loadBudget (pg-mem)', () => {
     expect(person?.label).toBe('Deleted user');
     expect(person?.deleted).toBe(true);
   });
+
+  // Regression: `loadBudget` selected `suggestion_key` but never mapped it, so every line came back without its key.
+  it('returns each line\'s stored suggestionKey, and null for a line without one', async () => {
+    const { pool } = setupTestDb();
+    const data = await seedTestData(pool);
+    const repo = createTripBudgetRepo(pool);
+    const allocations = [{ memberId: data.organizerId, amountCents: 5000 }];
+    const keyed = await repo.createLine(data.tripId, data.organizerId, {
+      category: 'tickets',
+      description: 'Suggested tickets',
+      priceSource: 'user_entered',
+      suggestionKey: 'ticket:base:4:2026-11-01:std-gst',
+      allocations,
+    });
+    const exported = await repo.createLine(data.tripId, data.organizerId, {
+      category: 'dining',
+      description: 'Dining out of pocket (estimate)',
+      priceSource: 'user_entered',
+      suggestionKey: 'dining_plan:oop',
+      allocations,
+    });
+    const plain = await repo.createLine(data.tripId, data.organizerId, {
+      category: 'other',
+      description: 'Typed by hand',
+      priceSource: 'user_entered',
+      allocations,
+    });
+
+    const bundle = await repo.loadBudget(data.tripId);
+    const keyOf = (id: string) => bundle.storedLines.find((l) => l.id === id)?.suggestionKey;
+    expect(keyOf(keyed.id)).toBe('ticket:base:4:2026-11-01:std-gst');
+    expect(keyOf(exported.id)).toBe('dining_plan:oop');
+    expect(keyOf(plain.id)).toBeNull();
+  });
 });

@@ -7,6 +7,7 @@
  * - POST   /trips/:id/budget/lines              (edit_budget) -> 201 + BudgetLineDTO
  * - PATCH  /trips/:id/budget/lines/:lineId      (edit_budget) -> 200 + BudgetLineDTO
  * - DELETE /trips/:id/budget/lines/:lineId      (edit_budget) -> 204
+ * - PUT    /trips/:id/budget/lines/:lineId/link (edit_budget, any member) -> 204   (Requirement 23)
  * - PUT    /trips/:id/budget/travelers          (edit_budget_travelers) -> 200 + TravelerProfileDTO
  * - DELETE /trips/:id/budget/travelers/:profileId (edit_budget_travelers) -> 204
  * - PATCH  /trips/:id/budget/settings           (edit_budget_settings) -> 200 + BudgetSettingsDTO
@@ -22,6 +23,7 @@ import { z } from 'zod';
 import {
   TICKET_PARK_BY_CANONICAL_PARK,
   budgetLineInputSchema,
+  budgetLineLinkBodySchema,
   budgetLineReplaceSchema,
   budgetSettingsPatchSchema,
   dismissSuggestionBodySchema,
@@ -31,6 +33,7 @@ import {
   type BudgetDTO,
   type BudgetLineDTO,
   type BudgetLineInput,
+  type BudgetLineLinkBody,
   type BudgetSuggestionDTO,
   type PriceQuoteDTO,
   type TicketPriceRef,
@@ -695,6 +698,26 @@ export function tripBudgetRoutes(options: TripBudgetRoutesOptions): FastifyPlugi
         }
 
         await repo.removeLine(tripId, lineId, userId, role);
+        reply.status(204);
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // 5b. PUT /trips/:id/budget/lines/:lineId/link  (Requirement 23.5-23.8)
+    // Any Trip_Member may link (the payer is not necessarily the planner), so this
+    // authorizes with `edit_budget` only and NOT the creator-or-organizer rule.
+    // -------------------------------------------------------------------------
+    fastify.put(
+      '/trips/:id/budget/lines/:lineId/link',
+      { preHandler: [requireSession] },
+      async (request, reply): Promise<void> => {
+        const userId = getUserId(request);
+        const { id: tripId, lineId } = parseOrAppError(lineParamsSchema, request.params);
+        const body = parseOrAppError(budgetLineLinkBodySchema, request.body) as BudgetLineLinkBody;
+
+        await requireBudgetAction(pool, userId, tripId, 'edit_budget');
+
+        await repo.linkExpense(tripId, lineId, body.expenseId);
         reply.status(204);
       },
     );

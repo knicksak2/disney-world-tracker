@@ -222,6 +222,7 @@ close to the code they validate.
 - The backend retrieval seam, cache, projection, transport, and `MenuDTO` are reused unchanged; this plan only wires and gates them and adds the mobile UI
 - Tasks 9-12 are a later addition (dining-reservation hand-off, Requirements 6-7) and are architecturally independent of tasks 1-8's menu-retrieval work — they only share the restaurant-category gate and the `ExperienceDetailScreen`. Task 10.1 (seed curation) is manual, human-verified work — no automated scraping or name-based matching is permitted per Requirement 6's rationale.
 - Task 10.1 must be genuinely completed (a real `dining-links.json` populated with verified URLs, or an explicit smaller subset with the rest deferred and stated as such) before 10.2/10.3 are meaningful — do not stub it with placeholder or fabricated URLs.
+- Requirement 9 (`classifyMenuGroup`, `menuGroupItemCents`) is implemented by `.kiro/specs/dining-plan-calculator/tasks.md` (task 1), not by a task in this plan.
 
 ## Task Dependency Graph
 

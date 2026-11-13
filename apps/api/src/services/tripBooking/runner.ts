@@ -8,6 +8,8 @@
  *            9.1, 9.2, 9.3, 9.4, 9.11, 9.12, 14.2
  */
 
+import type { StayRecord } from '@dwt/shared';
+
 import { wdwMinutesFromMidnight, wdwToday } from '../trips/wdwClock.js';
 import type { TripBookingReminderNotice } from './events.js';
 import { decidePassStart } from './passGate.js';
@@ -31,6 +33,8 @@ export interface CandidateTrip {
   readonly endDate: string;
   readonly hasResortStay: boolean;
   readonly settings: StoredBookingSettings | null;
+  /** The Trip's lodging Stays; absent when the `trip_stays` table does not exist (trip-lodging-stays R9.8). */
+  readonly stays?: readonly StayRecord[];
 }
 
 export interface ReminderRunnerRepo {
@@ -119,6 +123,7 @@ export function createReminderRunner(deps: ReminderRunnerDeps): ReminderRunner {
             endDate: trip.endDate,
             hasResortStay: trip.hasResortStay,
             settings: trip.settings,
+            stays: trip.stays,
           });
           const tripDoneKeys = done.get(trip.id) ?? new Set<string>();
           const tripClaimedKeys = claimed.get(trip.id) ?? new Set<string>();

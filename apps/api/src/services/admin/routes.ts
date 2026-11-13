@@ -21,6 +21,8 @@ import type { PinRepo } from '../pins/repo.js';
 import { registerPhotoRoutes } from './photoRoutes.js';
 import { registerTicketPriceRoutes } from './ticketPriceRoutes.js';
 import { registerMickeyRoutes } from './mickeyRoutes.js';
+import { registerDiningPlanRoutes } from './diningPlanRoutes.js';
+import type { AdminDiningPlanPort } from '../diningPlan/adminPort.js';
 import type { AdminMickeyService } from '../mickeys/adminService.js';
 import type { DbPool } from '../../db/pool.js';
 import type {
@@ -78,6 +80,8 @@ export interface AdminRoutesOptions {
   readonly ticketPrices?: AdminTicketPricesPort | undefined;
   readonly mickeys?: AdminMickeyService | undefined;
   readonly pool?: DbPool | undefined;
+  /** dining-plan-calculator Requirement 18: plan prices, defaults, location rules and the seed action. */
+  readonly diningPlan?: AdminDiningPlanPort | undefined;
 }
 
 export interface AdminSectionLink {
@@ -262,6 +266,15 @@ export const TICKET_PRICES_ADMIN_SECTION: AdminSectionLink = {
   badge: 'Demand Cache',
 };
 
+export const DINING_PLAN_ADMIN_SECTION: AdminSectionLink = {
+  path: '/admin/dining-plan',
+  title: 'Dining Plan Calculator',
+  description: 'Plan price periods, default assumptions, restaurant credit rules, coverage, and the seed rules action.',
+  category: 'Data Ingestion & External Sync',
+  icon: '🍽️',
+  badge: 'Curated Rules',
+};
+
 export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
   return async function adminPlugin(fastify) {
     if (options.ticketPrices) {
@@ -270,6 +283,17 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
       }
     } else {
       const idx = ADMIN_SECTIONS.findIndex((s) => s.path === '/admin/ticket-prices');
+      if (idx !== -1) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).splice(idx, 1);
+      }
+    }
+    // The Dining Plan section is listed only when its port is supplied, like the ticket-price section.
+    if (options.diningPlan) {
+      if (!ADMIN_SECTIONS.some((s) => s.path === DINING_PLAN_ADMIN_SECTION.path)) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).push(DINING_PLAN_ADMIN_SECTION);
+      }
+    } else {
+      const idx = ADMIN_SECTIONS.findIndex((s) => s.path === DINING_PLAN_ADMIN_SECTION.path);
       if (idx !== -1) {
         (ADMIN_SECTIONS as AdminSectionLink[]).splice(idx, 1);
       }
@@ -1959,6 +1983,11 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
     // Ticket Prices Management & Diagnostics (Task 10.1)
     // -------------------------------------------------------------------------
     await registerTicketPriceRoutes(fastify, options);
+
+    // -------------------------------------------------------------------------
+    // Dining Plan Calculator (dining-plan-calculator task 9)
+    // -------------------------------------------------------------------------
+    await registerDiningPlanRoutes(fastify, options);
 
     // -------------------------------------------------------------------------
     // Hidden Mickeys Review Queue & Operations (Task 7.2)

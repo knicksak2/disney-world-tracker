@@ -386,6 +386,8 @@ small, independently testable wave: a repo method, a route, and its tests.
   `services/intelligence` and `services/notifications` after task 4/5, not just the new tests.
 - No mobile work exists in this plan. If a future spec wants an in-app admin surface, that is a
   new, separate spec — this one is deliberately server-rendered-only per Requirement 2.2.
+- Requirement 19 (Dining Plan section) is implemented by `.kiro/specs/dining-plan-calculator/tasks.md`
+  (task 9), not by a task in this plan.
 
 ## Task Dependency Graph
 

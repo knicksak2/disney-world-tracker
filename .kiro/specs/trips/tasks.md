@@ -515,6 +515,8 @@ existing `RatingChanged` propagation path is reused unchanged.
 - `repo.ts` and `routes.ts` are each a single file built up one concern at a time, so their sub-tasks are sequenced across waves to avoid write conflicts.
 - Canonical Completion and Rating writes always delegate to the existing Tracking_Service repos so no Trip-local copies exist and the existing `RatingChanged` propagation is reused.
 - Checkpoints ensure incremental validation at natural breaks.
+- Requirement 26 (lodging stays) is implemented by `.kiro/specs/trip-lodging-stays/tasks.md`, not by a task in this plan.
+- Requirement 27 (Dining Plan calculator: permissions, hub tile, routes) is implemented by `.kiro/specs/dining-plan-calculator/tasks.md` (tasks 4, 8 and 11), not by a task in this plan.
 
 ## Task Dependency Graph
 

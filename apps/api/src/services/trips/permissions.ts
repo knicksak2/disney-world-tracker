@@ -67,7 +67,9 @@ export type TripAction =
   | 'view_budget'
   | 'edit_budget'
   | 'edit_budget_travelers'
-  | 'edit_budget_settings';
+  | 'edit_budget_settings'
+  | 'view_dining_plan'
+  | 'edit_dining_plan'; // dining-plan-calculator member + organizer (R16.2)
 
 /**
  * Actions any Trip_Member may perform regardless of role (R4.3). Organizers
@@ -94,6 +96,8 @@ const MEMBER_ACTIONS: ReadonlySet<TripAction> = new Set<TripAction>([
   'view_budget',
   'edit_budget',
   'edit_budget_travelers',
+  'view_dining_plan',
+  'edit_dining_plan',
 ]);
 
 /**

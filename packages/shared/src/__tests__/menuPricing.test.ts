@@ -186,6 +186,80 @@ describe('menuPricing (Task 1.3)', () => {
       expect(offers[0]?.label).toBe('Person');
       expect(offers[0]?.priceCents).toBe(5000);
     });
+
+    it('extracts distinct pricing for multiple meals (e.g. Breakfast vs Dinner) without collision', () => {
+      const ohanaMenus = [
+        {
+          menuType: 'Breakfast',
+          groups: [
+            {
+              name: "'Ohana Breakfast Pricing",
+              items: [
+                { name: '$58 per adult, plus tax and gratuity' },
+                { name: '$36 per child (Guests ages 3-9), plus tax and gratuity' },
+              ],
+            },
+          ],
+        },
+        {
+          menuType: 'Dinner',
+          groups: [
+            {
+              name: "'Ohana Dinner Pricing",
+              items: [
+                { name: '$69 per adult, plus tax and gratuity' },
+                { name: '$46 per child (Guests ages 3-9), plus tax and gratuity' },
+              ],
+            },
+          ],
+        },
+      ];
+
+      const offers = extractMenuPriceOffers(ohanaMenus);
+      expect(offers).toHaveLength(4);
+      expect(offers).toEqual([
+        {
+          kind: 'per_person_tier',
+          label: 'Adult',
+          audience: 'adult',
+          priceCents: 5800,
+          menuType: 'Breakfast',
+          sourceText: '$58 per adult, plus tax and gratuity',
+        },
+        {
+          kind: 'per_person_tier',
+          label: 'Child',
+          audience: 'child',
+          priceCents: 3600,
+          menuType: 'Breakfast',
+          sourceText: '$36 per child (Guests ages 3-9), plus tax and gratuity',
+        },
+        {
+          kind: 'per_person_tier',
+          label: 'Adult',
+          audience: 'adult',
+          priceCents: 6900,
+          menuType: 'Dinner',
+          sourceText: '$69 per adult, plus tax and gratuity',
+        },
+        {
+          kind: 'per_person_tier',
+          label: 'Child',
+          audience: 'child',
+          priceCents: 4600,
+          menuType: 'Dinner',
+          sourceText: '$46 per child (Guests ages 3-9), plus tax and gratuity',
+        },
+      ]);
+
+      const suggestions = extractTierPriceSuggestions(ohanaMenus);
+      expect(suggestions).toEqual([
+        { name: 'Breakfast Adult', priceCents: 5800 },
+        { name: 'Breakfast Child', priceCents: 3600 },
+        { name: 'Dinner Adult', priceCents: 6900 },
+        { name: 'Dinner Child', priceCents: 4600 },
+      ]);
+    });
   });
 
   describe('formatCentsAsDollarString and isAlcoholGroupType', () => {

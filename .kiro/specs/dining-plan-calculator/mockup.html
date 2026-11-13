@@ -1,0 +1,2108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dining Plan Calculator — Clean Redesign (v5, 100% Real Controls)</title>
+<style>
+  :root {
+    --bg: #0f071e;
+    --bg-elev: #1b1033;
+    --card: #22143d;
+    --card-hi: #2d1b4e;
+    --card-soft: rgba(45, 27, 78, 0.55);
+    --border: rgba(167, 139, 250, 0.16);
+    --border-hi: rgba(251, 191, 36, 0.55);
+    --text: #f8f5ff;
+    --muted: #b8a9d9;
+    --dim: #7e6d9e;
+    --primary: #8b3dff;
+    --primary-hi: #a855f7;
+    --gold: #fbbf24;
+    --gold-soft: rgba(251, 191, 36, 0.14);
+    --mint: #34d399;
+    --mint-soft: rgba(52, 211, 153, 0.14);
+    --coral: #fb7185;
+    --coral-soft: rgba(251, 113, 133, 0.14);
+    --sky: #38bdf8;
+    --sky-soft: rgba(56, 189, 248, 0.14);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245, 158, 11, 0.14);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #27134d 0%, #090414 75%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 14px 10px 44px;
+  }
+
+  .studio-header {
+    max-width: 980px;
+    margin: 0 auto 14px;
+    text-align: center;
+  }
+  .studio-header h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    margin-bottom: 5px;
+    background: linear-gradient(90deg, #fff, #e9d5ff, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .studio-header p {
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 760px;
+    margin: 0 auto 10px;
+    line-height: 1.45;
+  }
+
+  .option-switcher {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: rgba(27, 16, 51, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 4px;
+  }
+  .opt-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .opt-btn.active {
+    background: linear-gradient(135deg, var(--primary), #6d28d9);
+    color: #fff;
+    box-shadow: 0 3px 12px rgba(139, 61, 255, 0.4);
+  }
+
+  /* Phone frame */
+  .phone-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .phone {
+    width: 396px;
+    max-width: 100%;
+    height: 840px;
+    background: var(--bg);
+    border-radius: 38px;
+    border: 7px solid #281947;
+    box-shadow: 0 22px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .status-bar {
+    height: 28px;
+    padding: 6px 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    background: #170b2e;
+    flex-shrink: 0;
+  }
+  .app-bar {
+    padding: 8px 14px 9px;
+    background: linear-gradient(180deg, #27144a 0%, #170b2e 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .app-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .back-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .app-title {
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .app-sub {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .profile-chip {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .profile-chip:hover {
+    border-color: var(--gold);
+    color: var(--text);
+  }
+
+  /* STICKY 2-LINE COMPACT VERDICT BAR */
+  .verdict-compact-wrap {
+    background: #170c2e;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .verdict-compact-bar {
+    padding: 8px 12px;
+    cursor: pointer;
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.13) 0%, rgba(251, 191, 36, 0.1) 100%);
+  }
+  .vc-row1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .vc-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .vc-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--mint-soft);
+    border: 1px solid rgba(52, 211, 153, 0.45);
+    color: var(--mint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 900;
+    flex-shrink: 0;
+  }
+  .vc-savings {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--mint);
+    white-space: nowrap;
+  }
+  .vc-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .vc-total {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--gold);
+  }
+  .vc-why {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--muted);
+    background: rgba(255,255,255,0.07);
+    padding: 3px 7px;
+    border-radius: 999px;
+  }
+  .vc-row2 {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 3px;
+    padding-left: 24px;
+    line-height: 1.25;
+  }
+  .vc-row2 span {
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .verdict-drawer {
+    display: none;
+    padding: 10px 12px 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: #140929;
+  }
+  .verdict-drawer.open { display: block; }
+
+  .verdict-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .v-stat {
+    background: rgba(15, 7, 30, 0.65);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 5px 4px;
+    text-align: center;
+  }
+  .v-stat.best {
+    border-color: rgba(251, 191, 36, 0.55);
+    background: rgba(251, 191, 36, 0.1);
+  }
+  .v-stat-lbl { font-size: 8.5px; color: var(--muted); display: block; }
+  .v-stat-val { font-size: 11px; font-weight: 800; margin-top: 2px; display: block; }
+
+  /* Segmented 4-Tab Bar */
+  .top-tabs-wrap {
+    padding: 7px 12px;
+    background: rgba(15, 7, 30, 0.95);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .seg-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: #160c2b;
+    padding: 3px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    gap: 2px;
+  }
+  .seg-tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 6px 2px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .seg-tab.active {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(139, 61, 255, 0.4);
+  }
+
+  .screen-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px 86px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) transparent;
+  }
+  .screen-scroll::-webkit-scrollbar { width: 4px; }
+  .screen-scroll::-webkit-scrollbar-thumb { background: #3d246c; border-radius: 4px; }
+
+  .option-view { display: none; }
+  .option-view.active { display: block; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 5px;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+  }
+  .badge.gold { background: var(--gold-soft); color: var(--gold); border: 1px solid rgba(251, 191, 36, 0.35); }
+  .badge.mint { background: var(--mint-soft); color: var(--mint); border: 1px solid rgba(52, 211, 153, 0.35); }
+  .badge.coral { background: var(--coral-soft); color: var(--coral); border: 1px solid rgba(251, 113, 133, 0.35); }
+  .badge.sky { background: var(--sky-soft); color: var(--sky); border: 1px solid rgba(56, 189, 248, 0.35); }
+  .badge.amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.35); }
+  .badge.purple { background: rgba(168, 85, 247, 0.2); color: #e9d5ff; border: 1px solid rgba(168, 85, 247, 0.4); }
+  .badge.dim { background: rgba(255,255,255,0.06); color: var(--muted); }
+
+  /* Non-wrapping 2-row Reservation Banner */
+  .res-compact-card {
+    background: rgba(139, 61, 255, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 12px;
+    padding: 8px 10px;
+    margin-bottom: 9px;
+  }
+  .res-compact-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .res-compact-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #e9d5ff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .res-compact-actions {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 6px;
+    margin-top: 7px;
+  }
+  .btn-xs-ghost {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-xs-primary {
+    background: var(--primary);
+    border: none;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .res-drawer {
+    display: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .res-drawer.open { display: block; }
+  .res-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 10.5px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .res-item:last-child { border-bottom: none; }
+
+  /* Calendar Filter Bar */
+  .cal-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .cal-filter-group {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .cal-filter-group::-webkit-scrollbar { display: none; }
+  .filter-pill {
+    border: 1px solid var(--border);
+    background: var(--card-soft);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-pill.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary-hi);
+  }
+
+  /* RESORT CHAPTERS */
+  .chapter-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .chapter-card.recommended-stay {
+    border-color: rgba(251, 191, 36, 0.45);
+  }
+  .chapter-card.empty-filtered {
+    background: rgba(34, 20, 61, 0.5);
+    border-style: dashed;
+  }
+  .chapter-hdr {
+    padding: 9px 11px;
+    background: linear-gradient(180deg, rgba(45, 27, 78, 0.9) 0%, rgba(27, 16, 51, 0.9) 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .chapter-hdr-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+  }
+  .chapter-title-wrap { min-width: 0; }
+  .chapter-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chapter-dates {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .chapter-collapse-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Unmistakably clickable Stay Plan & Booking Bar (2 stacked lines inside so NOTHING ever truncates!) */
+  .stay-edit-bar {
+    margin-top: 7px;
+    padding: 7px 9px;
+    border-radius: 9px;
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    background: rgba(15, 7, 30, 0.55);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .stay-edit-bar:hover {
+    border-color: var(--primary-hi);
+    background: rgba(139, 61, 255, 0.14);
+  }
+  .stay-edit-bar.gold {
+    border-color: rgba(251, 191, 36, 0.42);
+    background: rgba(251, 191, 36, 0.08);
+  }
+  .stay-edit-summary-wrap { min-width: 0; }
+  .stay-edit-line1 {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: var(--mint);
+  }
+  .stay-edit-bar.gold .stay-edit-line1 { color: var(--gold); }
+  .stay-edit-line2 {
+    font-size: 9.5px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+  .stay-edit-cta {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #e9d5ff;
+    background: rgba(139, 61, 255, 0.32);
+    padding: 4px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .stay-edit-bar.gold .stay-edit-cta {
+    background: rgba(251, 191, 36, 0.22);
+    color: var(--gold);
+  }
+
+  .stay-config-drawer {
+    display: none;
+    margin-top: 8px;
+    padding: 9px;
+    border-radius: 10px;
+    background: rgba(12, 5, 24, 0.78);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+  .stay-config-drawer.open { display: block; }
+
+  .filter-note-bar {
+    background: rgba(56, 189, 248, 0.1);
+    border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+    padding: 5px 10px;
+    font-size: 9.5px;
+    color: #bae6fd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .chapter-col-hdr {
+    display: grid;
+    grid-template-columns: 58px repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding: 6px 8px 4px;
+    background: rgba(15, 7, 30, 0.45);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .chapter-days { padding: 4px 8px 8px; }
+  .day-row {
+    display: grid;
+    grid-template-columns: 58px repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    align-items: stretch;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .day-row:last-child { border-bottom: none; }
+  .day-label-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 2px;
+  }
+  .day-dow { font-size: 11px; font-weight: 800; color: var(--text); }
+  .day-dt { font-size: 9.5px; color: var(--muted); }
+  .day-switch-tag { font-size: 8px; font-weight: 800; color: var(--amber); margin-top: 2px; }
+
+  .meal-cell {
+    background: rgba(15, 7, 30, 0.52);
+    border: 1px solid rgba(167, 139, 250, 0.14);
+    border-radius: 9px;
+    padding: 5px 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 54px;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .meal-cell:hover { transform: translateY(-1px); border-color: var(--primary-hi); }
+  .meal-cell.credit {
+    background: linear-gradient(160deg, rgba(139, 61, 255, 0.18) 0%, rgba(27, 16, 51, 0.75) 100%);
+    border-color: rgba(168, 85, 247, 0.42);
+  }
+  .meal-cell.sig {
+    background: linear-gradient(160deg, rgba(251, 191, 36, 0.15) 0%, rgba(27, 16, 51, 0.8) 100%);
+    border-color: rgba(251, 191, 36, 0.45);
+  }
+  .meal-cell.skipped {
+    background: rgba(15, 7, 30, 0.22);
+    border-style: dashed;
+    border-color: rgba(255,255,255,0.07);
+    opacity: 0.55;
+    justify-content: center;
+    align-items: center;
+  }
+  .meal-cell.dimmed-slot {
+    background: rgba(15, 7, 30, 0.16);
+    border: 1px solid rgba(255,255,255,0.04);
+    opacity: 0.28;
+    justify-content: center;
+    align-items: center;
+    cursor: default;
+  }
+  .mc-name {
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.22;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .mc-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2px;
+    margin-top: 4px;
+  }
+  .mc-tag {
+    font-size: 8px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .mc-tag.ts { background: rgba(168, 85, 247, 0.28); color: #f3e8ff; }
+  .mc-tag.sig { background: var(--gold-soft); color: var(--gold); }
+  .mc-tag.qs { background: var(--sky-soft); color: var(--sky); }
+  .mc-tag.cash { background: var(--mint-soft); color: var(--mint); }
+  .mc-price { font-size: 9px; font-weight: 700; color: var(--muted); }
+
+  .switch-divider {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px dashed rgba(245, 158, 11, 0.35);
+    border-radius: 10px;
+    padding: 6px 10px;
+    margin: -4px 0 10px;
+    font-size: 10px;
+    color: #fde68a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .section-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .section-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+  }
+
+  /* Clean 3-Hotel Combination Table in Compare Tab */
+  .combo-matrix {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 7px;
+  }
+  .combo-matrix-hdr {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 68px;
+    gap: 4px;
+    font-size: 8.5px;
+    font-weight: 800;
+    color: var(--dim);
+    text-transform: uppercase;
+    padding: 0 4px 3px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .combo-matrix-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 68px;
+    gap: 4px;
+    align-items: center;
+    background: rgba(15, 7, 30, 0.45);
+    padding: 6px 5px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .cm-pill {
+    font-size: 8.5px;
+    font-weight: 700;
+    padding: 2px 4px;
+    border-radius: 4px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cm-pill.cash { background: rgba(255,255,255,0.06); color: var(--muted); }
+  .cm-pill.qs { background: var(--sky-soft); color: var(--sky); }
+  .cm-pill.ddp { background: rgba(168, 85, 247, 0.24); color: #e9d5ff; }
+  .cm-price-col {
+    text-align: right;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+  .cm-delta {
+    display: block;
+    font-size: 8.5px;
+    color: var(--coral);
+    font-weight: 700;
+  }
+
+  .scenario-card {
+    background: rgba(15, 7, 30, 0.55);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 11px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .scenario-card:hover { border-color: var(--primary-hi); }
+  .scenario-card.winner {
+    border: 1.5px solid var(--gold);
+    background: linear-gradient(160deg, rgba(251, 191, 36, 0.1) 0%, rgba(27, 16, 51, 0.85) 100%);
+  }
+  .sc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .sc-name { font-size: 12px; font-weight: 800; }
+  .sc-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .sc-right { text-align: right; flex-shrink: 0; }
+  .sc-total { font-size: 14px; font-weight: 900; }
+  .sc-delta { font-size: 10px; font-weight: 800; margin-top: 1px; }
+  .bar-track {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .bar-fill { height: 100%; border-radius: 99px; }
+
+  .sc-ledger {
+    display: none;
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .sc-ledger.open { display: block; }
+  .ledger-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    padding: 2.5px 0;
+    color: var(--muted);
+  }
+  .ledger-row span:last-child { color: var(--text); font-weight: 600; }
+
+  .credit-meter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+    margin-bottom: 10px;
+  }
+  .credit-meter-card {
+    background: rgba(15, 7, 30, 0.55);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 9px 8px;
+    text-align: center;
+  }
+  .cm-num { font-size: 15px; font-weight: 900; }
+  .cm-lbl { font-size: 9.5px; font-weight: 700; color: var(--muted); margin-top: 1px; }
+  .cm-sub { font-size: 8.5px; color: var(--dim); margin-top: 3px; }
+  .cm-bar {
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 9px;
+    background: rgba(15, 7, 30, 0.45);
+    border-radius: 9px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .ctrl-lbl { font-size: 11px; font-weight: 700; }
+  .ctrl-sub { font-size: 9.5px; color: var(--muted); }
+  .stepper { display: flex; align-items: center; gap: 7px; }
+  .step-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    border: 1px solid var(--primary-hi);
+    background: rgba(139, 61, 255, 0.2);
+    color: #fff;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 5px 0 9px;
+  }
+  .pill-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    margin: 5px 0 10px;
+  }
+  .choice-pill {
+    flex: 1;
+    min-width: 72px;
+    text-align: center;
+    padding: 6px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(15, 7, 30, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .choice-pill .sub-hint {
+    display: block;
+    font-size: 8.5px;
+    font-weight: 500;
+    color: var(--dim);
+    margin-top: 1px;
+  }
+  .choice-pill.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary-hi);
+  }
+  .choice-pill.active .sub-hint { color: rgba(255,255,255,0.82); }
+
+  .pct-input {
+    width: 68px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: #140a26;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 2, 12, 0.76);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: flex-end;
+    z-index: 40;
+  }
+  .sheet-backdrop.open { display: flex; }
+  .sheet {
+    width: 100%;
+    max-height: 82%;
+    background: #1f1138;
+    border-top: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: 22px 22px 0 0;
+    padding: 12px 14px 22px;
+    overflow-y: auto;
+  }
+  .sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255,255,255,0.22);
+    border-radius: 2px;
+    margin: 0 auto 10px;
+  }
+
+  .bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 58px;
+    background: rgba(18, 9, 36, 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 10px;
+    z-index: 20;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 9.5px;
+    color: var(--dim);
+    gap: 2px;
+  }
+  .nav-item.active { color: var(--gold); font-weight: 700; }
+  .nav-fab {
+    width: 42px;
+    height: 42px;
+    border-radius: 21px;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    margin-top: -16px;
+    box-shadow: 0 5px 14px rgba(139, 61, 255, 0.5);
+  }
+</style>
+</head>
+<body>
+
+<div class="studio-header">
+  <h1>✨ Dining Plan Calculator — Polished Redesign (v5)</h1>
+  <p>
+    <strong>Updated:</strong> Spells out the exact recommended plan (<code>Disney Dining Plan</code> vs <code>Quick-Service</code>) everywhere, replaces the semicolon list in <strong>Compare</strong> with a clean 3-hotel pill matrix, adds the held-plan selector under <code>Already have plan</code>, and restores 100% of the real <strong>Settings</strong> controls (all 4 order styles, adult alcohol toggles, dessert, appetizers, Kids Eat Free, and sales tax).
+  </p>
+  <div class="option-switcher">
+    <button class="opt-btn active" onclick="switchLayout('A', this)">✨ Cleaned-Up Option A (Resort Chapters)</button>
+    <button class="opt-btn" onclick="switchLayout('B', this)">Option B: Day Scrubber</button>
+    <button class="opt-btn" onclick="switchLayout('C', this)">Option C: Visual Storybook</button>
+  </div>
+</div>
+
+<div class="phone-wrap">
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>5G 100%</span>
+    </div>
+
+    <div class="app-bar">
+      <div class="app-bar-left">
+        <div class="back-circle">←</div>
+        <div>
+          <div class="app-title">🍴 Dining Plan</div>
+          <div class="app-sub">3 guests • Dec 15–31 (16 nights)</div>
+        </div>
+      </div>
+      <button class="profile-chip" onclick="switchATab('settings', document.getElementById('tab-btn-settings'))" title="Edit eating habits">
+        Splurge • 18% tip ⚙
+      </button>
+    </div>
+
+    <!-- Top Sticky 2-Line Verdict Bar: Shows full savings, total, and exact winning plan without clipping -->
+    <div class="verdict-compact-wrap" id="sticky-verdict-wrap">
+      <div class="verdict-compact-bar" onclick="toggleVerdictDrawer()">
+        <div class="vc-row1">
+          <div class="vc-left">
+            <div class="vc-dot">✓</div>
+            <div class="vc-savings">Saves about $312.40</div>
+          </div>
+          <div class="vc-right">
+            <span class="vc-total">Total $4,308</span>
+            <span class="vc-why" id="vc-why-lbl">Why? ▾</span>
+          </div>
+        </div>
+        <div class="vc-row2">
+          Best: Disney Dining Plan at Beach Club <span>(Pay cash elsewhere)</span>
+        </div>
+      </div>
+
+      <div class="verdict-drawer" id="verdict-drawer">
+        <div style="font-size:10.5px; color:var(--muted); margin-bottom:7px;">
+          Buying the <strong>Disney Dining Plan (Table-Service)</strong> only for Beach Club — and paying cash at All-Star &amp; AKL — saves <strong>$312.40</strong> vs paying cash ($4,620.84), tax &amp; tips included.
+        </div>
+        <div class="verdict-mini-grid">
+          <div class="v-stat">
+            <span class="v-stat-lbl">No Plan</span>
+            <span class="v-stat-val">$4,621</span>
+          </div>
+          <div class="v-stat best">
+            <span class="v-stat-lbl" style="color:var(--gold);">★ Best Mix</span>
+            <span class="v-stat-val" style="color:var(--gold);">$4,308</span>
+          </div>
+          <div class="v-stat">
+            <span class="v-stat-lbl">All QS Plan</span>
+            <span class="v-stat-val">$4,710</span>
+          </div>
+          <div class="v-stat">
+            <span class="v-stat-lbl">All Dining Plan</span>
+            <span class="v-stat-val">$5,106</span>
+          </div>
+        </div>
+        <div style="background:var(--amber-soft); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:5px 8px; font-size:9.5px; color:#fde68a; margin-bottom:6px;">
+          ⚠️ <strong>Some figures are estimates:</strong> 3 meals are priced from an estimate; 1 meal uses an unverified credit rule.
+        </div>
+        <div style="font-size:9px; color:var(--dim); line-height:1.35;">
+          Estimate only. Not affiliated with or endorsed by Disney. Plan prices and rules change; confirm in the Disney booking flow before you buy.
+        </div>
+      </div>
+    </div>
+
+    <div class="top-tabs-wrap" id="optA-tabs-bar">
+      <div class="seg-tabs">
+        <button class="seg-tab active" id="tab-btn-meals" onclick="switchATab('meals', this)">🍽️ Meals (17d)</button>
+        <button class="seg-tab" id="tab-btn-compare" onclick="switchATab('compare', this)">⚖️ Compare</button>
+        <button class="seg-tab" id="tab-btn-credits" onclick="switchATab('credits', this)">🎟️ Credits</button>
+        <button class="seg-tab" id="tab-btn-settings" onclick="switchATab('settings', this)">⚙️ Settings</button>
+      </div>
+    </div>
+
+    <div class="screen-scroll">
+
+      <div id="layout-A" class="option-view active">
+
+        <!-- TAB 1: MEALS -->
+        <div id="a-pane-meals">
+          <div class="res-compact-card" id="res-import-card">
+            <div class="res-compact-top">
+              <div class="res-compact-title" onclick="toggleDrawer('res-drawer')">
+                <span>📅 3 reservations ready</span>
+              </div>
+              <span class="badge amber">⚠️ 1 party mismatch</span>
+            </div>
+            <div class="res-compact-actions">
+              <button class="btn-xs-ghost" onclick="toggleDrawer('res-drawer')">Review ▾</button>
+              <button class="btn-xs-primary" onclick="importReservations()">+ Add All 3 to Calendar</button>
+            </div>
+            <div class="res-drawer" id="res-drawer">
+              <div class="res-item">
+                <span><strong>Boma — Flavors of Africa</strong> • Wed 12/16 Dinner</span>
+                <span class="badge amber">⚠️ Party mismatch</span>
+              </div>
+              <div class="res-item">
+                <span><strong>'Ohana</strong> • Thu 12/24 Dinner</span>
+                <span class="badge sky">📅 Reservation</span>
+              </div>
+              <div class="res-item">
+                <span><strong>Space 220 Restaurant</strong> • Mon 12/28 Lunch</span>
+                <span class="badge purple">📋 Planned</span>
+              </div>
+              <div style="margin-top:5px; font-size:9.5px; color:#bae6fd;">
+                ℹ️ 1 planned restaurant has no meal time; add it by hand.
+              </div>
+            </div>
+          </div>
+
+          <div class="cal-toolbar">
+            <div class="cal-filter-group">
+              <button class="filter-pill active" onclick="filterCalendar('all', this)">All 17 Days (42)</button>
+              <button class="filter-pill" onclick="filterCalendar('credits', this)">🎟️ Use Credits (21)</button>
+              <button class="filter-pill" onclick="filterCalendar('cash', this)">💵 Pay Cash (21)</button>
+            </div>
+          </div>
+
+          <div id="chapters-container"></div>
+        </div>
+
+        <!-- TAB 2: COMPARE (EXPLICIT PLAN NAMES + CLEAN 3-HOTEL COMBINATION MATRIX) -->
+        <div id="a-pane-compare" style="display:none;">
+
+          <div class="section-card" style="border-color: rgba(251, 191, 36, 0.4);">
+            <div class="section-hdr">
+              <span class="section-title" style="color:var(--gold);">🛏️ Best Plan Per Hotel</span>
+              <span class="badge gold">Saves $312.40</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 9px; background:rgba(15,7,30,0.5); border-radius:9px;">
+                <div>
+                  <div style="font-size:11.5px; font-weight:800;">🏈 All-Star Sports Resort</div>
+                  <div style="font-size:9.5px; color:var(--muted);">Dec 15–16 • 1 night • DVC / Passholder</div>
+                </div>
+                <span class="badge mint">No Plan (Pay Cash)</span>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 9px; background:rgba(15,7,30,0.5); border-radius:9px;">
+                <div>
+                  <div style="font-size:11.5px; font-weight:800;">🦁 Animal Kingdom Lodge</div>
+                  <div style="font-size:9.5px; color:var(--muted);">Dec 16–23 • 7 nights • DVC / Passholder</div>
+                </div>
+                <span class="badge mint">No Plan (Pay Cash)</span>
+              </div>
+
+              <div style="padding:8px 9px; background:rgba(251,191,36,0.09); border:1px solid rgba(251,191,36,0.35); border-radius:9px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                  <div>
+                    <div style="font-size:11.5px; font-weight:800;">🏖️ Beach Club Resort</div>
+                    <div style="font-size:9.5px; color:var(--muted);">Dec 23–31 • 8 nights • Package (Kids Free)</div>
+                  </div>
+                  <span class="badge gold">★ Disney Dining Plan</span>
+                </div>
+                <div style="font-size:9.5px; color:var(--muted); margin-top:5px;">
+                  Includes 1 Table-Service + 1 Quick-Service + 1 Snack/night (24 TS, 24 QS, 24 Snacks)
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:10.5px; margin-top:5px; padding-top:5px; border-top:1px solid rgba(255,255,255,0.06);">
+                  <span style="color:var(--muted);">Plan cost: <strong>$2,366.16</strong> (tax included)</span>
+                  <span style="color:var(--mint); font-weight:800;">Saves $312.40</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Clean 3-Column Matrix Instead of Semicolon Prose Wall! -->
+            <div style="margin-top:9px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.07);">
+              <div onclick="toggleDisplay('other-combos-drawer')" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:10.5px; font-weight:700; color:var(--primary-hi);">
+                <span>Compare all other hotel combinations (6)</span>
+                <span>▾</span>
+              </div>
+              <div id="other-combos-drawer" style="display:none;">
+                <div class="combo-matrix">
+                  <div class="combo-matrix-hdr">
+                    <div>🏈 All-Star</div>
+                    <div>🦁 AKL</div>
+                    <div>🏖️ Beach Club</div>
+                    <div style="text-align:right;">Total</div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <div class="cm-price-col">$4,485<span class="cm-delta">+$177</span></div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill ddp">Dining Plan</span>
+                    <div class="cm-price-col">$4,512<span class="cm-delta">+$204</span></div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill cash">No Plan</span>
+                    <div class="cm-price-col">$4,621<span class="cm-delta">+$312</span></div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <div class="cm-price-col">$4,710<span class="cm-delta">+$402</span></div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill cash">No Plan</span>
+                    <span class="cm-pill qs">Quick-Service</span>
+                    <span class="cm-pill ddp">Dining Plan</span>
+                    <div class="cm-price-col">$4,789<span class="cm-delta">+$481</span></div>
+                  </div>
+                  <div class="combo-matrix-row">
+                    <span class="cm-pill ddp">Dining Plan</span>
+                    <span class="cm-pill ddp">Dining Plan</span>
+                    <span class="cm-pill ddp">Dining Plan</span>
+                    <div class="cm-price-col">$5,106<span class="cm-delta">+$798</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-hdr" style="padding:0 2px;">
+            <span class="section-title">📊 4 Main Strategies (Tap any card for 7-row math)</span>
+          </div>
+
+          <div class="scenario-card winner" onclick="toggleDrawer('ledger-1')">
+            <div class="sc-top">
+              <div>
+                <div class="sc-name">★ Best Mix: Disney Dining Plan at Beach Club only</div>
+                <div class="sc-sub">Cash at All-Star &amp; AKL • Kids Eat Free • Tap to toggle ▾</div>
+              </div>
+              <div class="sc-right">
+                <div class="sc-total" style="color:var(--gold);">$4,308.44</div>
+                <div class="sc-delta" style="color:var(--mint);">Saves $312.40</div>
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:84%; background:linear-gradient(90deg, var(--mint), var(--gold));"></div></div>
+            <div class="sc-ledger open" id="ledger-1">
+              <div class="ledger-row"><span>Disney Dining Plan cost (Beach Club, tax incl.)</span><span>$2,366.16</span></div>
+              <div class="ledger-row"><span>Meals you pay for (All-Star, AKL &amp; cash meals)</span><span>$1,245.10</span></div>
+              <div class="ledger-row"><span>Tax on what you pay (6.5%)</span><span>$80.93</span></div>
+              <div class="ledger-row"><span>Tips (18% on table-service)</span><span>$398.40</span></div>
+              <div class="ledger-row"><span>Snacks you pay for (Days 1–8)</span><span>$217.85</span></div>
+              <div class="ledger-row"><span>Refillable mugs you pay for (3 included)</span><span>$0.00</span></div>
+              <div class="ledger-row" style="border-top:1px solid rgba(255,255,255,0.1); padding-top:4px; font-weight:800; color:var(--text);">
+                <span>Total Trip Food Cost</span><span style="color:var(--gold);">$4,308.44</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scenario-card" onclick="toggleDrawer('ledger-2')">
+            <div class="sc-top">
+              <div>
+                <div class="sc-name">No Dining Plan (Pay As You Go)</div>
+                <div class="sc-sub">All 16 nights paid cash • Tap for 7-row math ▾</div>
+              </div>
+              <div class="sc-right">
+                <div class="sc-total">$4,620.84</div>
+                <div class="sc-delta" style="color:var(--muted);">Baseline</div>
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:90%; background:#a78bfa;"></div></div>
+            <div class="sc-ledger" id="ledger-2">
+              <div class="ledger-row"><span>Meals you pay for</span><span>$3,190.00</span></div>
+              <div class="ledger-row"><span>Tax on what you pay</span><span>$207.35</span></div>
+              <div class="ledger-row"><span>Tips</span><span>$451.80</span></div>
+              <div class="ledger-row"><span>Snacks you pay for</span><span>$705.84</span></div>
+              <div class="ledger-row"><span>Refillable mugs you pay for (3 mugs)</span><span>$65.85</span></div>
+              <div class="ledger-row" style="border-top:1px solid rgba(255,255,255,0.1); padding-top:4px; font-weight:800;">
+                <span>Total</span><span>$4,620.84</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scenario-card" onclick="toggleDrawer('ledger-3')">
+            <div class="sc-top">
+              <div>
+                <div class="sc-name">Disney Quick-Service Dining Plan (All 3 Hotels)</div>
+                <div class="sc-sub">All 16 nights • Tap for 7-row math ▾</div>
+              </div>
+              <div class="sc-right">
+                <div class="sc-total">$4,710.24</div>
+                <div class="sc-delta" style="color:var(--coral);">Costs $89.40 more</div>
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:92%; background:var(--sky);"></div></div>
+            <div class="sc-ledger" id="ledger-3">
+              <div class="ledger-row"><span>Plan cost (tax included)</span><span>$2,902.56</span></div>
+              <div class="ledger-row"><span>Meals you pay for (Table-service cash)</span><span>$980.00</span></div>
+              <div class="ledger-row"><span>Tax on what you pay</span><span>$63.70</span></div>
+              <div class="ledger-row"><span>Tips</span><span>$390.30</span></div>
+              <div class="ledger-row"><span>Snacks you pay for</span><span>$373.68</span></div>
+              <div class="ledger-row"><span>Refillable mugs you pay for</span><span>$0.00</span></div>
+              <div class="ledger-row" style="border-top:1px solid rgba(255,255,255,0.1); padding-top:4px; font-weight:800;">
+                <span>Total</span><span>$4,710.24</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scenario-card" onclick="toggleDrawer('ledger-4')">
+            <div class="sc-top">
+              <div>
+                <div class="sc-name">Disney Dining Plan (All 3 Hotels)</div>
+                <div class="sc-sub">All 16 nights • Tap for 7-row math ▾</div>
+              </div>
+              <div class="sc-right">
+                <div class="sc-total">$5,106.00</div>
+                <div class="sc-delta" style="color:var(--coral);">Costs $485.16 more</div>
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:100%; background:var(--coral);"></div></div>
+            <div class="sc-ledger" id="ledger-4">
+              <div class="ledger-row"><span>Plan cost (tax included)</span><span>$4,732.32</span></div>
+              <div class="ledger-row"><span>Meals you pay for</span><span>$0.00</span></div>
+              <div class="ledger-row"><span>Tax on what you pay</span><span>$0.00</span></div>
+              <div class="ledger-row"><span>Tips</span><span>$373.68</span></div>
+              <div class="ledger-row"><span>Snacks you pay for</span><span>$0.00</span></div>
+              <div class="ledger-row"><span>Refillable mugs you pay for</span><span>$0.00</span></div>
+              <div class="ledger-row" style="border-top:1px solid rgba(255,255,255,0.1); padding-top:4px; font-weight:800;">
+                <span>Total</span><span>$5,106.00</span>
+              </div>
+            </div>
+          </div>
+
+          <button onclick="openBudgetSheet()" style="width:100%; margin-top:4px; padding:12px; border-radius:12px; border:1px solid var(--gold); background:linear-gradient(135deg, rgba(251,191,36,0.2), rgba(139,61,255,0.25)); color:#fff; font-size:12px; font-weight:800; cursor:pointer;">
+            💰 Save $4,308.44 to Trip Budget
+          </button>
+        </div>
+
+        <!-- TAB 3: CREDITS -->
+        <div id="a-pane-credits" style="display:none;">
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title">🎟️ Beach Club Disney Dining Plan (8N)</span>
+              <span class="badge mint">Per Person</span>
+            </div>
+
+            <div class="credit-meter-grid">
+              <div class="credit-meter-card">
+                <div class="cm-num" style="color:var(--primary-hi);">24 / 24</div>
+                <div class="cm-lbl">Table-Service</div>
+                <div class="cm-bar"><div class="bar-fill" style="width:100%; background:var(--primary-hi);"></div></div>
+                <div class="cm-sub" style="color:var(--mint);">0 left over ✓</div>
+              </div>
+              <div class="credit-meter-card">
+                <div class="cm-num" style="color:var(--sky);">21 / 24</div>
+                <div class="cm-lbl">Quick-Service</div>
+                <div class="cm-bar"><div class="bar-fill" style="width:88%; background:var(--sky);"></div></div>
+                <div class="cm-sub" style="color:var(--amber);">3 left over</div>
+              </div>
+              <div class="credit-meter-card">
+                <div class="cm-num" style="color:var(--gold);">24 / 24</div>
+                <div class="cm-lbl">Snacks</div>
+                <div class="cm-bar"><div class="bar-fill" style="width:100%; background:var(--gold);"></div></div>
+                <div class="cm-sub">~1 snack/day</div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 9px; background:rgba(15,7,30,0.45); border-radius:9px; font-size:10px; color:var(--muted);">
+              <span>🥤 <strong>3 Refillable Mugs included</strong> (Resort hotels only)</span>
+              <span class="badge dim">Cannot share</span>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title" style="color:var(--gold);">★ Top 5 Highest-Value Credit Meals</span>
+              <span class="badge gold">Max ROI</span>
+            </div>
+            <div style="font-size:10.5px; line-height:1.65;">
+              <div class="ledger-row"><span>1. <strong>'Ohana</strong> (Thu 12/24 Dinner • 1 TS)</span><span style="color:var(--mint);">Covers $225.00</span></div>
+              <div class="ledger-row"><span>2. <strong>Teppan Edo</strong> (Wed 12/30 Dinner • 1 TS)</span><span style="color:var(--mint);">Covers $190.00</span></div>
+              <div class="ledger-row"><span>3. <strong>Chefs de France</strong> (Tue 12/29 Dinner • 1 TS)</span><span style="color:var(--mint);">Covers $184.00</span></div>
+              <div class="ledger-row"><span>4. <strong>Topolino's Terrace</strong> (Sat 12/26 Brkfst • 1 TS)</span><span style="color:var(--mint);">Covers $180.00</span></div>
+              <div class="ledger-row"><span>5. <strong>Cape May Cafe</strong> (Wed 12/23 Brkfst • 1 TS)</span><span style="color:var(--mint);">Covers $168.00</span></div>
+            </div>
+            <button onclick="jumpToFilteredMeals('credits')" style="width:100%; margin-top:9px; padding:8px; border-radius:9px; border:1px solid var(--border); background:rgba(139,61,255,0.15); color:#e9d5ff; font-size:10.5px; font-weight:700; cursor:pointer;">
+              🍽️ See all 21 credit meals on the 17-Day Calendar →
+            </button>
+          </div>
+
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title">📈 What Could Change This Result</span>
+              <span class="badge mint">Solid Winner</span>
+            </div>
+            <div class="ledger-row"><span>If menu prices are 15% lower</span><span>Still saves $118.20</span></div>
+            <div class="ledger-row"><span>If menu prices are 15% higher</span><span style="color:var(--mint);">Saves $506.60</span></div>
+            <div style="font-size:10px; color:var(--muted); margin-top:6px;">
+              💡 Switching <strong>Cinderella's Royal Table</strong> (2 TS for $265) to cash and using those 2 TS credits on two 1-credit dinners saves an extra <strong>$92.00</strong>.
+            </div>
+
+            <div style="margin-top:9px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.07);">
+              <div onclick="toggleDisplay('about-figures-drawer')" style="display:flex; justify-content:space-between; cursor:pointer; font-size:10px; font-weight:700; color:var(--muted);">
+                <span>ℹ️ About these figures &amp; pricing rules</span>
+                <span>▾</span>
+              </div>
+              <div id="about-figures-drawer" style="display:none; margin-top:6px; font-size:9.5px; color:var(--dim); line-height:1.45;">
+                • Plan prices &amp; menus updated <strong>2025-05-01</strong> (6.5% tax included in plan price).<br/>
+                • 39 of 42 meals use restaurant menu prices; 3 use typical Disney meal averages.<br/>
+                • 1 meal (Via Napoli) has an unverified credit rule (mezzo metro pizza exclusion).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: SETTINGS (100% FAITHFUL TO DiningSettingsSheet.tsx!) -->
+        <div id="a-pane-settings" style="display:none;">
+
+          <!-- Party synced from Trip -->
+          <div class="section-card">
+            <div class="section-hdr" style="margin-bottom:4px;">
+              <span class="section-title">👥 Party (Synced with Trip)</span>
+              <span class="badge dim">3 People</span>
+            </div>
+            <div style="font-size:11px; font-weight:700; color:var(--text);">
+              2 adults (knicksak2, test), 1 child 3–9 (user)
+            </div>
+            <div style="font-size:9.5px; color:var(--muted); margin-top:2px;">
+              Tue, Dec 15 to Thu, Dec 31 • 16 nights across 3 hotels
+            </div>
+          </div>
+
+          <!-- How You Order (ALL 4 REAL OPTIONS!) & Usual Drink + Per-Adult Alcohol -->
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title">🍽️ How You Order &amp; Drink</span>
+            </div>
+
+            <div style="font-size:10px; color:var(--muted); margin-bottom:2px; font-weight:700;">How do you order?</div>
+            <div class="pill-grid-2">
+              <div class="choice-pill" onclick="pickSingle(this)">
+                Budget
+                <span class="sub-hint">Lower-priced dishes</span>
+              </div>
+              <div class="choice-pill" onclick="pickSingle(this)">
+                Typical
+                <span class="sub-hint">Middle of the menu</span>
+              </div>
+              <div class="choice-pill active" onclick="pickSingle(this)">
+                Splurge
+                <span class="sub-hint">Higher-priced dishes</span>
+              </div>
+              <div class="choice-pill" onclick="pickSingle(this)">
+                Most expensive
+                <span class="sub-hint">Priciest dish every time</span>
+              </div>
+            </div>
+
+            <div style="font-size:10px; color:var(--muted); margin-bottom:2px; font-weight:700;">Usual drink (non-alcoholic)</div>
+            <div class="pill-group">
+              <div class="choice-pill" onclick="pickSingle(this)">
+                💧 Water
+              </div>
+              <div class="choice-pill" onclick="pickSingle(this)">
+                🥤 Soft drink
+              </div>
+              <div class="choice-pill active" onclick="pickSingle(this)">
+                🍹 Specialty drink
+                <span class="sub-hint">Shakes, specialty sodas</span>
+              </div>
+            </div>
+
+            <div style="font-size:10px; color:var(--muted); margin:6px 0 4px; font-weight:700;">Who orders alcohol (adults only)</div>
+            <div class="ctrl-row">
+              <span class="ctrl-lbl">knicksak2</span>
+              <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+            </div>
+            <div class="ctrl-row" style="margin-bottom:0;">
+              <span class="ctrl-lbl">test</span>
+              <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+            </div>
+          </div>
+
+          <!-- Extras (Dessert, Appetizers, Snacks, Mugs, Kids Eat Free) -->
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title">🍨 Extras &amp; Promotions</span>
+            </div>
+
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">Order dessert at table-service meals</div>
+                <div class="ctrl-sub">Included with Disney Dining Plan TS credits</div>
+              </div>
+              <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+            </div>
+
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">Appetizers per table</div>
+                <div class="ctrl-sub">0 to 4 shared appetizers per TS meal</div>
+              </div>
+              <div class="stepper">
+                <button class="step-btn" onclick="stepVal('set-apps', -1, 0, 4)">−</button>
+                <span id="set-apps" style="font-weight:800; font-size:12px;">1</span>
+                <button class="step-btn" onclick="stepVal('set-apps', 1, 0, 4)">+</button>
+              </div>
+            </div>
+
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">Snacks per person per day</div>
+                <div class="ctrl-sub">0 to 4 snacks per day</div>
+              </div>
+              <div class="stepper">
+                <button class="step-btn" onclick="stepVal('set-snacks', -1, 0, 4)">−</button>
+                <span id="set-snacks" style="font-weight:800; font-size:12px;">2</span>
+                <button class="step-btn" onclick="stepVal('set-snacks', 1, 0, 4)">+</button>
+              </div>
+            </div>
+
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">Refillable mugs wanted</div>
+                <div class="ctrl-sub">Up to 3 (one per guest aged 3+)</div>
+              </div>
+              <div class="stepper">
+                <button class="step-btn" onclick="stepVal('set-mugs', -1, 0, 3)">−</button>
+                <span id="set-mugs" style="font-weight:800; font-size:12px;">3</span>
+                <button class="step-btn" onclick="stepVal('set-mugs', 1, 0, 3)">+</button>
+              </div>
+            </div>
+
+            <div class="ctrl-row" style="margin-bottom:0;">
+              <div>
+                <div class="ctrl-lbl">Kids Eat Free promotion</div>
+                <div class="ctrl-sub">Applies only to package bookings when Disney offers it</div>
+              </div>
+              <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+            </div>
+          </div>
+
+          <!-- Tax and Tip -->
+          <div class="section-card">
+            <div class="section-hdr">
+              <span class="section-title">🧾 Tax &amp; Tip (Leave blank for default)</span>
+            </div>
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">Sales tax (%)</div>
+                <div class="ctrl-sub">Default 6.5%</div>
+              </div>
+              <input type="text" class="pct-input" value="6.5" aria-label="Sales tax percent" />
+            </div>
+            <div class="ctrl-row" style="margin-bottom:0;">
+              <div>
+                <div class="ctrl-lbl">Table-service tip (%)</div>
+                <div class="ctrl-sub">Default 18% (paid even on dining plan)</div>
+              </div>
+              <input type="text" class="pct-input" value="18" aria-label="Table-service tip percent" />
+            </div>
+
+            <button style="width:100%; margin-top:10px; padding:8px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:10.5px; font-weight:700; cursor:pointer;">
+              ↺ Reset all settings to defaults
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- OPTION B -->
+      <div id="layout-B" class="option-view">
+        <div class="section-card">
+          <div class="section-hdr">
+            <span class="section-title">📅 Scrub Across All 17 Days</span>
+            <span class="badge gold" id="b-stay-badge">🏖️ Beach Club (Disney Dining Plan)</span>
+          </div>
+          <div id="b-day-pills" style="display:flex; gap:5px; overflow-x:auto; padding-bottom:6px;"></div>
+          <div id="b-day-detail" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- OPTION C -->
+      <div id="layout-C" class="option-view">
+        <div class="section-card" style="text-align:center; padding:16px 12px;">
+          <div class="badge gold" style="margin-bottom:6px;">✨ Magical Split-Stay Strategy</div>
+          <div style="font-size:19px; font-weight:900; margin-bottom:4px;">Disney Dining Plan at Beach Club</div>
+          <div style="font-size:11px; color:var(--muted);">
+            Pay cash at All-Star Sports (1N) &amp; Animal Kingdom Lodge (7N), then unlock the Disney Dining Plan (Table-Service) at Beach Club (8N) with Kids Eat Free to save $312.40.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MEAL SLOT PICKER BOTTOM SHEET (Matches real DiningSlotSheet.tsx) -->
+    <div class="sheet-backdrop" id="slot-sheet" onclick="if(event.target===this)closeSlotSheet()">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div>
+            <div style="font-size:14px; font-weight:800;" id="sheet-slot-title">Sun, Dec 27 • Dinner</div>
+            <div style="font-size:10.5px; color:var(--gold); font-weight:700;" id="sheet-slot-sub">Chosen: Beaches &amp; Cream Soda Shop</div>
+          </div>
+          <button class="btn-xs-ghost" onclick="closeSlotSheet()">✕</button>
+        </div>
+
+        <div style="font-size:10px; color:var(--muted); margin-bottom:4px; font-weight:700;">What is this meal?</div>
+        <div class="pill-grid-2">
+          <div class="choice-pill active" id="slot-type-rest" onclick="setSlotChoice('restaurant', this)">
+            🏛️ A restaurant
+            <span class="sub-hint">Search by name</span>
+          </div>
+          <div class="choice-pill" id="slot-type-ts" onclick="setSlotChoice('table_service', this)">
+            🍽️ Typical table-service
+            <span class="sub-hint">Not picked yet</span>
+          </div>
+          <div class="choice-pill" id="slot-type-qs" onclick="setSlotChoice('quick_service', this)">
+            🍔 Typical quick-service
+            <span class="sub-hint">Counter service</span>
+          </div>
+          <div class="choice-pill" id="slot-type-skip" onclick="setSlotChoice('skip', this)">
+            ⏭️ Skip this meal
+            <span class="sub-hint">Not counted</span>
+          </div>
+        </div>
+
+        <div id="slot-rest-picker">
+          <input type="text" placeholder="🔍 Search 140+ Disney restaurants..." style="width:100%; padding:8px 10px; border-radius:9px; border:1px solid var(--border); background:#140a26; color:#fff; font-size:11px; margin-bottom:8px;" />
+
+          <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;" id="slot-rest-list">
+            <div class="ctrl-row" id="slot-chosen-card" style="border-color:var(--gold); background:rgba(251,191,36,0.08);">
+              <div>
+                <div class="ctrl-lbl" id="slot-chosen-name">Beaches &amp; Cream Soda Shop</div>
+                <div class="ctrl-sub" id="slot-chosen-meta">Current selection for this meal</div>
+              </div>
+              <span class="badge gold">Chosen</span>
+            </div>
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">🌺 'Ohana</div>
+                <div class="ctrl-sub">Polynesian • 1 TS Credit ★ High Value • ~$225 party</div>
+              </div>
+              <span class="badge purple">1 TS</span>
+            </div>
+            <div class="ctrl-row">
+              <div>
+                <div class="ctrl-lbl">🍕 Via Napoli Ristorante e Pizzeria</div>
+                <div class="ctrl-sub">EPCOT • 1 TS Credit • ~$165 party</div>
+              </div>
+              <span class="badge purple">1 TS</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="slot-diners-section" style="margin-bottom:10px;">
+          <div style="font-size:10px; color:var(--muted); margin-bottom:4px; font-weight:700;">Who is eating (explains 2/3 credits)</div>
+          <div class="ctrl-row">
+            <div><div class="ctrl-lbl">knicksak2</div><div class="ctrl-sub">Adult</div></div>
+            <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+          </div>
+          <div class="ctrl-row">
+            <div><div class="ctrl-lbl">test</div><div class="ctrl-sub">Adult</div></div>
+            <input type="checkbox" checked style="accent-color:var(--primary); width:16px; height:16px;" />
+          </div>
+          <div class="ctrl-row" style="margin-bottom:0;">
+            <div><div class="ctrl-lbl">user</div><div class="ctrl-sub">Child (3–9)</div></div>
+            <input type="checkbox" id="slot-diner-child" style="accent-color:var(--primary); width:16px; height:16px;" />
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1.6fr; gap:8px;">
+          <button class="btn-xs-ghost" style="padding:10px; color:var(--coral); border-color:rgba(251,113,133,0.35);" onclick="closeSlotSheet()">🗑️ Clear slot</button>
+          <button class="btn-xs-primary" style="padding:10px; font-size:12px;" onclick="closeSlotSheet()">Save meal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SAVE TO BUDGET SHEET -->
+    <div class="sheet-backdrop" id="budget-sheet" onclick="if(event.target===this)closeBudgetSheet()">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div style="font-size:14px; font-weight:800; margin-bottom:4px;">💰 Save Dining Estimate to Trip Budget</div>
+        <div style="font-size:10.5px; color:var(--muted); margin-bottom:10px;">
+          Writes <strong>$4,308.44</strong> (Disney Dining Plan at Beach Club + cash elsewhere) to your Trip Expenses under Food &amp; Dining.
+        </div>
+        <button class="btn-xs-primary" style="width:100%; padding:10px; font-size:12px;" onclick="closeBudgetSheet()">✓ Confirm &amp; Save $4,308.44</button>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-item"><span>🏠</span><span>Home</span></div>
+      <div class="nav-item"><span>🧭</span><span>Explore</span></div>
+      <div class="nav-fab">✨</div>
+      <div class="nav-item active"><span>🗺️</span><span>Trips</span></div>
+      <div class="nav-item"><span>🔒</span><span>Vault</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STAYS = [
+    {
+      id: 'allstar',
+      icon: '🏈',
+      shortName: "All-Star Sports",
+      dates: "Dec 15–16 • 1 Night • 3 Guests",
+      planSummary: "Auto-pick: No Plan (Pay Cash)",
+      bookingSummary: "DVC / Annual Passholder • $0 plan",
+      isWinnerPlan: false,
+      mode: 'compare',
+      heldPlan: 'ddp',
+      switchAfterText: "⇄ Wed, Dec 16 Switch Day: Either All-Star or AKL credits can be used on Dec 16."
+    },
+    {
+      id: 'akl',
+      icon: '🦁',
+      shortName: "Animal Kingdom Lodge",
+      dates: "Dec 16–23 • 7 Nights • 3 Guests",
+      planSummary: "Auto-pick: No Plan (Pay Cash)",
+      bookingSummary: "DVC / Annual Passholder • $0 plan",
+      isWinnerPlan: false,
+      mode: 'compare',
+      heldPlan: 'ddp',
+      switchAfterText: "⇄ Wed, Dec 23 Switch Day: Beach Club Disney Dining Plan credits activate today!"
+    },
+    {
+      id: 'beach',
+      icon: '🏖️',
+      shortName: "Beach Club Resort",
+      dates: "Dec 23–31 • 8 Nights • 3 Guests",
+      planSummary: "Auto-pick: ★ Disney Dining Plan (Saves $312)",
+      bookingSummary: "Package (Kids Eat Free) • $2,366",
+      isWinnerPlan: true,
+      mode: 'compare',
+      heldPlan: 'ddp'
+    }
+  ];
+
+  const DAYS_DATA = [
+    { stay: 'allstar', dow: 'Tue', dt: 'Dec 15', switchDay: false,
+      b: { name: 'Typical quick-service meal', tag: 'Cash', kind: 'cash', price: '$42' },
+      l: { name: "Satu'li Canteen", tag: 'Cash', kind: 'cash', price: '$65' },
+      d: { name: 'Rainforest Cafe at Animal Kingdom', tag: 'Cash', kind: 'cash', price: '$118' }
+    },
+    { stay: 'allstar', dow: 'Wed', dt: 'Dec 16', switchDay: true,
+      b: { name: 'The Mara', tag: 'Cash', kind: 'cash', price: '$48' },
+      l: { name: 'Flame Tree Barbecue', tag: 'Cash', kind: 'cash', price: '$62' },
+      d: { name: 'Boma — Flavors of Africa', tag: 'Cash', kind: 'cash', price: '$195' }
+    },
+    { stay: 'akl', dow: 'Thu', dt: 'Dec 17', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'Yak & Yeti Local Food Cafes', tag: 'Cash', kind: 'cash', price: '$58' },
+      d: { name: 'Sanaa', tag: 'Cash', kind: 'cash', price: '$162' }
+    },
+    { stay: 'akl', dow: 'Fri', dt: 'Dec 18', switchDay: false,
+      b: { name: 'Typical quick-service meal', tag: 'Cash', kind: 'cash', price: '$42' },
+      l: { name: "Woody's Lunch Box", tag: 'Cash', kind: 'cash', price: '$56' },
+      d: { name: "50's Prime Time Cafe", tag: 'Cash', kind: 'cash', price: '$158' }
+    },
+    { stay: 'akl', dow: 'Sat', dt: 'Dec 19', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'Docking Bay 7 Food and Cargo', tag: 'Cash', kind: 'cash', price: '$66' },
+      d: { name: 'Jiko — The Cooking Place', tag: 'Cash', kind: 'cash', price: '$295' }
+    },
+    { stay: 'akl', dow: 'Sun', dt: 'Dec 20', switchDay: false,
+      b: { name: 'The Mara', tag: 'Cash', kind: 'cash', price: '$48' },
+      l: { name: 'Columbia Harbour House', tag: 'Cash', kind: 'cash', price: '$60' },
+      d: { name: 'Jungle Navigation Co. LTD Skipper Canteen', tag: 'Cash', kind: 'cash', price: '$164' }
+    },
+    { stay: 'akl', dow: 'Mon', dt: 'Dec 21', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'Regal Eagle Smokehouse: Craft Drafts & Barbecue', tag: 'Cash', kind: 'cash', price: '$62' },
+      d: { name: 'Biergarten Restaurant', tag: 'Cash', kind: 'cash', price: '$178' }
+    },
+    { stay: 'akl', dow: 'Tue', dt: 'Dec 22', switchDay: false,
+      b: { name: 'Boma — Flavors of Africa', tag: 'Cash', kind: 'cash', price: '$132' },
+      l: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      d: { name: 'The BOATHOUSE', tag: 'Cash', kind: 'cash', price: '$190' }
+    },
+    { stay: 'beach', dow: 'Wed', dt: 'Dec 23', switchDay: true,
+      b: { name: "Cape May Cafe (Minnie's Beach Bash)", tag: '1 TS ★', kind: 'ts', price: '$168' },
+      l: { name: 'Les Halles Boulangerie-Patisserie', tag: '1 QS', kind: 'qs', price: '$58' },
+      d: { name: 'Le Cellier Steakhouse', tag: '2 TS ✨', kind: 'sig', price: '$310' }
+    },
+    { stay: 'beach', dow: 'Thu', dt: 'Dec 24', switchDay: false,
+      b: { name: 'BoardWalk Deli', tag: 'Cash', kind: 'cash', price: '$44' },
+      l: { name: 'Regal Eagle Smokehouse', tag: '1 QS', kind: 'qs', price: '$66' },
+      d: { name: "'Ohana", tag: '1 TS ★', kind: 'ts', price: '$225' }
+    },
+    { stay: 'beach', dow: 'Fri', dt: 'Dec 25', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'Connections Eatery', tag: '1 QS', kind: 'qs', price: '$64' },
+      d: { name: "Cinderella's Royal Table", tag: '2 TS ✨', kind: 'sig', price: '$265' }
+    },
+    { stay: 'beach', dow: 'Sat', dt: 'Dec 26', switchDay: false,
+      b: { name: "Topolino's Terrace — Flavors of the Riviera", tag: '1 TS ★', kind: 'ts', price: '$180' },
+      l: { name: 'Sunshine Seasons', tag: '1 QS', kind: 'qs', price: '$61' },
+      d: { name: 'Via Napoli Ristorante e Pizzeria', tag: '1 TS', kind: 'ts', price: '$165' }
+    },
+    { stay: 'beach', dow: 'Sun', dt: 'Dec 27', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'La Cantina de San Angel', tag: '1 QS', kind: 'qs', price: '$59' },
+      d: { name: 'Beaches & Cream Soda Shop', tag: '2/3 TS', kind: 'sig', price: '$138' }
+    },
+    { stay: 'beach', dow: 'Mon', dt: 'Dec 28', switchDay: false,
+      b: { name: 'Typical quick-service meal', tag: '1 QS', kind: 'qs', price: '$45' },
+      l: { name: 'ABC Commissary', tag: '1 QS', kind: 'qs', price: '$60' },
+      d: { name: 'The Hollywood Brown Derby', tag: 'Cash', kind: 'cash', price: '$248' }
+    },
+    { stay: 'beach', dow: 'Tue', dt: 'Dec 29', switchDay: false,
+      b: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      l: { name: 'Katsura Grill', tag: '1 QS', kind: 'qs', price: '$58' },
+      d: { name: 'Chefs de France', tag: '1 TS ★', kind: 'ts', price: '$184' }
+    },
+    { stay: 'beach', dow: 'Wed', dt: 'Dec 30', switchDay: false,
+      b: { name: 'Beach Club Marketplace', tag: '1 QS', kind: 'qs', price: '$46' },
+      l: { name: 'Yorkshire County Fish Shop', tag: '1 QS', kind: 'qs', price: '$54' },
+      d: { name: 'Teppan Edo', tag: '1 TS ★', kind: 'ts', price: '$190' }
+    },
+    { stay: 'beach', dow: 'Thu', dt: 'Dec 31', switchDay: false,
+      b: { name: 'Ale & Compass Restaurant', tag: 'Cash', kind: 'cash', price: '$96' },
+      l: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' },
+      d: { name: 'Skipped', tag: 'Skip', kind: 'skip', price: '' }
+    }
+  ];
+
+  let currentCalFilter = 'all';
+  const openStayConfigs = {};
+  const collapsedChapters = {};
+
+  function mealMatchesFilter(meal, mode) {
+    if (meal.kind === 'skip') return mode === 'all';
+    const isCredit = (meal.kind === 'ts' || meal.kind === 'qs' || meal.kind === 'sig');
+    if (mode === 'credits') return isCredit;
+    if (mode === 'cash') return !isCredit;
+    return true;
+  }
+
+  function dayMatchesFilter(d, mode) {
+    if (mode === 'all') return true;
+    return mealMatchesFilter(d.b, mode) || mealMatchesFilter(d.l, mode) || mealMatchesFilter(d.d, mode);
+  }
+
+  function renderMealCell(meal, dayLabel, slotName) {
+    if (meal.kind === 'skip') {
+      if (currentCalFilter !== 'all') {
+        return `<div class="meal-cell dimmed-slot"><span style="font-size:9px; color:var(--dim);">—</span></div>`;
+      }
+      return `<div class="meal-cell skipped" onclick="openSlotSheet('${dayLabel}', '${slotName}', 'Skipped')">
+        <span style="font-size:9px; color:var(--dim);">+ Add</span>
+      </div>`;
+    }
+
+    const isCredit = (meal.kind === 'ts' || meal.kind === 'qs' || meal.kind === 'sig');
+    if (!mealMatchesFilter(meal, currentCalFilter)) {
+      return `<div class="meal-cell dimmed-slot"><span style="font-size:8.5px; color:var(--dim);">—</span></div>`;
+    }
+
+    const cellClass = meal.kind === 'sig' ? 'meal-cell sig' : (isCredit ? 'meal-cell credit' : 'meal-cell');
+    const tagClass = meal.kind === 'sig' ? 'mc-tag sig' : (meal.kind === 'ts' ? 'mc-tag ts' : (meal.kind === 'qs' ? 'mc-tag qs' : 'mc-tag cash'));
+
+    return `<div class="${cellClass}" onclick="openSlotSheet('${dayLabel}', '${slotName}', '${meal.name.replace(/'/g, "\\'")}')">
+      <div class="mc-name">${meal.name}</div>
+      <div class="mc-foot">
+        <span class="${tagClass}">${meal.tag}</span>
+        <span class="mc-price">${meal.price}</span>
+      </div>
+    </div>`;
+  }
+
+  function renderChapters() {
+    const container = document.getElementById('chapters-container');
+    let html = '';
+
+    STAYS.forEach((stay) => {
+      const allStayDays = DAYS_DATA.filter(d => d.stay === stay.id);
+      const visibleDays = allStayDays.filter(d => dayMatchesFilter(d, currentCalFilter));
+
+      if (visibleDays.length === 0) {
+        const emptyMsg = currentCalFilter === 'credits' ? '0 credit meals' : '0 cash meals';
+        html += `
+          <div class="chapter-card empty-filtered">
+            <div class="chapter-hdr" style="border-bottom:none; padding:8px 11px;">
+              <div class="chapter-hdr-top">
+                <div class="chapter-title" style="font-size:11.5px; color:var(--muted);">
+                  <span>${stay.icon} ${stay.shortName}</span>
+                  <span style="font-weight:500; font-size:10px;">(${stay.dates.split('•')[0].trim()})</span>
+                </div>
+                <span class="badge dim">${emptyMsg}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const isCollapsed = !!collapsedChapters[stay.id];
+      const isCfgOpen = !!openStayConfigs[stay.id];
+
+      html += `
+        <div class="chapter-card ${stay.isWinnerPlan ? 'recommended-stay' : ''}">
+          <div class="chapter-hdr" style="${isCollapsed ? 'border-bottom:none;' : ''}">
+            <div class="chapter-hdr-top">
+              <div class="chapter-title-wrap">
+                <div class="chapter-title">
+                  <span>${stay.icon} ${stay.shortName}</span>
+                </div>
+                <div class="chapter-dates">${stay.dates}</div>
+              </div>
+              <button class="chapter-collapse-btn" onclick="toggleChapterCollapse('${stay.id}')">
+                ${isCollapsed ? `Show ${visibleDays.length}d ▾` : `Hide days ▴`}
+              </button>
+            </div>
+
+            <!-- 2-line clear clickable bar: explicit plan name + never truncates! -->
+            <div class="stay-edit-bar ${stay.isWinnerPlan ? 'gold' : ''}" onclick="toggleStayCfg('${stay.id}')">
+              <div class="stay-edit-summary-wrap">
+                <div class="stay-edit-line1">${stay.planSummary}</div>
+                <div class="stay-edit-line2">${stay.bookingSummary}</div>
+              </div>
+              <span class="stay-edit-cta">${isCfgOpen ? 'Done ▴' : 'Change ▾'}</span>
+            </div>
+
+            <div class="stay-config-drawer ${isCfgOpen ? 'open' : ''}" id="stay-cfg-${stay.id}">
+              <div style="font-size:9.5px; color:var(--muted); margin-bottom:4px; font-weight:700;">How should we handle the Dining Plan here?</div>
+              <div class="pill-group" style="margin-bottom:7px;">
+                <div class="choice-pill ${stay.mode === 'compare' ? 'active' : ''}" onclick="setStayMode('${stay.id}', 'compare')">Find best</div>
+                <div class="choice-pill ${stay.mode === 'have_plan' ? 'active' : ''}" onclick="setStayMode('${stay.id}', 'have_plan')">Already have plan</div>
+                <div class="choice-pill ${stay.mode === 'no_plan' ? 'active' : ''}" onclick="setStayMode('${stay.id}', 'no_plan')">Pay cash only</div>
+              </div>
+
+              ${stay.mode === 'have_plan' ? `
+                <div style="font-size:9.5px; color:var(--gold); margin-bottom:4px; font-weight:700;">Which plan is booked with this stay?</div>
+                <div class="pill-group" style="margin-bottom:7px;">
+                  <div class="choice-pill ${stay.heldPlan === 'qs' ? 'active' : ''}" onclick="setStayHeldPlan('${stay.id}', 'qs')">Disney Quick-Service Plan</div>
+                  <div class="choice-pill ${stay.heldPlan === 'ddp' ? 'active' : ''}" onclick="setStayHeldPlan('${stay.id}', 'ddp')">Disney Dining Plan</div>
+                </div>
+              ` : ''}
+
+              <div style="font-size:9.5px; color:var(--muted); margin-bottom:4px; font-weight:700;">How is this hotel booked?</div>
+              <div class="pill-group" style="margin-bottom:0;">
+                <div class="choice-pill ${stay.isWinnerPlan ? 'active' : ''}" onclick="pickSingle(this)">📦 Package (Kids Free)</div>
+                <div class="choice-pill ${!stay.isWinnerPlan ? 'active' : ''}" onclick="pickSingle(this)">🎟️ DVC / Passholder</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="${isCollapsed ? 'display:none;' : ''}">
+            ${currentCalFilter !== 'all' && visibleDays.length < allStayDays.length ? `
+              <div class="filter-note-bar">
+                <span>Showing <strong>${visibleDays.length} of ${allStayDays.length} days</strong> with ${currentCalFilter === 'cash' ? 'cash' : 'credit'} meals</span>
+                <span style="cursor:pointer; font-weight:800;" onclick="filterCalendar('all', document.querySelector('.cal-filter-group .filter-pill'))">Show all</span>
+              </div>
+            ` : ''}
+
+            <div class="chapter-col-hdr">
+              <div>Day</div>
+              <div>🌅 Brkfst</div>
+              <div>☀️ Lunch</div>
+              <div>🌙 Dinner</div>
+            </div>
+            <div class="chapter-days">
+              ${visibleDays.map(d => `
+                <div class="day-row">
+                  <div class="day-label-cell">
+                    <span class="day-dow">${d.dow}</span>
+                    <span class="day-dt">${d.dt}</span>
+                    ${d.switchDay ? '<span class="day-switch-tag">⇄ Switch</span>' : ''}
+                  </div>
+                  ${renderMealCell(d.b, d.dow + ', ' + d.dt, 'Breakfast')}
+                  ${renderMealCell(d.l, d.dow + ', ' + d.dt, 'Lunch')}
+                  ${renderMealCell(d.d, d.dow + ', ' + d.dt, 'Dinner')}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (stay.switchAfterText && currentCalFilter === 'all') {
+        html += `
+          <div class="switch-divider" onclick="alert('Disney dining credits do not carry between split-stay reservations, but on checkout/check-in day you can use either hotel\\'s credits. The calculator automatically picks whichever saves the most.')">
+            <span>${stay.switchAfterText}</span>
+            <span style="font-weight:800;">ℹ️</span>
+          </div>
+        `;
+      }
+    });
+
+    container.innerHTML = html;
+  }
+
+  function setStayMode(id, mode) {
+    const s = STAYS.find(x => x.id === id);
+    if (s) s.mode = mode;
+    renderChapters();
+  }
+  function setStayHeldPlan(id, plan) {
+    const s = STAYS.find(x => x.id === id);
+    if (s) s.heldPlan = plan;
+    renderChapters();
+  }
+
+  function toggleStayCfg(id) {
+    openStayConfigs[id] = !openStayConfigs[id];
+    renderChapters();
+  }
+  function toggleChapterCollapse(id) {
+    collapsedChapters[id] = !collapsedChapters[id];
+    renderChapters();
+  }
+
+  function renderOptionB(idx = 8) {
+    const pills = document.getElementById('b-day-pills');
+    if (!pills) return;
+    pills.innerHTML = DAYS_DATA.map((d, i) => `
+      <button class="filter-pill ${i === idx ? 'active' : ''}" onclick="renderOptionB(${i})">${d.dow} ${d.dt.split(' ')[1]}</button>
+    `).join('');
+    const day = DAYS_DATA[idx];
+    document.getElementById('b-day-detail').innerHTML = `
+      <div style="font-size:13px; font-weight:800; margin-bottom:8px;">${day.dow}, ${day.dt}</div>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;">
+        ${renderMealCell(day.b, day.dow + ', ' + day.dt, 'Breakfast')}
+        ${renderMealCell(day.l, day.dow + ', ' + day.dt, 'Lunch')}
+        ${renderMealCell(day.d, day.dow + ', ' + day.dt, 'Dinner')}
+      </div>
+    `;
+  }
+
+  function toggleVerdictDrawer() {
+    const d = document.getElementById('verdict-drawer');
+    const lbl = document.getElementById('vc-why-lbl');
+    d.classList.toggle('open');
+    lbl.textContent = d.classList.contains('open') ? 'Hide ▴' : 'Why? ▾';
+  }
+
+  function toggleDrawer(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('open');
+  }
+  function toggleDisplay(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+  }
+
+  function filterCalendar(mode, btn) {
+    currentCalFilter = mode;
+    document.querySelectorAll('.cal-filter-group .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderChapters();
+  }
+
+  function switchATab(tab, btn) {
+    ['meals', 'compare', 'credits', 'settings'].forEach(t => {
+      document.getElementById('a-pane-' + t).style.display = (t === tab) ? 'block' : 'none';
+    });
+    document.querySelectorAll('#optA-tabs-bar .seg-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+
+  function jumpToFilteredMeals(mode) {
+    switchATab('meals', document.getElementById('tab-btn-meals'));
+    const pills = document.querySelectorAll('.cal-filter-group .filter-pill');
+    if (mode === 'credits' && pills[1]) {
+      filterCalendar('credits', pills[1]);
+    }
+  }
+
+  function switchLayout(opt, btn) {
+    document.querySelectorAll('.option-switcher .opt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ['A', 'B', 'C'].forEach(k => {
+      document.getElementById('layout-' + k).classList.toggle('active', k === opt);
+    });
+    document.getElementById('optA-tabs-bar').style.display = (opt === 'A') ? 'block' : 'none';
+  }
+
+  function importReservations() {
+    const card = document.getElementById('res-import-card');
+    card.innerHTML = `<div style="font-size:10.5px; color:var(--mint); font-weight:800;">✓ 3 reservations placed into your 17-day calendar</div>`;
+    setTimeout(() => { card.style.display = 'none'; }, 1800);
+  }
+
+  function openSlotSheet(day, slot, currentName) {
+    document.getElementById('sheet-slot-title').textContent = `${day} • ${slot}`;
+    const sub = document.getElementById('sheet-slot-sub');
+    const chosenName = document.getElementById('slot-chosen-name');
+    const chosenCard = document.getElementById('slot-chosen-card');
+    const childBox = document.getElementById('slot-diner-child');
+
+    if (currentName === 'Skipped') {
+      sub.textContent = 'No meal set yet';
+      chosenCard.style.display = 'none';
+      setSlotChoice('skip', document.getElementById('slot-type-skip'));
+    } else if (currentName.startsWith('Typical')) {
+      sub.textContent = `Chosen: ${currentName}`;
+      chosenCard.style.display = 'none';
+      setSlotChoice('quick_service', document.getElementById('slot-type-qs'));
+    } else {
+      sub.textContent = `Chosen: ${currentName}`;
+      chosenName.textContent = currentName;
+      chosenCard.style.display = 'flex';
+      setSlotChoice('restaurant', document.getElementById('slot-type-rest'));
+    }
+    if (childBox) childBox.checked = !currentName.includes('Beaches & Cream');
+    document.getElementById('slot-sheet').classList.add('open');
+  }
+  function setSlotChoice(choice, el) {
+    if (el) pickSingle(el);
+    document.getElementById('slot-rest-picker').style.display = (choice === 'restaurant') ? 'block' : 'none';
+    document.getElementById('slot-diners-section').style.display = (choice === 'skip') ? 'none' : 'block';
+  }
+  function closeSlotSheet() { document.getElementById('slot-sheet').classList.remove('open'); }
+  function openBudgetSheet() { document.getElementById('budget-sheet').classList.add('open'); }
+  function closeBudgetSheet() { document.getElementById('budget-sheet').classList.remove('open'); }
+
+  function pickSingle(el) {
+    el.parentElement.querySelectorAll('.choice-pill').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+  function stepVal(id, delta, min, max = 99) {
+    const el = document.getElementById(id);
+    const v = Math.min(max, Math.max(min, parseInt(el.textContent, 10) + delta));
+    el.textContent = v;
+  }
+
+  renderChapters();
+  renderOptionB(8);
+</script>
+</body>
+</html>

@@ -67,6 +67,7 @@ const TIMELINE_FIXTURE: BookingTimelineDTO = {
   lightningLaneTiming: { value: 'seven_day', source: 'auto' },
   arrivalDate: { value: '2026-10-01', source: 'trip_start' },
   muted: false,
+  stays: [],
   windows: [
     {
       windowKey: 'dining:2026-08-02',
@@ -488,5 +489,47 @@ describe('TripBookingTimelineScreen (Task 11.5)', () => {
       expect(setTripsListNoticeMock).toHaveBeenCalledWith('That booking timeline is no longer available.');
       expect(navigation.navigate).toHaveBeenCalledWith('TripsList');
     });
+  });
+});
+
+describe('TripBookingTimelineScreen with a timeline derived from stays (trip-lodging-stays task 8.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("renders a 'stays' source as derived from the Trip's stays, not as an Organizer override", async () => {
+    const fromStays: BookingTimelineDTO = {
+      ...TIMELINE_FIXTURE,
+      stayType: { value: 'resort', source: 'stays' },
+      arrivalDate: { value: '2026-10-01', source: 'stays' },
+      stays: [
+        { stayId: 's1', lodgingKind: 'resort', checkIn: '2026-10-01', checkOut: '2026-10-05', source: 'stay' },
+        { stayId: 's2', lodgingKind: 'offsite', checkIn: '2026-10-05', checkOut: '2026-10-10', source: 'stay' },
+      ],
+    };
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/booking-timeline`) return fromStays;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) return BASE_TRIP;
+      if (method === 'GET' && path === '/me') return ORGANIZER_ME;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return ROSTER;
+      throw new Error(`Unexpected ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    expect(await screen.findByTestId('booking-window-dining:2026-08-02')).toBeTruthy();
+    // Stay type and arrival date both come from the stays; Lightning Lane timing is still 'auto'.
+    expect(screen.getAllByText("From the Trip's stays")).toHaveLength(2);
+    expect(screen.getAllByText('Detected automatically')).toHaveLength(1);
+    expect(screen.queryByText('Set by an Organizer')).toBeNull();
+
+    // R9.6: the Organizer's settings modal says the lodging type is set per stay and locks it.
+    fireEvent.press(await screen.findByTestId('booking-settings-edit'));
+    expect(await screen.findByTestId('booking-settings-modal')).toBeTruthy();
+    expect(screen.getByTestId('booking-settings-per-stay-note')).toBeTruthy();
+    expect(screen.getByTestId('stay-type-resort').props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true }),
+    );
+    expect(screen.getByTestId('check-in-override-picker').props.accessibilityState).toEqual({ disabled: true });
   });
 });

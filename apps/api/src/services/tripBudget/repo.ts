@@ -262,6 +262,13 @@ export interface TripBudgetRepo {
     callerRole: TripRole,
   ): Promise<void>;
 
+  /**
+   * Record that a Budget_Line was logged as an Expense (Requirement 23.5-23.8).
+   * Writes only `trip_budget_lines.linked_expense_id`; reads `expenses` to verify the Trip.
+   * Idempotent for the same Expense; rejects a different Expense on an already-linked line.
+   */
+  linkExpense(tripId: string, lineId: string, expenseId: string): Promise<void>;
+
   // Load Budget (Task 14.3)
   loadBudget(tripId: string): Promise<RawBudgetBundle>;
   listPlannedItemsForSuggestions(tripId: string): Promise<PlannedItemRow[]>;
@@ -1486,6 +1493,54 @@ export function createTripBudgetRepo(pool: DbPool): TripBudgetRepo {
       await pool.query('DELETE FROM trip_budget_lines WHERE id = $1 AND trip_id = $2', [lineId, tripId]);
     },
 
+    async linkExpense(tripId, lineId, expenseId) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Lock the line so two simultaneous links serialize (Requirement 23.7).
+        const lineRes = await client.query<{ id: string; linked_expense_id: string | null }>(
+          'SELECT id, linked_expense_id FROM trip_budget_lines WHERE id = $1 AND trip_id = $2 FOR UPDATE',
+          [lineId, tripId],
+        );
+        const line = lineRes.rows[0];
+        if (!line) {
+          throw new AppError('trip_not_found', 'Budget line not found');
+        }
+
+        // The Expense must belong to the same Trip (Requirement 17.3 / 23.6). Read-only.
+        const expRes = await client.query<{ id: string }>(
+          'SELECT id FROM expenses WHERE id = $1 AND trip_id = $2',
+          [expenseId, tripId],
+        );
+        if (expRes.rows.length === 0) {
+          throw new AppError('trip_validation_failed', 'Expense does not belong to this trip');
+        }
+
+        if (line.linked_expense_id === expenseId) {
+          await client.query('COMMIT');
+          return;
+        }
+        if (line.linked_expense_id !== null) {
+          throw new AppError('trip_validation_failed', 'Budget line is already linked to an expense');
+        }
+
+        await client.query(
+          `UPDATE trip_budget_lines
+              SET linked_expense_id = $1, updated_at = now()
+            WHERE id = $2 AND trip_id = $3 AND linked_expense_id IS NULL`,
+          [expenseId, lineId, tripId],
+        );
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+
     async loadBudget(tripId) {
       // 1. Trip dates and day_touring_hours
       const tripRes = await pool.query<{
@@ -1762,6 +1817,12 @@ export function createTripBudgetRepo(pool: DbPool): TripBudgetRepo {
           priceAsOf: new Date(l.price_as_of),
           priceRef: l.price_ref as TicketPriceRef | LlPriceRef | null,
           applyTip: l.apply_tip,
+          // The column was selected above but never mapped, so GET /budget always reported
+          // `linkedExpenseId: null` (Requirement 17.3 / 23.10 need the real value).
+          linkedExpenseId: l.linked_expense_id,
+          // Same omission as `linked_expense_id`: selected but never mapped, so GET /budget reported
+          // `suggestionKey: null` for every line.
+          suggestionKey: l.suggestion_key,
           allocations: lineAllocs,
         };
       });

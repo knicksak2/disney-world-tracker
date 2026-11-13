@@ -12,6 +12,7 @@ import {
   isTipBearingServiceStyle,
   budgetAllocationInputSchema,
   budgetLineInputSchema,
+  budgetLineLinkBodySchema,
   budgetSettingsPatchSchema,
   budgetSuggestionDtoSchema,
   dismissSuggestionBodySchema,
@@ -462,6 +463,13 @@ describe('Trip Budget Contracts and Schemas (Task 1.1)', () => {
     it('validates dismiss suggestion body', () => {
       expect(dismissSuggestionBodySchema.safeParse({ suggestionKey: 'abc' }).success).toBe(true);
       expect(dismissSuggestionBodySchema.safeParse({ suggestionKey: '' }).success).toBe(false);
+    });
+    it('validates the budget line link body (Requirement 23.5)', () => {
+      expect(budgetLineLinkBodySchema.safeParse({ expenseId: validExpId }).success).toBe(true);
+      expect(budgetLineLinkBodySchema.safeParse({}).success).toBe(false);
+      expect(budgetLineLinkBodySchema.safeParse({ expenseId: 'not-a-uuid' }).success).toBe(false);
+      expect(budgetLineLinkBodySchema.safeParse({ expenseId: null }).success).toBe(false);
+      expect(budgetLineLinkBodySchema.safeParse({ expenseId: validExpId, extra: 1 }).success).toBe(false);
     });
   });
 });

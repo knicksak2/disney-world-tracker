@@ -92,6 +92,7 @@
 - **Authority.** `requirements.md` and `design.md` in this folder are authoritative.
 - **Verification tiers.** Run file-level tests (`vitest` in API, `jest` in mobile) while iterating, scoped verify at checkpoints, and `npm run verify` once before declaring done.
 - **Pin gate not involved.** No catalogue or pin SVG files are modified.
+- **Requirement 9 (Dining Plan estimates)** is implemented by `.kiro/specs/dining-plan-calculator/tasks.md` (task 11, the in-app disclaimer and labels), not by a task in this plan; it adds no Terms_Of_Service wording.
 
 ## Task Dependency Graph
 

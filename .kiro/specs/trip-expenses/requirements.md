@@ -267,6 +267,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 2. WHEN a member creates or edits a `discount` Charge_Line, THE Mobile_App SHALL offer an "exclude alcohol items" toggle; WHEN enabled, THE Trip_Service SHALL scope that Charge_Line to exactly the Expense_Items on the Expense not flagged `isAlcohol`, consistent with Requirement 5.10's scoped-allocation rule.
 3. THE Trip_Service SHALL NOT infer or apply any alcohol-exclusion rule automatically based on Expense Category, restaurant link, or any other signal; exclusion SHALL occur only when the member explicitly enables it on a specific Charge_Line, because discount terms vary by promotion and the App has no authoritative source for which discounts exclude alcohol.
 4. WHEN the "exclude alcohol items" toggle is enabled on a Charge_Line and zero Expense_Items on the Expense are flagged `isAlcohol`, THE Trip_Service SHALL reject the Charge_Line with `trip_validation_failed` consistent with Requirement 5.10's zero-scope rejection, and THE Mobile_App SHALL surface that no alcohol items exist to exclude.
+5. WHEN a member creates or edits a `discount` Charge_Line, THE Mobile_App SHALL offer entry as a percentage (e.g. 10%, 20%, or custom %) or as a flat dollar amount; WHEN a percentage is selected, THE Mobile_App SHALL compute the discount amount as `round(percentage × eligible_items_subtotal)` in integer cents, where `eligible_items_subtotal` respects the "exclude alcohol items" toggle (excluding items flagged `isAlcohol` when enabled).
 
 ### Requirement 15: Expenses involving a deleted account (added by the `account-deletion` spec)
 
@@ -296,3 +297,14 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 6. THE Mobile_App SHALL state in the picker that menu prices are before tax and gratuity, and SHALL offer, as explicit member actions, to add an estimated `tax` Charge_Line and an estimated `gratuity` Charge_Line computed from the shared default rates, each created as an ordinary editable Charge_Line (Requirement 5.8, 5.9) and never added silently.
 7. IF the linked restaurant has no cached menu, or no item with a parseable price, THEN THE Mobile_App SHALL hide or disable the picker and fall back to manual and scanned entry without error.
 8. THE Menu Item Picker SHALL be one shared component used by both the Expense form and the Budget line form of the `trip-budget` feature.
+
+### Requirement 17: Open the Expense form pre-filled from a Budget_Line (added by the `trip-budget` spec)
+
+**User Story:** As a Trip_Member who paid for something we budgeted, I want the Expense form to open with the budgeted description, date, category, amount and people already filled in, so that I only have to say who paid and fix anything the receipt shows differently. This requirement is additive; it extends Requirements 1, 3 and 11 and changes no server behavior. The mapping, the link route and the Budget screen control are specified in `.kiro/specs/trip-budget` (Requirement 23).
+
+#### Acceptance Criteria
+
+1. THE Expense form SHALL accept an optional pre-fill (description, date, category, amount, optional Catalog restaurant link, and a per-person amount for each person) for a NEW Expense, and WHEN it is absent the form SHALL behave exactly as before.
+2. WHEN a pre-fill is given, THE form SHALL open in Split_Mode `exact` with the pre-filled amounts per person, SHALL default the Payer to the member opening the form, SHALL keep a pre-filled amount for every person including the default Payer so that changing the Payer never reassigns a person's amount to the new Payer implicitly, and SHALL state in text that the values come from the budget estimate.
+3. THE form SHALL send nothing to the Trip_Service until the member saves, SHALL apply the unchanged Expense validation of Requirement 1 and Requirement 3 to the saved values, and SHALL report the saved Expense to its caller (an optional `onSaved` callback) after a successful create so the caller can link it.
+4. THE Trip_Service SHALL NOT receive, store or expose any field that records that an Expense began as a pre-fill, and this requirement SHALL NOT require a migration.

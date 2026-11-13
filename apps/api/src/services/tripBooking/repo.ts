@@ -18,6 +18,7 @@ import type {
   PackingListDTO,
   StayType,
   LightningLaneTiming,
+  StayRecord,
   WindowKind,
   packingItemCreateSchema,
   packingItemUpdateSchema,
@@ -27,6 +28,7 @@ import { STARTER_PACKING_LIST } from '@dwt/shared';
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
 import { formatCalendarDate } from '../trips/repo.js';
+import { isTripStaysAvailable, selectTripStaysByTrip } from '../trips/stays.js';
 import {
   nextPackedState,
   normalizeName,
@@ -52,6 +54,8 @@ export interface TimelineReadModel {
   readonly doneMarks: ReadonlyMap<string, { markedAt: string; markedByDisplayName: string }>;
   readonly reservations: readonly { kind: string; plannedDate: string }[];
   readonly viewerMuted: boolean;
+  /** The Trip's lodging Stays; absent when the `trip_stays` table does not exist (trip-lodging-stays R9.1). */
+  readonly stays?: readonly StayRecord[];
 }
 
 export interface BookingTimelineRepo {
@@ -191,6 +195,11 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         }
       }
 
+      // 4. Lodging Stays (trip-lodging-stays R9.1): one statement; omitted when the table does not exist yet.
+      const stays = (await isTripStaysAvailable(pool))
+        ? ((await selectTripStaysByTrip(pool, [tripId])).get(tripId) ?? [])
+        : undefined;
+
       return {
         trip: { startDate, endDate },
         hasResortStay: Boolean(tripRow.has_resort_stay),
@@ -198,6 +207,7 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         doneMarks,
         reservations,
         viewerMuted: Boolean(tripRow.viewer_muted),
+        ...(stays !== undefined ? { stays } : {}),
       };
     },
 
@@ -331,12 +341,18 @@ export function createTripBookingRepo(pool: DbPool): TripBookingRepo {
         [args.today, args.horizon, args.limit],
       );
 
+      // Lodging Stays for every candidate in ONE statement (trip-lodging-stays R9.8); omitted without the table.
+      const staysByTrip = (await isTripStaysAvailable(pool))
+        ? await selectTripStaysByTrip(pool, res.rows.map((row) => row.id))
+        : null;
+
       return res.rows.map((row) => ({
         id: row.id,
         name: row.name,
         startDate: formatCalendarDate(row.start_date)!,
         endDate: formatCalendarDate(row.end_date)!,
         hasResortStay: Boolean(row.has_resort_stay),
+        ...(staysByTrip !== null ? { stays: staysByTrip.get(row.id) ?? [] } : {}),
         settings:
           row.stay_type !== null || row.lightning_lane_timing !== null || row.check_in_override !== null
             ? {

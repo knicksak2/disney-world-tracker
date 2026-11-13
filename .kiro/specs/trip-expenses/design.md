@@ -656,6 +656,12 @@ Added by the `trip-budget` spec (its tasks 17.3 and 19.1). `apps/mobile/src/comp
 
 **Validates: Requirements 16.8**
 
+### Property 22: Discount percentage entry respects alcohol exclusion
+
+For any itemized expense, when a discount charge line is set via percentage $P$, the computed discount amount in cents is $\text{round}(P \times \text{eligibleCents} / 100)$, where $\text{eligibleCents}$ is the sum of prices of all non-alcohol items if `excludeAlcohol` is true, and the sum of all items if `excludeAlcohol` is false.
+
+**Validates: Requirements 14.5**
+
 ## Error Handling
 
 | Condition | Code | Behavior |
@@ -706,6 +712,7 @@ No new environment variables, secrets, base URLs, or cadences: the feature adds 
 | `EXPENSE_ITEM_NAME_MAX` | `100` | `packages/shared/src/tripExpenses.ts` | Max Expense_Item name length (Req 5.1). |
 | Alcohol term list | maintained array of common beverage terms + known Disney bar/lounge drink names | `apps/mobile/src/screens/trips/receiptScan.ts` | Client-side suggestion list for `flagAlcoholCandidate` (Req 9.8); never authoritative. |
 | Gratuity percentage presets | `[0.18, 0.20, 0.22]` + custom | `apps/mobile/src/screens/trips/TripExpensesScreen.tsx` | UI presets for the gratuity-as-percentage entry mode (Req 5.9); not a server-side constant since only the resulting cents amount is ever transmitted. |
+| Discount percentage presets | `[0.10, 0.20]` + custom | `apps/mobile/src/screens/trips/ExpenseFormModal.tsx` | UI presets for the discount-as-percentage entry mode (Req 14.5); not a server-side constant since only the resulting cents amount is ever transmitted. |
 
 ### External Interfaces
 

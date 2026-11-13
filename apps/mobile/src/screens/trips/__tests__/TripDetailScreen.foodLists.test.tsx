@@ -108,6 +108,8 @@ const BASE_TRIP: TripDTO = {
   resorts: [],
   foodLists: [AVAILABLE_LIST_1, UNAVAILABLE_LIST],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 const OWNED_FOOD_LISTS: readonly FoodListDTO[] = [

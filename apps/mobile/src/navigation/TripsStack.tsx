@@ -32,6 +32,8 @@ import TripScheduleScreen from '../screens/trips/TripScheduleScreen';
 import TripReservationsScreen from '../screens/trips/TripReservationsScreen';
 import TripExpensesScreen from '../screens/trips/TripExpensesScreen';
 import { TripBudgetScreen } from '../screens/trips/TripBudgetScreen';
+import TripDiningPlanScreen from '../screens/trips/TripDiningPlanScreen';
+import DiningPlanCalculatorScreen from '../screens/trips/DiningPlanCalculatorScreen';
 import TripBalancesScreen from '../screens/trips/TripBalancesScreen';
 import TripBookingTimelineScreen from '../screens/trips/TripBookingTimelineScreen';
 import TripPackingListScreen from '../screens/trips/TripPackingListScreen';
@@ -70,6 +72,10 @@ export type TripsStackParamList = {
   TripExpenses: { tripId: string };
   /** Planned budget, savings plan and actuals comparison (trip-budget R22.1). */
   TripBudget: { tripId: string };
+  /** Dining Plan calculator for a Trip: is a dining plan worth it for the planned meals (dining-plan-calculator R19.1). */
+  TripDiningPlan: { tripId: string };
+  /** Standalone Dining Plan calculator, no Trip; nothing is saved (dining-plan-calculator R20.1). */
+  DiningPlanCalculator: undefined;
   /** Group balances and settlement view (trip-expenses R10.1). */
   TripBalances: { tripId: string };
   /** Booking timeline section of a Trip. */
@@ -112,6 +118,8 @@ export default function TripsStack(): JSX.Element {
       <Stack.Screen name="TripReservations" component={TripReservationsScreen} />
       <Stack.Screen name="TripExpenses" component={TripExpensesScreen} />
       <Stack.Screen name="TripBudget" component={TripBudgetScreen} />
+      <Stack.Screen name="TripDiningPlan" component={TripDiningPlanScreen} />
+      <Stack.Screen name="DiningPlanCalculator" component={DiningPlanCalculatorScreen} />
       <Stack.Screen name="TripBalances" component={TripBalancesScreen} />
       <Stack.Screen name="TripBookingTimeline" component={TripBookingTimelineScreen} />
       <Stack.Screen name="TripPackingList" component={TripPackingListScreen} />

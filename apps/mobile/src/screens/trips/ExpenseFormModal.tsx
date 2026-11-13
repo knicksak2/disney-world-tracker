@@ -27,10 +27,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   EXPENSE_SPLIT_MODES,
-  CHARGE_LINE_KINDS,
   uuidSchema,
   bpsOf,
-  BUDGET_DEFAULT_TAX_BPS,
   BUDGET_DEFAULT_DINING_TIP_BPS,
   type ExpenseCategory,
   type ExpenseSplitMode,
@@ -55,6 +53,7 @@ import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { themedSwitchProps } from '../../theme/switchColors';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import { AVATAR_FILL, FORM, FORM_SWITCH } from './ExpenseFormModal.palette';
+import { CurrencyInputField } from '../../components/CurrencyInputField';
 import { DatePickerField } from '../../components/DatePickerField';
 import { apiRequest } from '../../api/client';
 import {
@@ -65,6 +64,7 @@ import {
 } from './tripExpenseApi';
 import { TripGuestManagementModal } from './TripGuestManagementModal';
 import { ledgerSaveErrorMessage } from './tripPartyDeleted';
+import type { ExpenseFormDraft } from './budgetToExpenseDraft';
 import { ExperiencePicker } from './ExperiencePicker';
 import { ResortPickerModal, type ResortItem } from './ResortPickerModal';
 import { ReceiptReviewModal } from './ReceiptReviewModal';
@@ -86,6 +86,13 @@ interface Props {
   readonly onClose: () => void;
   readonly onOpenManageGuests?: (() => void) | undefined;
   readonly onOpenReceiptScan?: ((onParsed: (items: any[], chargeLines: any[]) => void) => void) | undefined;
+  /**
+   * Pre-fill for a NEW expense taken from a Budget_Line (trip-expenses Requirement 17,
+   * trip-budget Requirement 23). Ignored when `initialExpense` is given.
+   */
+  readonly initialDraft?: ExpenseFormDraft | null | undefined;
+  /** Called with the created Expense after a successful create (not after an edit), before `onClose`. */
+  readonly onSaved?: ((expense: ExpenseDTO) => void | Promise<void>) | undefined;
 }
 
 interface DraftTier {
@@ -108,6 +115,19 @@ interface DraftChargeLine {
   amountCents: number;
   excludeAlcohol?: boolean | undefined;
   scopeItemIds?: string[] | undefined;
+  rateMode?: 'dollar' | 'pct' | undefined;
+  percentage?: number | undefined;
+  customPctText?: string | undefined;
+}
+
+export function computeDiscountCents(
+  percentage: number,
+  items: readonly { priceCents: number; isAlcohol?: boolean }[],
+  excludeAlcohol: boolean,
+): number {
+  const eligibleItems = excludeAlcohol ? items.filter((i) => !i.isAlcohol) : items;
+  const eligibleSubtotalCents = eligibleItems.reduce((s, i) => s + (i.priceCents || 0), 0);
+  return Math.round(eligibleSubtotalCents * (percentage / 100));
 }
 
 function isValidUuid(val: string | undefined | null): val is string {
@@ -156,6 +176,8 @@ export function ExpenseFormModal({
   onClose,
   onOpenManageGuests,
   onOpenReceiptScan,
+  initialDraft,
+  onSaved,
 }: Props): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -202,12 +224,11 @@ export function ExpenseFormModal({
   // Split Mode: tiered
   const [tiers, setTiers] = useState<DraftTier[]>([]);
   const [tierCounts, setTierCounts] = useState<Record<string, Record<string, number>>>({}); // tierIdx -> recipientId -> count
-  const [tierViewMode, setTierViewMode] = useState<'matrix' | 'cards'>('matrix');
   const [userOverrodeTierAmount, setUserOverrodeTierAmount] = useState(false);
 
   // Tiered split Tax & Tip helper state (Req 4 / Mockup spec)
   const [showTierTaxTipHelper, setShowTierTaxTipHelper] = useState(false);
-  const [tierTaxMode, setTierTaxMode] = useState<'dollar' | 'total' | 'pct'>('dollar');
+  const [tierTaxMode, setTierTaxMode] = useState<'dollar' | 'total' | 'pct'>('pct');
   const [tierTaxDollar, setTierTaxDollar] = useState('');
   const [tierTaxTotal, setTierTaxTotal] = useState('');
   const [tierTaxPct, setTierTaxPct] = useState('6.5');
@@ -226,12 +247,32 @@ export function ExpenseFormModal({
   const [showTierSuggestions, setShowTierSuggestions] = useState(true);
 
   // Restaurant Menu Query for linked dining experience (Req 9.9, 11.4)
-  const { data: expDetail } = useQuery<{ menus?: readonly MenuDTO[] }>({
+  const { data: expDetail } = useQuery<{ name?: string; park?: string | null; menus?: readonly MenuDTO[] }>({
     queryKey: ['experience', experienceId] as const,
     queryFn: () => apiRequest<any>('GET', `/catalog/${experienceId}`),
     enabled: Boolean(experienceId && category === 'dining'),
     staleTime: 5 * 60 * 1000,
   });
+
+  // Location-aware default tax & tip presets
+  useEffect(() => {
+    if (category === 'hotel') {
+      setTierTaxPct('12.5');
+      setTierTipPct('0');
+    } else if (category === 'dining') {
+      const park = expDetail?.park;
+      setTierTaxPct(park === 'animal-kingdom' ? '7.5' : '6.5');
+      setTierTipPct('18');
+    } else {
+      setTierTaxPct('6.5');
+      setTierTipPct('0');
+    }
+  }, [category, expDetail?.park]);
+
+  const effectiveRestaurantName =
+    experienceName ||
+    expDetail?.name ||
+    (experienceId ? 'Restaurant Linked' : 'Link Disney Dining');
 
   const restaurantMenuNames = useMemo(() => {
     if (!expDetail?.menus) return [];
@@ -254,9 +295,10 @@ export function ExpenseFormModal({
 
   const hasCachedMenuItems = useMemo(() => {
     if (!experienceId || !expDetail?.menus || expDetail.menus.length === 0) return false;
+    if (suggestedTiers.length > 0) return true;
     const sections = buildPickerRows(expDetail.menus);
     return sections.some((s) => s.items.some((it) => !it.isPriceless));
-  }, [experienceId, expDetail?.menus]);
+  }, [experienceId, expDetail?.menus, suggestedTiers]);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -290,13 +332,19 @@ export function ExpenseFormModal({
       return;
     }
 
-    const currentKey = initialExpense ? initialExpense.id : '__new__';
+    const draft = initialExpense ? null : (initialDraft ?? null);
+    const currentKey = initialExpense
+      ? initialExpense.id
+      : draft
+        ? `__draft__:${draft.budgetLineId}`
+        : '__new__';
     if (initializedExpenseKeyRef.current === currentKey) {
       return;
     }
     initializedExpenseKeyRef.current = currentKey;
 
     if (initialExpense) {
+      setShowTierSuggestions(true);
       setPayerId(initialExpense.payerId);
       setDescription(initialExpense.description);
       setDate(initialExpense.date);
@@ -366,6 +414,7 @@ export function ExpenseFormModal({
       }
     } else {
       // Defaults for new expense
+      setShowTierSuggestions(true);
       setPayerId(callerId);
       setDescription('');
       setDate(new Date().toISOString().slice(0, 10));
@@ -386,8 +435,27 @@ export function ExpenseFormModal({
       setItems([]);
       setChargeLines([]);
       setErrorMessage(null);
+
+      if (draft) {
+        // Pre-fill from a Budget_Line (Requirement 17). Exact split, keeping EVERY person's amount
+        // including the default payer's: the exact branch skips the entry of whoever is the payer,
+        // so changing the payer later leaves the old payer's amount in place as an explicit share
+        // instead of folding it into the new payer's implicit remainder.
+        const sharesMap: Record<string, string> = {};
+        for (const s of draft.shares) {
+          const recId = s.memberId ?? s.guestId;
+          if (recId) sharesMap[recId] = (s.amountCents / 100).toFixed(2);
+        }
+        setSplitMode('exact');
+        setDescription(draft.description);
+        setDate(draft.date ?? new Date().toISOString().slice(0, 10));
+        setCategory(draft.category);
+        setExperienceId(draft.experienceId);
+        setManualAmountDollars(draft.amountCents > 0 ? (draft.amountCents / 100).toFixed(2) : '');
+        setExactShares(sharesMap);
+      }
     }
-  }, [visible, initialExpense, callerId]);
+  }, [visible, initialExpense, initialDraft, callerId]);
 
   // Keep track of participant IDs so new guests can be automatically included in even split
   const prevParticipantIdsRef = React.useRef<string[]>([]);
@@ -408,26 +476,27 @@ export function ExpenseFormModal({
   }, [visible, allParticipants]);
 
   // Handle Split_Mode Change UX (Req 8.3 / Task 10.6):
-  // When switching splitMode in edit mode, clear previously-entered fields
+  // Switch active split mode while preserving tab drafts so exploring modes does not destroy input
   const handleSplitModeChange = (newMode: ExpenseSplitMode) => {
     if (newMode === splitMode) return;
     setSplitMode(newMode);
     setUserOverrodeTierAmount(false);
     setErrorMessage(null);
-    // Clear mode-specific fields
-    setExactShares({});
-    setEvenParticipants(allParticipants.map((p) => p.id));
-    setTiers(
-      newMode === 'tiered'
-        ? [
-            { name: 'Adult', priceCents: 5000 },
-            { name: 'Child', priceCents: 3000 },
-          ]
-        : [],
-    );
-    setTierCounts({});
-    setItems([]);
-    setChargeLines([]);
+
+    // If switching to tiered and no tiers exist yet, populate default or menu suggestions
+    if (newMode === 'tiered' && tiers.length === 0) {
+      if (suggestedTiers.length > 0) {
+        setTiers(suggestedTiers);
+      } else {
+        setTiers([
+          { name: 'Adult', priceCents: 5000 },
+          { name: 'Child', priceCents: 3000 },
+        ]);
+      }
+    }
+    if (newMode === 'even' && evenParticipants.length === 0) {
+      setEvenParticipants(allParticipants.map((p) => p.id));
+    }
   };
 
   // Launch receipt scan (Req 9.1, 9.3)
@@ -455,12 +524,53 @@ export function ExpenseFormModal({
     }
   };
 
+  // Helper to add a blank manual item
+  const addBlankItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        name: '',
+        priceCents: 0,
+        isAlcohol: false,
+        assigneeIds: allParticipants.map((p) => p.id),
+      },
+    ]);
+  };
+
   // Live itemized amount calculation (Req 5.14)
+  const itemsSubtotalCents = useMemo(
+    () => items.reduce((s, it) => s + (it.priceCents || 0), 0),
+    [items],
+  );
+  const hasAlcoholItems = useMemo(() => items.some((it) => it.isAlcohol), [items]);
+  const nonAlcoholSubtotalCents = useMemo(
+    () => items.filter((it) => !it.isAlcohol).reduce((s, it) => s + (it.priceCents || 0), 0),
+    [items],
+  );
+
+  // Recalculate percentage-based discount lines when item prices or alcohol flags change (Req 14.5)
+  useEffect(() => {
+    setChargeLines((prev) => {
+      let changed = false;
+      const next = prev.map((cl) => {
+        if (cl.kind === 'discount' && cl.rateMode === 'pct' && typeof cl.percentage === 'number') {
+          const discountAmt = computeDiscountCents(cl.percentage, items, Boolean(cl.excludeAlcohol));
+          const targetCents = -discountAmt;
+          if (targetCents !== cl.amountCents) {
+            changed = true;
+            return { ...cl, amountCents: targetCents };
+          }
+        }
+        return cl;
+      });
+      return changed ? next : prev;
+    });
+  }, [items]);
+
   const itemizedDerivedAmountCents = useMemo(() => {
-    const itemsTotal = items.reduce((s, it) => s + (it.priceCents || 0), 0);
     const chargeTotal = chargeLines.reduce((s, cl) => s + (cl.amountCents || 0), 0);
-    return Math.max(0, itemsTotal + chargeTotal);
-  }, [items, chargeLines]);
+    return Math.max(0, itemsSubtotalCents + chargeTotal);
+  }, [itemsSubtotalCents, chargeLines]);
 
   // Live tiered amount calculation (Req 4.7)
   const {
@@ -554,11 +664,6 @@ export function ExpenseFormModal({
       return itemizedDerivedAmountCents;
     }
     if (splitMode === 'tiered') {
-      const val = parseFloat(manualAmountDollars);
-      const manualCents = isNaN(val) ? 0 : Math.round(val * 100);
-      if (manualCents > 0 && manualCents >= derivedTiersTotalCents) {
-        return manualCents;
-      }
       return derivedTiersTotalCents;
     }
     const val = parseFloat(manualAmountDollars);
@@ -765,9 +870,16 @@ export function ExpenseFormModal({
       }
       throw new Error(`Unknown split mode: ${splitMode}`);
     },
-    onSuccess: () => {
+    onSuccess: async (expense) => {
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.list(tripId) });
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.balances(tripId) });
+      if (onSaved && !isEditing) {
+        try {
+          await onSaved(expense);
+        } catch {
+          // The Expense is already saved; the caller reports its own follow-up failure.
+        }
+      }
       onClose();
     },
     onError: (err: unknown) => {
@@ -832,133 +944,13 @@ export function ExpenseFormModal({
             keyboardShouldPersistTaps="handled"
             testID="expense-form-scroll"
           >
-            {/* 1. HERO EXPENSE CARD (Amount + Description + Date & Venue) */}
-            <View style={styles.heroExpenseCard}>
-              {/* Amount Row */}
-              {splitMode === 'itemized' ? (
-                <View style={styles.heroAmountRow} testID="derived-amount-box">
-                  <View style={styles.heroAmountInputWrap}>
-                    <Text style={styles.heroAmountDisplay} testID="derived-amount-value">
-                      ${(itemizedDerivedAmountCents / 100).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.derivedBadgeLock}>
-                    <Ionicons name="lock-closed" size={12} color={pal.greenText} />
-                    <Text style={styles.derivedBadgeLockText}>Locked: Items</Text>
-                  </View>
-                </View>
-              ) : splitMode === 'tiered' ? (
-                <View style={styles.heroAmountRow} testID="derived-tier-amount-box">
-                  <View style={styles.heroAmountInputWrap}>
-                    <Text style={styles.heroCurrencyPrefix}>$</Text>
-                    <TextInput
-                      style={styles.heroAmountInput}
-                      placeholder={(derivedTiersTotalCents / 100).toFixed(2)}
-                      placeholderTextColor={t.color.textSecondary}
-                      keyboardAppearance={t.scheme}
-                      keyboardType="decimal-pad"
-                      value={manualAmountDollars}
-                      onChangeText={(v) => {
-                        setManualAmountDollars(v);
-                        const parsed = Math.round((parseFloat(v) || 0) * 100);
-                        if (v === '' || parsed === derivedTiersTotalCents) {
-                          setUserOverrodeTierAmount(false);
-                        } else {
-                          setUserOverrodeTierAmount(true);
-                        }
-                      }}
-                      testID="expense-amount-input"
-                    />
-                  </View>
-                  <View style={styles.tierHeroSummaryBadge}>
-                    <Text style={styles.tierHeroSummaryText} testID="derived-tier-amount-value">
-                      ${(parsedAmountCents / 100).toFixed(2)}
-                    </Text>
-                    <Text style={styles.tierHeroCountText}>
-                      {totalTierUnits} ticket{totalTierUnits === 1 ? '' : 's'}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.heroAmountRow}>
-                  <View style={styles.heroAmountInputWrap}>
-                    <Text style={styles.heroCurrencyPrefix}>$</Text>
-                    <TextInput
-                      style={styles.heroAmountInput}
-                      placeholder="0.00"
-                      placeholderTextColor={pal.placeholder}
-                      keyboardAppearance={t.scheme}
-                      keyboardType="decimal-pad"
-                      value={manualAmountDollars}
-                      onChangeText={setManualAmountDollars}
-                      testID="expense-amount-input"
-                    />
-                  </View>
-                  {manualAmountDollars ? (
-                    <View style={styles.manualBadge}>
-                      <Text style={styles.manualBadgeText}>Manual Entry</Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
+            {initialDraft && !isEditing ? (
+              <Text style={styles.helperText} testID="expense-form-draft-notice">
+                Pre-filled from your budget estimate. Match it to the receipt before saving.
+              </Text>
+            ) : null}
 
-              {/* Description Input */}
-              <View style={styles.heroDescRow}>
-                <Ionicons name="create-outline" size={18} color={t.color.primaryFg} />
-                <TextInput
-                  style={styles.heroDescInput}
-                  placeholder="What was this for? (e.g. Be Our Guest Dinner)"
-                  placeholderTextColor={t.color.textSecondary}
-                  keyboardAppearance={t.scheme}
-                  value={description}
-                  onChangeText={setDescription}
-                  testID="expense-description-input"
-                />
-              </View>
-
-              {/* Sub-row: Date Picker & Disney Venue Link */}
-              <View style={styles.heroSubRow}>
-                <View style={styles.heroDateWrap}>
-                  <DatePickerField
-                    value={date}
-                    onChange={setDate}
-                    placeholder="Select date"
-                    accessibilityLabel="Expense date"
-                    testID="expense-date-input"
-                  />
-                </View>
-
-                {category === 'dining' ? (
-                  <Pressable
-                    style={[styles.heroVenueBtn, (experienceName || experienceId) ? styles.heroVenueBtnActive : null]}
-                    onPress={() => setShowExpPicker(true)}
-                    testID="link-restaurant-button"
-                  >
-                    <Ionicons name="restaurant" size={13} color={t.color.primaryFg} />
-                    <Text style={styles.heroVenueBtnText} numberOfLines={1}>
-                      {experienceName || (experienceId ? 'Restaurant Linked' : 'Link Disney Dining')}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
-                  </Pressable>
-                ) : null}
-
-                {category === 'hotel' ? (
-                  <Pressable
-                    style={[styles.heroVenueBtn, (resortName || resortId) ? styles.heroVenueBtnActive : null]}
-                    onPress={() => setShowResortPicker(true)}
-                    testID="link-resort-button"
-                  >
-                    <Ionicons name="bed" size={13} color={t.color.primaryFg} />
-                    <Text style={styles.heroVenueBtnText} numberOfLines={1}>
-                      {resortName || (resortId ? 'Resort Linked' : 'Link Disney Resort')}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={12} color={t.color.primaryFg} />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {/* 2. CATEGORY SELECTOR */}
+            {/* 1. CATEGORY SELECTOR */}
             <View style={styles.categoryHeaderRow}>
               <SectionLabel style={styles.fieldLabel}>CATEGORY</SectionLabel>
               <View testID="active-category-pill" style={[styles.activeCategoryPill, { backgroundColor: pal.categoryBadgeBg }]}>
@@ -1056,6 +1048,94 @@ export function ExpenseFormModal({
               </Text>
             </Pressable>
 
+            {/* 2. DETAILS CARD (Venue Link + Description + Date) */}
+            <View style={styles.heroExpenseCard}>
+              {category === 'dining' ? (
+                hasCachedMenuItems && (experienceId || experienceName) ? (
+                  <View style={styles.heroLinkedMenuBar} testID="hero-linked-menu-bar">
+                    <Pressable
+                      style={styles.heroLinkedMenuLeft}
+                      onPress={() => setShowExpPicker(true)}
+                      testID="link-restaurant-button"
+                      accessibilityRole="button"
+                      accessibilityLabel="Change linked restaurant"
+                    >
+                      <Ionicons name="restaurant" size={14} color={t.color.primaryFg} />
+                      <Text style={styles.heroLinkedMenuText} numberOfLines={1}>
+                        {effectiveRestaurantName} • Menu Available
+                      </Text>
+                      <Ionicons name="chevron-forward" size={12} color={t.color.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.heroLinkedMenuBtn}
+                      onPress={() => setShowMenuItemPicker(true)}
+                      testID="hero-view-menu-button"
+                      accessibilityRole="button"
+                      accessibilityLabel="View menu"
+                    >
+                      <Ionicons name="book-outline" size={13} color={t.color.primaryFg} />
+                      <Text style={styles.heroLinkedMenuBtnText}>View Menu</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={[styles.heroVenueBtnWide, (experienceName || experienceId) ? styles.heroVenueBtnActive : null]}
+                    onPress={() => setShowExpPicker(true)}
+                    testID="link-restaurant-button"
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Ionicons name="restaurant" size={14} color={t.color.primaryFg} />
+                      <Text style={styles.heroVenueBtnText} numberOfLines={1}>
+                        {effectiveRestaurantName}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={13} color={t.color.primaryFg} />
+                  </Pressable>
+                )
+              ) : null}
+
+              {category === 'hotel' ? (
+                <Pressable
+                  style={[styles.heroVenueBtnWide, (resortName || resortId) ? styles.heroVenueBtnActive : null]}
+                  onPress={() => setShowResortPicker(true)}
+                  testID="link-resort-button"
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <Ionicons name="bed" size={14} color={t.color.primaryFg} />
+                    <Text style={styles.heroVenueBtnText} numberOfLines={1}>
+                      {resortName || (resortId ? 'Resort Linked' : 'Link Disney Resort')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={13} color={t.color.primaryFg} />
+                </Pressable>
+              ) : null}
+
+              {/* Description Input */}
+              <View style={styles.heroDescRow}>
+                <Ionicons name="create-outline" size={18} color={t.color.primaryFg} />
+                <TextInput
+                  style={styles.heroDescInput}
+                  placeholder="What was this for? (e.g. Be Our Guest Dinner)"
+                  placeholderTextColor={t.color.textSecondary}
+                  keyboardAppearance={t.scheme}
+                  value={description}
+                  onChangeText={setDescription}
+                  testID="expense-description-input"
+                />
+              </View>
+
+              {/* Date Picker */}
+              <View style={styles.heroDateWrap}>
+                <DatePickerField
+                  value={date}
+                  onChange={setDate}
+                  placeholder="Select date"
+                  accessibilityLabel="Expense date"
+                  testID="expense-date-input"
+                />
+              </View>
+            </View>
+
             {/* 3. RECEIPT SCANNER TOOLBAR (Compact & Sleek) */}
             <Card style={styles.receiptScannerQuickBar} testID="receipt-scanner-hero-card">
               <View style={styles.quickBarLeft}>
@@ -1149,6 +1229,30 @@ export function ExpenseFormModal({
             {/* EXACT MODE */}
             {splitMode === 'exact' ? (
               <View style={styles.modeSection}>
+                <View style={styles.heroAmountCard} testID="hero-amount-card">
+                  <View style={styles.heroAmountCardHeader}>
+                    <Text style={styles.heroAmountCardLabel}>TOTAL BILL</Text>
+                    <View style={styles.heroManualEntryBadge}>
+                      <Text style={styles.heroManualEntryBadgeText}>Manual Entry</Text>
+                    </View>
+                  </View>
+                  <View style={styles.heroAmountRow}>
+                    <View style={styles.heroAmountInputWrap}>
+                      <Text style={styles.heroCurrencyPrefix}>$</Text>
+                      <TextInput
+                        style={styles.heroAmountInput}
+                        placeholder="0.00"
+                        placeholderTextColor={t.color.textSecondary}
+                        keyboardAppearance={t.scheme}
+                        keyboardType="decimal-pad"
+                        value={manualAmountDollars}
+                        onChangeText={setManualAmountDollars}
+                        testID="expense-amount-input"
+                      />
+                    </View>
+                  </View>
+                </View>
+
                 <SectionLabel style={styles.fieldLabel}>PER-PERSON SHARES</SectionLabel>
                 <Text style={styles.helperText}>
                   Enter what each person owes. The remaining amount will be assigned to the payer.
@@ -1256,6 +1360,30 @@ export function ExpenseFormModal({
             {/* EVEN MODE */}
             {splitMode === 'even' ? (
               <View style={styles.modeSection}>
+                <View style={styles.heroAmountCard} testID="hero-amount-card">
+                  <View style={styles.heroAmountCardHeader}>
+                    <Text style={styles.heroAmountCardLabel}>TOTAL BILL</Text>
+                    <View style={styles.heroManualEntryBadge}>
+                      <Text style={styles.heroManualEntryBadgeText}>Manual Entry</Text>
+                    </View>
+                  </View>
+                  <View style={styles.heroAmountRow}>
+                    <View style={styles.heroAmountInputWrap}>
+                      <Text style={styles.heroCurrencyPrefix}>$</Text>
+                      <TextInput
+                        style={styles.heroAmountInput}
+                        placeholder="0.00"
+                        placeholderTextColor={t.color.textSecondary}
+                        keyboardAppearance={t.scheme}
+                        keyboardType="decimal-pad"
+                        value={manualAmountDollars}
+                        onChangeText={setManualAmountDollars}
+                        testID="expense-amount-input"
+                      />
+                    </View>
+                  </View>
+                </View>
+
                 <View style={styles.participantsHeaderRow}>
                   <SectionLabel style={styles.fieldLabel}>PARTICIPANTS</SectionLabel>
                   <View style={styles.quickToggleRow}>
@@ -1351,6 +1479,23 @@ export function ExpenseFormModal({
             {/* TIERED MODE */}
             {splitMode === 'tiered' ? (
               <View style={styles.modeSection}>
+                <View style={styles.derivedAmountCard} testID="derived-tier-amount-box">
+                  <View style={styles.heroAmountCardHeader}>
+                    <Text style={styles.heroAmountCardLabel} numberOfLines={1}>CALCULATED TOTAL</Text>
+                    <View style={styles.derivedAutoBadge}>
+                      <Ionicons name="sparkles" size={12} color={t.color.primaryFg} />
+                      <Text style={styles.derivedAutoBadgeText}>Auto-Calculated</Text>
+                    </View>
+                  </View>
+                  <View style={styles.heroAmountRow}>
+                    <View style={styles.heroAmountInputWrap}>
+                      <Text style={styles.heroAmountDisplay} testID="derived-tier-amount-value">
+                        ${(parsedAmountCents / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
                 {suggestedTiers.length > 0 && showTierSuggestions ? (
                   <Card style={styles.tierSuggestionCard} testID="tier-suggestions-banner">
                     <View style={styles.tierSuggestionHeader}>
@@ -1378,18 +1523,56 @@ export function ExpenseFormModal({
                   </Card>
                 ) : null}
 
+                {suggestedTiers.length > 0 && !showTierSuggestions ? (
+                  <View style={styles.tierAppliedIndicator} testID="tier-applied-indicator">
+                    <Ionicons name="checkmark-circle" size={14} color={FORM[t.scheme].greenDeepText} />
+                    <Text style={styles.tierAppliedIndicatorText}>
+                      Menu pricing applied: {suggestedTiers.map((t) => `${t.name} $${(t.priceCents / 100).toFixed(2)}`).join(' • ')}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={styles.tierHeaderRow}>
                   <SectionLabel style={styles.fieldLabel}>EXPENSE TIERS</SectionLabel>
-                  <Pressable
-                    style={styles.addTierHeaderBtn}
-                    onPress={() =>
-                      setTiers((prev) => [...prev, { name: 'Child', priceCents: 2000 }])
-                    }
-                    testID="add-tier-btn"
-                  >
-                    <Ionicons name="add" size={13} color={t.color.primaryFg} />
-                    <Text style={styles.addTierHeaderBtnText}>Add Tier</Text>
-                  </Pressable>
+                  <View style={styles.tierHeaderActions}>
+                    {suggestedTiers.length > 0 ? (
+                      <Pressable
+                        style={styles.tierHeaderBtn}
+                        onPress={() => {
+                          setTiers(suggestedTiers);
+                          setShowTierSuggestions(false);
+                        }}
+                        testID="reapply-tier-suggestions-btn"
+                        accessibilityRole="button"
+                        accessibilityLabel="Apply menu pricing suggestions"
+                      >
+                        <Ionicons name="sparkles" size={12} color={t.color.primaryFg} />
+                        <Text style={styles.tierHeaderBtnText}>Menu Suggestions</Text>
+                      </Pressable>
+                    ) : null}
+                    {hasCachedMenuItems ? (
+                      <Pressable
+                        style={styles.tierHeaderBtn}
+                        onPress={() => setShowMenuItemPicker(true)}
+                        testID="tiered-pick-from-menu-button"
+                        accessibilityRole="button"
+                        accessibilityLabel="Browse menu offers"
+                      >
+                        <Ionicons name="restaurant-outline" size={12} color={t.color.primaryFg} />
+                        <Text style={styles.tierHeaderBtnText}>Browse Menu</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={styles.addTierHeaderBtn}
+                      onPress={() =>
+                        setTiers((prev) => [...prev, { name: 'Child', priceCents: 2000 }])
+                      }
+                      testID="add-tier-btn"
+                    >
+                      <Ionicons name="add" size={13} color={t.color.primaryFg} />
+                      <Text style={styles.addTierHeaderBtnText}>Add Tier</Text>
+                    </Pressable>
+                  </View>
                 </View>
 
                 {tiers.map((tier, idx) => (
@@ -1413,19 +1596,19 @@ export function ExpenseFormModal({
                       <View style={styles.tierPriceCol}>
                         <View style={styles.tierPriceBox}>
                           <Text style={styles.tierPriceDollarSign}>$</Text>
-                          <TextInput
+                          <CurrencyInputField
                             style={styles.tierPriceInput}
                             placeholder="0.00"
                             placeholderTextColor={t.color.textSecondary}
                             keyboardAppearance={t.scheme}
-                            keyboardType="decimal-pad"
-                            value={(tier.priceCents / 100).toFixed(2)}
-                            onChangeText={(v) => {
+                            cents={tier.priceCents}
+                            onChangeCents={(cents) => {
                               const copy = [...tiers];
-                              copy[idx]!.priceCents = Math.round((parseFloat(v) || 0) * 100);
+                              copy[idx]!.priceCents = cents;
                               setTiers(copy);
                             }}
                             testID={`tier-price-${idx}`}
+                            accessibilityLabel={`Price for tier ${tier.name}`}
                           />
                           <Text style={styles.tierPriceUnitSuffix}>/ ea</Text>
                         </View>
@@ -1512,7 +1695,7 @@ export function ExpenseFormModal({
                         <View style={styles.helperInputRow}>
                           <Text style={styles.currencyPrefix}>$</Text>
                           <TextInput
-                            style={styles.shareInput}
+                            style={styles.helperInput}
                             placeholder="e.g. 14.56"
                             placeholderTextColor={t.color.textSecondary}
                             keyboardAppearance={t.scheme}
@@ -1526,7 +1709,7 @@ export function ExpenseFormModal({
                         <View style={styles.helperInputRow}>
                           <Text style={styles.currencyPrefix}>$</Text>
                           <TextInput
-                            style={styles.shareInput}
+                            style={styles.helperInput}
                             placeholder="Final total on receipt"
                             placeholderTextColor={t.color.textSecondary}
                             keyboardAppearance={t.scheme}
@@ -1538,23 +1721,39 @@ export function ExpenseFormModal({
                         </View>
                       ) : (
                         <View>
-                          <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 4 }}>
                             <Pressable
                               style={[styles.miniPresetChip, tierTaxPct === '6.5' && styles.miniPresetChipActive]}
                               onPress={() => setTierTaxPct('6.5')}
+                              testID="tax-preset-6-5"
                             >
-                              <Text style={[styles.miniPresetText, tierTaxPct === '6.5' && styles.miniPresetTextActive]}>EPCOT / MK (6.5%)</Text>
+                              <Text style={[styles.miniPresetText, tierTaxPct === '6.5' && styles.miniPresetTextActive]}>MK / EPCOT / DHS (6.5%)</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.miniPresetChip, tierTaxPct === '7.5' && styles.miniPresetChipActive]}
+                              onPress={() => setTierTaxPct('7.5')}
+                              testID="tax-preset-7-5"
+                            >
+                              <Text style={[styles.miniPresetText, tierTaxPct === '7.5' && styles.miniPresetTextActive]}>Animal Kingdom (7.5%)</Text>
                             </Pressable>
                             <Pressable
                               style={[styles.miniPresetChip, tierTaxPct === '12.5' && styles.miniPresetChipActive]}
                               onPress={() => setTierTaxPct('12.5')}
+                              testID="tax-preset-12-5"
                             >
                               <Text style={[styles.miniPresetText, tierTaxPct === '12.5' && styles.miniPresetTextActive]}>Resorts (12.5%)</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.miniPresetChip, tierTaxPct === '0' && styles.miniPresetChipActive]}
+                              onPress={() => setTierTaxPct('0')}
+                              testID="tax-preset-0"
+                            >
+                              <Text style={[styles.miniPresetText, tierTaxPct === '0' && styles.miniPresetTextActive]}>None (0%)</Text>
                             </Pressable>
                           </View>
                           <View style={styles.helperInputRow}>
                             <TextInput
-                              style={styles.shareInput}
+                              style={styles.helperInput}
                               placeholder="Custom %"
                               placeholderTextColor={t.color.textSecondary}
                               keyboardAppearance={t.scheme}
@@ -1606,7 +1805,7 @@ export function ExpenseFormModal({
                           </View>
                           <View style={styles.helperInputRow}>
                             <TextInput
-                              style={styles.shareInput}
+                              style={styles.helperInput}
                               placeholder="Tip %"
                               placeholderTextColor={t.color.textSecondary}
                               keyboardAppearance={t.scheme}
@@ -1622,7 +1821,7 @@ export function ExpenseFormModal({
                         <View style={styles.helperInputRow}>
                           <Text style={styles.currencyPrefix}>$</Text>
                           <TextInput
-                            style={styles.shareInput}
+                            style={styles.helperInput}
                             placeholder="Exact tip dollars"
                             placeholderTextColor={t.color.textSecondary}
                             keyboardAppearance={t.scheme}
@@ -1663,30 +1862,6 @@ export function ExpenseFormModal({
                       {totalTierUnits} ticket{totalTierUnits === 1 ? '' : 's'} assigned
                     </Text>
                   </View>
-                  <View style={styles.tierViewToggleContainer}>
-                    <Pressable
-                      style={[styles.tierViewToggleBtn, tierViewMode === 'matrix' && styles.tierViewToggleBtnActive]}
-                      onPress={() => setTierViewMode('matrix')}
-                      testID="tier-view-toggle-matrix"
-                      accessibilityRole="button"
-                      accessibilityLabel="Switch to table matrix view"
-                    >
-                      <Text style={[styles.tierViewToggleText, tierViewMode === 'matrix' && styles.tierViewToggleTextActive]}>
-                        📊 Matrix
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.tierViewToggleBtn, tierViewMode === 'cards' && styles.tierViewToggleBtnActive]}
-                      onPress={() => setTierViewMode('cards')}
-                      testID="tier-view-toggle-cards"
-                      accessibilityRole="button"
-                      accessibilityLabel="Switch to cards view"
-                    >
-                      <Text style={[styles.tierViewToggleText, tierViewMode === 'cards' && styles.tierViewToggleTextActive]}>
-                        🗂️ Cards
-                      </Text>
-                    </Pressable>
-                  </View>
                 </View>
 
                 {/* Quick actions presets toolbar */}
@@ -1725,594 +1900,792 @@ export function ExpenseFormModal({
                   ) : null}
                 </View>
 
-                {tierViewMode === 'matrix' ? (
-                  /* SPREADSHEET MATRIX VIEW: Compact ~220px high table fitting everyone without scrolling */
-                  <View style={styles.tierMatrixCard}>
-                    {tiers.length > 3 ? (
-                      <View style={styles.matrixScrollHintRow}>
-                        <Ionicons name="swap-horizontal" size={12} color={t.color.primaryFg} />
-                        <Text style={styles.matrixScrollHintText}>
-                          Swipe table horizontally to see all {tiers.length} tiers & totals
-                        </Text>
-                      </View>
-                    ) : null}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={tiers.length > 3}
-                      contentContainerStyle={styles.tierMatrixScrollContent}
+                {/* BALANCED CARDS VIEW: Fixed 2-column layout (no awkward stretching for odd tiers) */}
+                {allParticipants.map((p) => {
+                  const avatarColor = getAvatarColor(p.name, t);
+                  const pSubtotal = participantSubtotals[p.id] ?? 0;
+                  const hasAssignedTiers = pSubtotal > 0;
+                  return (
+                    <View
+                      key={p.id}
+                      style={[styles.participantTierCard, hasAssignedTiers && styles.participantTierCardActive]}
+                      testID={`participant-tier-card-${p.id}`}
                     >
-                      <View style={styles.tierMatrixTable}>
-                        {/* Table Header */}
-                        <View style={styles.tierMatrixHeaderRow}>
-                          <View style={styles.tierMatrixParticipantCol}>
-                            <Text style={styles.tierMatrixColHeaderText}>MEMBER</Text>
+                      <View style={styles.participantHeaderRow}>
+                        <View style={styles.participantLeftGroup}>
+                          <View style={[styles.avatarBubbleMini, { backgroundColor: avatarColor }]}>
+                            <Text style={styles.avatarBubbleMiniText}>{p.name.charAt(0).toUpperCase()}</Text>
                           </View>
-                          {tiers.map((t, tIdx) => (
-                            <View
-                              key={tIdx}
-                              style={[
-                                styles.tierMatrixTierCol,
-                                tiers.length === 3 && styles.tierMatrixTierColThree,
-                                tiers.length > 3 && styles.tierMatrixTierColMany,
-                              ]}
-                            >
-                              <Text style={styles.tierMatrixColHeaderText} numberOfLines={1}>
-                                {t.name || `Tier ${tIdx + 1}`}
-                              </Text>
-                              <Text style={styles.tierMatrixColHeaderPrice}>
-                                ${(t.priceCents / 100).toFixed(0)}
-                              </Text>
+                          <Text style={styles.participantName}>
+                            {p.name} {p.id === payerId ? '(Payer)' : ''}
+                          </Text>
+                          {p.isGuest ? (
+                            <View style={styles.guestPill}>
+                              <Text style={styles.guestPillText}>Guest</Text>
                             </View>
-                          ))}
-                          <View style={styles.tierMatrixSubtotalCol}>
-                            <Text style={styles.tierMatrixColHeaderText}>TOTAL</Text>
-                          </View>
+                          ) : null}
                         </View>
-
-                        {/* Table Participant Rows */}
-                        {allParticipants.map((p, pIdx) => {
-                          const avatarColor = getAvatarColor(p.name, t);
-                          const pSubtotal = participantSubtotals[p.id] ?? 0;
-                          const hasAssignedTiers = pSubtotal > 0;
+                        <View style={[styles.participantSubtotalPill, hasAssignedTiers && styles.participantSubtotalPillActive]}>
+                          <Text
+                            style={[styles.participantSubtotalText, hasAssignedTiers && styles.participantSubtotalTextActive]}
+                            testID={`participant-tier-subtotal-${p.id}`}
+                          >
+                            Subtotal: ${(pSubtotal / 100).toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.tierCountGrid}>
+                        {tiers.map((tier, tIdx) => {
+                          const count = tierCounts[String(tIdx)]?.[p.id] ?? 0;
+                          const isTierActive = count > 0;
                           return (
                             <View
-                              key={p.id}
-                              style={[
-                                styles.tierMatrixRow,
-                                pIdx === allParticipants.length - 1 && styles.tierMatrixRowLast,
-                                hasAssignedTiers && styles.tierMatrixRowActive,
-                              ]}
-                              testID={`participant-tier-card-${p.id}`}
+                              key={tIdx}
+                              style={[styles.tierCountPillCard, isTierActive && styles.tierCountPillCardActive]}
+                              testID={`tier-count-pill-${tIdx}-${p.id}`}
                             >
-                              <View style={styles.tierMatrixParticipantCol}>
-                                <View style={styles.tierMatrixParticipantInfo}>
-                                  <View style={[styles.avatarBubbleMini, { backgroundColor: avatarColor }]}>
-                                    <Text style={styles.avatarBubbleMiniText}>{p.name.charAt(0).toUpperCase()}</Text>
-                                  </View>
-                                  <View style={styles.tierMatrixNameGroup}>
-                                    <Text style={styles.tierMatrixParticipantName} numberOfLines={1}>
-                                      {p.name}
-                                    </Text>
-                                    {p.id === payerId ? (
-                                      <Text style={styles.payerSubtext}>Payer</Text>
-                                    ) : p.isGuest ? (
-                                      <Text style={styles.guestSubtext}>Guest</Text>
-                                    ) : null}
-                                  </View>
-                                </View>
-                              </View>
-
-                              {tiers.map((tier, tIdx) => {
-                                const count = tierCounts[String(tIdx)]?.[p.id] ?? 0;
-                                const isCellActive = count > 0;
-                                return (
-                                  <View
-                                    key={tIdx}
-                                    style={[
-                                      styles.tierMatrixTierCol,
-                                      tiers.length === 3 && styles.tierMatrixTierColThree,
-                                      tiers.length > 3 && styles.tierMatrixTierColMany,
-                                    ]}
-                                  >
-                                    <View
-                                      style={[styles.matrixStepperPill, isCellActive && styles.matrixStepperPillActive]}
-                                      testID={`tier-matrix-pill-${tIdx}-${p.id}`}
-                                    >
-                                      <Pressable
-                                        style={styles.matrixStepperBtn}
-                                        onPress={() => {
-                                          const next = Math.max(0, count - 1);
-                                          setTierCounts((prev) => ({
-                                            ...prev,
-                                            [String(tIdx)]: {
-                                              ...(prev[String(tIdx)] ?? {}),
-                                              [p.id]: next,
-                                            },
-                                          }));
-                                        }}
-                                        testID={`tier-count-dec-${tIdx}-${p.id}`}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Decrement ${tier.name} for ${p.name}`}
-                                      >
-                                        <Text style={styles.matrixStepperBtnText}>−</Text>
-                                      </Pressable>
-                                      <TextInput
-                                        style={[styles.matrixCountInput, isCellActive && styles.matrixCountInputActive]}
-                                        keyboardType="number-pad"
-                                        keyboardAppearance={t.scheme}
-                                        value={String(count)}
-                                        onChangeText={(v) => {
-                                          const num = parseInt(v, 10) || 0;
-                                          setTierCounts((prev) => ({
-                                            ...prev,
-                                            [String(tIdx)]: {
-                                              ...(prev[String(tIdx)] ?? {}),
-                                              [p.id]: num,
-                                            },
-                                          }));
-                                        }}
-                                        testID={`tier-count-${tIdx}-${p.id}`}
-                                      />
-                                      <Pressable
-                                        style={styles.matrixStepperBtn}
-                                        onPress={() => {
-                                          const next = count + 1;
-                                          setTierCounts((prev) => ({
-                                            ...prev,
-                                            [String(tIdx)]: {
-                                              ...(prev[String(tIdx)] ?? {}),
-                                              [p.id]: next,
-                                            },
-                                          }));
-                                        }}
-                                        testID={`tier-count-inc-${tIdx}-${p.id}`}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Increment ${tier.name} for ${p.name}`}
-                                      >
-                                        <Text style={styles.matrixStepperBtnText}>+</Text>
-                                      </Pressable>
-                                    </View>
-                                  </View>
-                                );
-                              })}
-
-                              <View style={styles.tierMatrixSubtotalCol}>
-                                <Text
-                                  style={[styles.matrixSubtotalText, hasAssignedTiers && styles.matrixSubtotalTextActive]}
-                                  testID={`participant-tier-subtotal-${p.id}`}
-                                  numberOfLines={2}
+                              <Text style={styles.tierCountPillName} numberOfLines={1}>
+                                {tier.name} <Text style={styles.tierCountPillPrice}>(${Math.round(tier.priceCents / 100)})</Text>
+                              </Text>
+                              <View style={styles.stepperPill}>
+                                <Pressable
+                                  style={styles.stepperBtn}
+                                  onPress={() => {
+                                    const next = Math.max(0, count - 1);
+                                    setTierCounts((prev) => ({
+                                      ...prev,
+                                      [String(tIdx)]: {
+                                        ...(prev[String(tIdx)] ?? {}),
+                                        [p.id]: next,
+                                      },
+                                    }));
+                                  }}
+                                  testID={`tier-count-dec-${tIdx}-${p.id}`}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Decrement ${tier.name} for ${p.name}`}
                                 >
-                                  Subtotal:{'\n'}${(pSubtotal / 100).toFixed(2)}
-                                </Text>
+                                  <Text style={styles.stepperBtnText}>-</Text>
+                                </Pressable>
+                                <TextInput
+                                  style={styles.tierCountInput}
+                                  keyboardType="number-pad"
+                                  keyboardAppearance={t.scheme}
+                                  value={String(count)}
+                                  onChangeText={(v) => {
+                                    const num = parseInt(v, 10) || 0;
+                                    setTierCounts((prev) => ({
+                                      ...prev,
+                                      [String(tIdx)]: {
+                                        ...(prev[String(tIdx)] ?? {}),
+                                        [p.id]: num,
+                                      },
+                                    }));
+                                  }}
+                                  testID={`tier-count-${tIdx}-${p.id}`}
+                                />
+                                <Pressable
+                                  style={styles.stepperBtn}
+                                  onPress={() => {
+                                    const next = count + 1;
+                                    setTierCounts((prev) => ({
+                                      ...prev,
+                                      [String(tIdx)]: {
+                                        ...(prev[String(tIdx)] ?? {}),
+                                        [p.id]: next,
+                                      },
+                                    }));
+                                  }}
+                                  testID={`tier-count-inc-${tIdx}-${p.id}`}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Increment ${tier.name} for ${p.name}`}
+                                >
+                                  <Text style={styles.stepperBtnText}>+</Text>
+                                </Pressable>
                               </View>
                             </View>
                           );
                         })}
                       </View>
-                    </ScrollView>
-                  </View>
-                ) : (
-                  /* BALANCED CARDS VIEW: Fixed 2-column layout (no awkward stretching for odd tiers) */
-                  allParticipants.map((p) => {
-                    const avatarColor = getAvatarColor(p.name, t);
-                    const pSubtotal = participantSubtotals[p.id] ?? 0;
-                    const hasAssignedTiers = pSubtotal > 0;
-                    return (
-                      <View
-                        key={p.id}
-                        style={[styles.participantTierCard, hasAssignedTiers && styles.participantTierCardActive]}
-                        testID={`participant-tier-card-${p.id}`}
-                      >
-                        <View style={styles.participantHeaderRow}>
-                          <View style={styles.participantLeftGroup}>
-                            <View style={[styles.avatarBubbleMini, { backgroundColor: avatarColor }]}>
-                              <Text style={styles.avatarBubbleMiniText}>{p.name.charAt(0).toUpperCase()}</Text>
-                            </View>
-                            <Text style={styles.participantName}>
-                              {p.name} {p.id === payerId ? '(Payer)' : ''}
-                            </Text>
-                            {p.isGuest ? (
-                              <View style={styles.guestPill}>
-                                <Text style={styles.guestPillText}>Guest</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                          <View style={[styles.participantSubtotalPill, hasAssignedTiers && styles.participantSubtotalPillActive]}>
-                            <Text
-                              style={[styles.participantSubtotalText, hasAssignedTiers && styles.participantSubtotalTextActive]}
-                              testID={`participant-tier-subtotal-${p.id}`}
-                            >
-                              Subtotal: ${(pSubtotal / 100).toFixed(2)}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.tierCountGrid}>
-                          {tiers.map((tier, tIdx) => {
-                            const count = tierCounts[String(tIdx)]?.[p.id] ?? 0;
-                            const isTierActive = count > 0;
-                            return (
-                              <View
-                                key={tIdx}
-                                style={[styles.tierCountPillCard, isTierActive && styles.tierCountPillCardActive]}
-                                testID={`tier-count-pill-${tIdx}-${p.id}`}
-                              >
-                                <Text style={styles.tierCountPillName} numberOfLines={1}>
-                                  {tier.name} <Text style={styles.tierCountPillPrice}>(${Math.round(tier.priceCents / 100)})</Text>
-                                </Text>
-                                <View style={styles.stepperPill}>
-                                  <Pressable
-                                    style={styles.stepperBtn}
-                                    onPress={() => {
-                                      const next = Math.max(0, count - 1);
-                                      setTierCounts((prev) => ({
-                                        ...prev,
-                                        [String(tIdx)]: {
-                                          ...(prev[String(tIdx)] ?? {}),
-                                          [p.id]: next,
-                                        },
-                                      }));
-                                    }}
-                                    testID={`tier-count-dec-${tIdx}-${p.id}`}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Decrement ${tier.name} for ${p.name}`}
-                                  >
-                                    <Text style={styles.stepperBtnText}>-</Text>
-                                  </Pressable>
-                                  <TextInput
-                                    style={styles.tierCountInput}
-                                    keyboardType="number-pad"
-                                    keyboardAppearance={t.scheme}
-                                    value={String(count)}
-                                    onChangeText={(v) => {
-                                      const num = parseInt(v, 10) || 0;
-                                      setTierCounts((prev) => ({
-                                        ...prev,
-                                        [String(tIdx)]: {
-                                          ...(prev[String(tIdx)] ?? {}),
-                                          [p.id]: num,
-                                        },
-                                      }));
-                                    }}
-                                    testID={`tier-count-${tIdx}-${p.id}`}
-                                  />
-                                  <Pressable
-                                    style={styles.stepperBtn}
-                                    onPress={() => {
-                                      const next = count + 1;
-                                      setTierCounts((prev) => ({
-                                        ...prev,
-                                        [String(tIdx)]: {
-                                          ...(prev[String(tIdx)] ?? {}),
-                                          [p.id]: next,
-                                        },
-                                      }));
-                                    }}
-                                    testID={`tier-count-inc-${tIdx}-${p.id}`}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Increment ${tier.name} for ${p.name}`}
-                                  >
-                                    <Text style={styles.stepperBtnText}>+</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
+                    </View>
+                  );
+                })}
               </View>
             ) : null}
 
             {/* ITEMIZED MODE */}
             {splitMode === 'itemized' ? (
               <View style={styles.modeSection}>
+                <View style={styles.derivedAmountCard} testID="derived-amount-box">
+                  <View style={styles.heroAmountCardHeader}>
+                    <Text style={styles.heroAmountCardLabel} numberOfLines={1}>CALCULATED TOTAL</Text>
+                    <View style={styles.derivedAutoBadge}>
+                      <Ionicons name="receipt-outline" size={12} color={t.color.primaryFg} />
+                      <Text style={styles.derivedAutoBadgeText}>Auto-Calculated</Text>
+                    </View>
+                  </View>
+                  <View style={styles.heroAmountRow}>
+                    <View style={styles.heroAmountInputWrap}>
+                      <Text style={styles.heroAmountDisplay} testID="derived-amount-value">
+                        ${(parsedAmountCents / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
                 <View style={styles.itemizedScanBar}>
-                  <Text style={styles.itemizedScanBarText}>Receipt actions:</Text>
-                  <Pressable
-                    style={styles.itemizedScanBtn}
-                    onPress={() => handleStartReceiptScan('camera')}
-                    testID="scan-receipt-button"
-                  >
-                    <Ionicons name="camera-outline" size={13} color={t.color.primaryFg} />
-                    <Text style={styles.itemizedScanBtnText}>Camera</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.itemizedScanBtn}
-                    onPress={() => handleStartReceiptScan('library')}
-                    testID="pick-receipt-library-button"
-                  >
-                    <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
-                    <Text style={styles.itemizedScanBtnText}>Choose Photo</Text>
-                  </Pressable>
-                  {hasCachedMenuItems && (
+                  <View style={styles.scanBarLeft}>
+                    <Ionicons name="receipt-outline" size={14} color={t.color.primaryFg} />
+                    <Text style={styles.itemizedScanBarText}>Scan paper receipt:</Text>
+                  </View>
+                  <View style={styles.scanBarButtons}>
                     <Pressable
                       style={styles.itemizedScanBtn}
-                      onPress={() => setShowMenuItemPicker(true)}
-                      testID="pick-from-menu-button"
+                      onPress={() => handleStartReceiptScan('camera')}
+                      testID="scan-receipt-button"
                       accessibilityRole="button"
-                      accessibilityLabel="Pick from menu"
+                      accessibilityLabel="Scan receipt with camera"
                     >
-                      <Ionicons name="restaurant-outline" size={13} color={t.color.primaryFg} />
-                      <Text style={styles.itemizedScanBtnText}>Pick from menu</Text>
+                      <Ionicons name="camera-outline" size={13} color={t.color.primaryFg} />
+                      <Text style={styles.itemizedScanBtnText}>Camera</Text>
                     </Pressable>
-                  )}
+                    <Pressable
+                      style={styles.itemizedScanBtn}
+                      onPress={() => handleStartReceiptScan('library')}
+                      testID="pick-receipt-library-button"
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose receipt photo"
+                    >
+                      <Ionicons name="images-outline" size={13} color={t.color.primaryFg} />
+                      <Text style={styles.itemizedScanBtnText}>Photo</Text>
+                    </Pressable>
+                  </View>
                 </View>
 
                 <View style={styles.itemizedHeaderRow}>
                   <SectionLabel style={styles.fieldLabel}>RECEIPT ITEMS ({items.length})</SectionLabel>
-                  <Pressable
-                    style={styles.addItemHeaderBtn}
-                    onPress={() =>
-                      setItems((prev) => [
-                        ...prev,
-                        {
-                          name: '',
-                          priceCents: 0,
-                          isAlcohol: false,
-                          assigneeIds: allParticipants.map((p) => p.id),
-                        },
-                      ])
-                    }
-                  >
-                    <Text style={styles.addItemHeaderBtnText}>+ Add Item</Text>
-                  </Pressable>
+                  {items.length > 0 && (
+                    hasCachedMenuItems ? (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <Pressable
+                          style={styles.addItemHeaderBtn}
+                          onPress={() => setShowMenuItemPicker(true)}
+                          testID="itemized-header-menu-btn"
+                          accessibilityRole="button"
+                          accessibilityLabel="Open menu picker"
+                        >
+                          <Ionicons name="restaurant-outline" size={12} color={t.color.primaryFg} />
+                          <Text style={styles.addItemHeaderBtnText}>From Menu</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.addItemHeaderBtn}
+                          onPress={addBlankItem}
+                          testID="itemized-header-custom-btn"
+                          accessibilityRole="button"
+                          accessibilityLabel="Add custom item"
+                        >
+                          <Ionicons name="add" size={12} color={t.color.primaryFg} />
+                          <Text style={styles.addItemHeaderBtnText}>Custom</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={styles.addItemHeaderBtn}
+                        onPress={addBlankItem}
+                        testID="itemized-header-add-btn"
+                        accessibilityRole="button"
+                        accessibilityLabel="Add item"
+                      >
+                        <Text style={styles.addItemHeaderBtnText}>+ Add Item</Text>
+                      </Pressable>
+                    )
+                  )}
                 </View>
 
-                {items.map((it, idx) => (
-                  <Card key={idx} style={styles.itemCard} testID={`item-card-${idx}`}>
-                    <View style={styles.itemHeader}>
-                      <TextInput
-                        style={[styles.input, styles.itemNameInput]}
-                        placeholder="Item name (e.g. Burger)"
+                {items.length === 0 ? (
+                  hasCachedMenuItems ? (
+                    <View style={styles.emptyItemsPromptCard} testID="itemized-empty-prompt">
+                      <View style={styles.emptyItemsPromptHeader}>
+                        <View style={styles.emptyItemsIconCircle}>
+                          <Ionicons name="restaurant" size={20} color={t.color.primaryFg} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.emptyItemsPromptTitle}>
+                            {effectiveRestaurantName} Menu Available
+                          </Text>
+                          <Text style={styles.emptyItemsPromptSub}>
+                            Pick items directly from the official menu, or add custom items manually.
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.emptyItemsBtnRow}>
+                        <Pressable
+                          style={styles.emptyItemsMenuBtn}
+                          onPress={() => setShowMenuItemPicker(true)}
+                          testID="pick-from-menu-button"
+                          accessibilityRole="button"
+                          accessibilityLabel="Pick from menu"
+                        >
+                          <Ionicons name="restaurant" size={14} color={t.color.textOnPrimary} />
+                          <Text style={styles.emptyItemsMenuBtnText}>Pick from Menu</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.emptyItemsCustomBtn}
+                          onPress={addBlankItem}
+                          testID="add-item-btn"
+                          accessibilityRole="button"
+                          accessibilityLabel="Add custom item"
+                        >
+                          <Ionicons name="add" size={15} color={t.color.primaryFg} />
+                          <Text style={styles.emptyItemsCustomBtnText}>Custom Item</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : category === 'dining' && !experienceId ? (
+                    <View style={styles.emptyItemsPromptCard}>
+                      <View style={styles.emptyItemsPromptHeader}>
+                        <View style={styles.emptyItemsIconCircle}>
+                          <Ionicons name="restaurant-outline" size={18} color={t.color.primaryFg} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.emptyItemsPromptTitle}>Dining at Disney?</Text>
+                          <Text style={styles.emptyItemsPromptSub}>
+                            Link a restaurant to load its menu items and prices automatically.
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.emptyItemsBtnRow}>
+                        <Pressable
+                          style={styles.emptyItemsLinkBtn}
+                          onPress={() => setShowExpPicker(true)}
+                          testID="itemized-link-dining-prompt-btn"
+                          accessibilityRole="button"
+                          accessibilityLabel="Link Disney Dining"
+                        >
+                          <Ionicons name="link-outline" size={14} color={t.color.primaryFg} />
+                          <Text style={styles.emptyItemsLinkBtnText}>Link Disney Dining</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.emptyItemsCustomBtn}
+                          onPress={addBlankItem}
+                          testID="add-item-btn"
+                          accessibilityRole="button"
+                          accessibilityLabel="Add custom item"
+                        >
+                          <Ionicons name="add" size={15} color={t.color.primaryFg} />
+                          <Text style={styles.emptyItemsCustomBtnText}>Custom Item</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <SecondaryButton
+                      label="+ Add Item"
+                      onPress={addBlankItem}
+                      testID="add-item-btn"
+                    />
+                  )
+                ) : (
+                  <>
+                    {items.map((it, idx) => (
+                      <Card key={idx} style={styles.itemCard} testID={`item-card-${idx}`}>
+                        <View style={styles.itemHeader}>
+                          <TextInput
+                            style={[styles.input, styles.itemNameInput]}
+                            placeholder="Item name (e.g. Burger)"
+                            placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                            keyboardAppearance={t.scheme}
+                            value={it.name}
+                            onChangeText={(v) => {
+                              const copy = [...items];
+                              copy[idx]!.name = v;
+                              setItems(copy);
+                            }}
+                            testID={`item-name-${idx}`}
+                          />
+                          <View style={styles.itemPriceWrap}>
+                            <Text style={styles.itemPricePrefix}>$</Text>
+                            <CurrencyInputField
+                              style={[styles.input, styles.itemPriceInput]}
+                              placeholder="0.00"
+                              placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                              keyboardAppearance={t.scheme}
+                              cents={it.priceCents}
+                              onChangeCents={(cents) => {
+                                const copy = [...items];
+                                copy[idx]!.priceCents = cents;
+                                setItems(copy);
+                              }}
+                              testID={`item-price-${idx}`}
+                              accessibilityLabel={`Price for item ${idx + 1}`}
+                            />
+                          </View>
+                          <Pressable
+                            style={styles.iconBtn}
+                            onPress={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove item ${idx + 1}`}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={t.color.danger} />
+                          </Pressable>
+                        </View>
+
+                        {/* Alcohol Toggle */}
+                        <View style={styles.alcoholRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.alcoholIcon}>🍸</Text>
+                            <Text style={styles.alcoholLabel}>Alcoholic Drink</Text>
+                          </View>
+                          <Switch
+                            key={t.scheme}
+                            value={it.isAlcohol}
+                            onValueChange={(val) => {
+                              const copy = [...items];
+                              copy[idx]!.isAlcohol = val;
+                              setItems(copy);
+                            }}
+                            testID={`item-alcohol-toggle-${idx}`}
+                            {...themedSwitchProps(t, it.isAlcohol, {
+                              trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
+                              thumbColor: it.isAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
+                            })}
+                          />
+                        </View>
+
+                        {/* Assignees */}
+                        <View style={styles.assigneesWrap}>
+                          <View style={styles.assigneesHeader}>
+                            <Text style={styles.assigneeTitle}>Assignees:</Text>
+                            <Pressable
+                              onPress={() => {
+                                const copy = [...items];
+                                copy[idx]!.assigneeIds = allParticipants.map((p) => p.id);
+                                setItems(copy);
+                              }}
+                              testID={`item-everyone-btn-${idx}`}
+                              style={styles.everyoneBtn}
+                            >
+                              <Text style={styles.everyoneBtnText}>Everyone</Text>
+                            </Pressable>
+                          </View>
+                          <View style={styles.assigneeChips}>
+                            {allParticipants.map((p) => {
+                              const isAssigned = it.assigneeIds.includes(p.id);
+                              const avatarColor = getAvatarColor(p.name, t);
+                              return (
+                                <Pressable
+                                  key={p.id}
+                                  style={[
+                                    styles.assigneeChip,
+                                    isAssigned && styles.assigneeChipSelected,
+                                  ]}
+                                  onPress={() => {
+                                    const copy = [...items];
+                                    const cur = copy[idx]!.assigneeIds;
+                                    copy[idx]!.assigneeIds = isAssigned
+                                      ? cur.filter((id) => id !== p.id)
+                                      : [...cur, p.id];
+                                    setItems(copy);
+                                  }}
+                                  testID={`item-assignee-${idx}-${p.id}`}
+                                >
+                                  <View style={[
+                                    styles.assigneeMiniAvatar,
+                                    { backgroundColor: isAssigned ? t.color.surface : avatarColor },
+                                  ]}>
+                                    <Text style={[
+                                      styles.assigneeMiniAvatarText,
+                                      { color: isAssigned ? pal.assigneeInitialSelected : t.color.textOnPrimary },
+                                    ]}>
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </Text>
+                                  </View>
+                                  <Text
+                                    style={[
+                                      styles.assigneeChipText,
+                                      isAssigned && styles.assigneeChipTextSelected,
+                                    ]}
+                                  >
+                                    {p.name}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      </Card>
+                    ))}
+
+                    <View style={styles.itemAddRow}>
+                      {hasCachedMenuItems && (
+                        <Pressable
+                          style={styles.itemAddMenuBtn}
+                          onPress={() => setShowMenuItemPicker(true)}
+                          testID="pick-from-menu-button"
+                          accessibilityRole="button"
+                          accessibilityLabel="Pick from menu"
+                        >
+                          <Ionicons name="restaurant" size={14} color={t.color.primaryFg} />
+                          <Text style={styles.itemAddMenuBtnText}>+ From Menu</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={[styles.itemAddCustomBtn, !hasCachedMenuItems && { flex: 1 }]}
+                        onPress={addBlankItem}
+                        testID="add-item-btn"
+                        accessibilityRole="button"
+                        accessibilityLabel="Add custom item"
+                      >
+                        <Ionicons name="add" size={15} color={t.color.primaryFg} />
+                        <Text style={styles.itemAddCustomBtnText}>
+                          {hasCachedMenuItems ? '+ Custom Item' : '+ Add Item'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+
+                {/* Charge Lines */}
+                <SectionLabel style={styles.fieldLabel}>TAX, GRATUITY & CHARGES</SectionLabel>
+                {chargeLines.map((cl, idx) => {
+                  if (cl.kind === 'discount') {
+                    const isPctMode = cl.rateMode === 'pct';
+                    const activePct = cl.percentage;
+                    const isCustomPct =
+                      isPctMode && (cl.customPctText !== undefined || (activePct !== 10 && activePct !== 20));
+                    const eligibleSubtotal = cl.excludeAlcohol ? nonAlcoholSubtotalCents : itemsSubtotalCents;
+                    const alcoholDeduction = itemsSubtotalCents - nonAlcoholSubtotalCents;
+
+                    return (
+                      <View key={idx} style={styles.discountChargeCard} testID={`charge-line-${idx}`}>
+                        <View style={styles.discountTopRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="pricetag-outline" size={13} color={t.color.primaryFg} />
+                            <Text style={styles.discountHeaderLabel}>DISCOUNT</Text>
+                          </View>
+                          <View style={styles.discountPresetGroup}>
+                            <Pressable
+                              style={[
+                                styles.discountPresetPill,
+                                isPctMode && !isCustomPct && activePct === 10 && styles.discountPresetPillActive,
+                              ]}
+                              onPress={() => {
+                                const amt = computeDiscountCents(10, items, Boolean(cl.excludeAlcohol));
+                                const copy = [...chargeLines];
+                                copy[idx] = { ...cl, rateMode: 'pct', percentage: 10, customPctText: undefined, amountCents: -amt };
+                                setChargeLines(copy);
+                              }}
+                              testID={`discount-preset-10-${idx}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="10% discount"
+                            >
+                              <Text
+                                style={[
+                                  styles.discountPresetText,
+                                  isPctMode && !isCustomPct && activePct === 10 && styles.discountPresetTextActive,
+                                ]}
+                              >
+                                10%
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.discountPresetPill,
+                                isPctMode && !isCustomPct && activePct === 20 && styles.discountPresetPillActive,
+                              ]}
+                              onPress={() => {
+                                const amt = computeDiscountCents(20, items, Boolean(cl.excludeAlcohol));
+                                const copy = [...chargeLines];
+                                copy[idx] = { ...cl, rateMode: 'pct', percentage: 20, customPctText: undefined, amountCents: -amt };
+                                setChargeLines(copy);
+                              }}
+                              testID={`discount-preset-20-${idx}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="20% discount"
+                            >
+                              <Text
+                                style={[
+                                  styles.discountPresetText,
+                                  isPctMode && !isCustomPct && activePct === 20 && styles.discountPresetTextActive,
+                                ]}
+                              >
+                                20%
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.discountPresetPill,
+                                isCustomPct && styles.discountPresetPillActive,
+                              ]}
+                              onPress={() => {
+                                const initialText =
+                                  cl.customPctText ||
+                                  (typeof activePct === 'number' && activePct !== 10 && activePct !== 20
+                                    ? String(activePct)
+                                    : '15');
+                                const parsed = parseFloat(initialText) || 0;
+                                const amt = computeDiscountCents(parsed, items, Boolean(cl.excludeAlcohol));
+                                const copy = [...chargeLines];
+                                copy[idx] = {
+                                  ...cl,
+                                  rateMode: 'pct',
+                                  percentage: parsed,
+                                  customPctText: initialText,
+                                  amountCents: -amt,
+                                };
+                                setChargeLines(copy);
+                              }}
+                              testID={`discount-mode-custom-${idx}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="Custom percentage discount"
+                            >
+                              <Text
+                                style={[
+                                  styles.discountPresetText,
+                                  isCustomPct && styles.discountPresetTextActive,
+                                ]}
+                              >
+                                Custom %
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.discountPresetPill,
+                                (!isPctMode || activePct === undefined) && styles.discountPresetPillActive,
+                              ]}
+                              onPress={() => {
+                                const copy = [...chargeLines];
+                                copy[idx] = { ...cl, rateMode: 'dollar', percentage: undefined, customPctText: undefined };
+                                setChargeLines(copy);
+                              }}
+                              testID={`discount-mode-dollar-${idx}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="Flat dollar discount"
+                            >
+                              <Text
+                                style={[
+                                  styles.discountPresetText,
+                                  (!isPctMode || activePct === undefined) && styles.discountPresetTextActive,
+                                ]}
+                              >
+                                Flat $
+                              </Text>
+                            </Pressable>
+                          </View>
+                          <Pressable
+                            style={styles.iconBtn}
+                            onPress={() => setChargeLines((prev) => prev.filter((_, i) => i !== idx))}
+                            hitSlop={8}
+                            testID={`remove-charge-${idx}`}
+                            accessibilityRole="button"
+                            accessibilityLabel="Remove discount"
+                          >
+                            <Ionicons name="trash-outline" size={16} color={t.color.danger} />
+                          </Pressable>
+                        </View>
+
+                        <View style={styles.discountInputRow}>
+                          {isCustomPct && (
+                            <View style={styles.customPctInputWrap} testID={`discount-custom-pct-wrap-${idx}`}>
+                              <TextInput
+                                style={styles.customPctInput}
+                                placeholder="15"
+                                placeholderTextColor={t.color.textSecondary}
+                                keyboardAppearance={t.scheme}
+                                keyboardType="decimal-pad"
+                                value={cl.customPctText ?? (typeof activePct === 'number' ? String(activePct) : '')}
+                                onChangeText={(text) => {
+                                  const cleaned = text.replace(/[^0-9.]/g, '');
+                                  const parsed = parseFloat(cleaned) || 0;
+                                  const amt = computeDiscountCents(parsed, items, Boolean(cl.excludeAlcohol));
+                                  const copy = [...chargeLines];
+                                  copy[idx] = {
+                                    ...cl,
+                                    rateMode: 'pct',
+                                    percentage: parsed,
+                                    customPctText: cleaned,
+                                    amountCents: -amt,
+                                  };
+                                  setChargeLines(copy);
+                                }}
+                                testID={`discount-custom-pct-input-${idx}`}
+                                accessibilityLabel="Custom discount percentage"
+                              />
+                              <Text style={styles.customPctSuffix}>%</Text>
+                            </View>
+                          )}
+                          <View style={styles.discountAmountWrap}>
+                            <Text style={styles.discountNegativePrefix}>-$</Text>
+                            <CurrencyInputField
+                              style={[styles.input, styles.discountInputField]}
+                              placeholder="0.00"
+                              placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
+                              keyboardAppearance={t.scheme}
+                              cents={Math.abs(cl.amountCents)}
+                              onChangeCents={(cents) => {
+                                const copy = [...chargeLines];
+                                copy[idx] = {
+                                  ...cl,
+                                  rateMode: 'dollar',
+                                  percentage: undefined,
+                                  customPctText: undefined,
+                                  amountCents: -Math.abs(cents),
+                                };
+                                setChargeLines(copy);
+                              }}
+                              testID={`charge-amount-${idx}`}
+                              accessibilityLabel="Discount amount in dollars"
+                            />
+                          </View>
+                          <View style={styles.alcoholExcludeWrap}>
+                            <Text style={styles.excludeText}>Exclude Alcohol</Text>
+                            <Switch
+                              key={t.scheme}
+                              value={Boolean(cl.excludeAlcohol)}
+                              onValueChange={(val) => {
+                                const amt =
+                                  cl.rateMode === 'pct' && typeof cl.percentage === 'number'
+                                    ? computeDiscountCents(cl.percentage, items, val)
+                                    : Math.abs(cl.amountCents);
+                                const copy = [...chargeLines];
+                                copy[idx] = { ...cl, excludeAlcohol: val, amountCents: -amt };
+                                setChargeLines(copy);
+                              }}
+                              testID={`discount-exclude-alcohol-${idx}`}
+                              {...themedSwitchProps(t, Boolean(cl.excludeAlcohol), {
+                                trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
+                                thumbColor: cl.excludeAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
+                              })}
+                            />
+                          </View>
+                        </View>
+
+                        <Text style={styles.discountHelperCaption}>
+                          {isPctMode && typeof activePct === 'number'
+                            ? `${activePct}% of $${(eligibleSubtotal / 100).toFixed(2)} ${
+                                cl.excludeAlcohol ? 'non-alcoholic items' : 'total items'
+                              }${
+                                cl.excludeAlcohol && hasAlcoholItems
+                                  ? ` (excludes $${(alcoholDeduction / 100).toFixed(2)} alcohol)`
+                                  : ''
+                              }`
+                            : cl.excludeAlcohol
+                            ? 'Flat discount deducted only from non-alcohol purchases'
+                            : 'Flat discount deducted across all items'}
+                        </Text>
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <View key={idx} style={styles.chargeRow} testID={`charge-line-${idx}`}>
+                      <Text style={styles.chargeKind}>{cl.kind.toUpperCase()}</Text>
+                      <CurrencyInputField
+                        style={[styles.input, styles.chargeInput]}
+                        placeholder="0.00"
                         placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
                         keyboardAppearance={t.scheme}
-                        value={it.name}
-                        onChangeText={(v) => {
-                          const copy = [...items];
-                          copy[idx]!.name = v;
-                          setItems(copy);
+                        cents={Math.abs(cl.amountCents)}
+                        onChangeCents={(cents) => {
+                          const copy = [...chargeLines];
+                          copy[idx]!.amountCents = Math.abs(cents);
+                          setChargeLines(copy);
                         }}
-                        testID={`item-name-${idx}`}
+                        testID={`charge-amount-${idx}`}
+                        accessibilityLabel={`Amount for ${cl.kind}`}
                       />
-                      <View style={styles.itemPriceWrap}>
-                        <Text style={styles.itemPricePrefix}>$</Text>
-                        <TextInput
-                          style={[styles.input, styles.itemPriceInput]}
-                          placeholder="0.00"
-                          placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
-                          keyboardAppearance={t.scheme}
-                          keyboardType="decimal-pad"
-                          value={(it.priceCents / 100).toFixed(2)}
-                          onChangeText={(v) => {
-                            const copy = [...items];
-                            copy[idx]!.priceCents = Math.round((parseFloat(v) || 0) * 100);
-                            setItems(copy);
-                          }}
-                          testID={`item-price-${idx}`}
-                        />
-                      </View>
                       <Pressable
                         style={styles.iconBtn}
-                        onPress={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
+                        onPress={() => setChargeLines((prev) => prev.filter((_, i) => i !== idx))}
                         hitSlop={8}
+                        testID={`remove-charge-${idx}`}
                         accessibilityRole="button"
-                        accessibilityLabel={`Remove item ${idx + 1}`}
+                        accessibilityLabel={`Remove ${cl.kind}`}
                       >
                         <Ionicons name="trash-outline" size={16} color={t.color.danger} />
                       </Pressable>
                     </View>
-
-                    {/* Alcohol Toggle */}
-                    <View style={styles.alcoholRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.alcoholIcon}>🍸</Text>
-                        <Text style={styles.alcoholLabel}>Alcoholic Drink</Text>
-                      </View>
-                      <Switch
-                        key={t.scheme}
-                        value={it.isAlcohol}
-                        onValueChange={(val) => {
-                          const copy = [...items];
-                          copy[idx]!.isAlcohol = val;
-                          setItems(copy);
-                        }}
-                        testID={`item-alcohol-toggle-${idx}`}
-                        {...themedSwitchProps(t, it.isAlcohol, {
-                          trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
-                          thumbColor: it.isAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
-                        })}
-                      />
-                    </View>
-
-                    {/* Assignees */}
-                    <View style={styles.assigneesWrap}>
-                      <View style={styles.assigneesHeader}>
-                        <Text style={styles.assigneeTitle}>Assignees:</Text>
-                        <Pressable
-                          onPress={() => {
-                            const copy = [...items];
-                            copy[idx]!.assigneeIds = allParticipants.map((p) => p.id);
-                            setItems(copy);
-                          }}
-                          testID={`item-everyone-btn-${idx}`}
-                          style={styles.everyoneBtn}
-                        >
-                          <Text style={styles.everyoneBtnText}>Everyone</Text>
-                        </Pressable>
-                      </View>
-                      <View style={styles.assigneeChips}>
-                        {allParticipants.map((p) => {
-                          const isAssigned = it.assigneeIds.includes(p.id);
-                          const avatarColor = getAvatarColor(p.name, t);
-                          return (
-                            <Pressable
-                              key={p.id}
-                              style={[
-                                styles.assigneeChip,
-                                isAssigned && styles.assigneeChipSelected,
-                              ]}
-                              onPress={() => {
-                                const copy = [...items];
-                                const cur = copy[idx]!.assigneeIds;
-                                copy[idx]!.assigneeIds = isAssigned
-                                  ? cur.filter((id) => id !== p.id)
-                                  : [...cur, p.id];
-                                setItems(copy);
-                              }}
-                              testID={`item-assignee-${idx}-${p.id}`}
-                            >
-                              <View style={[
-                                styles.assigneeMiniAvatar,
-                                { backgroundColor: isAssigned ? t.color.surface : avatarColor },
-                              ]}>
-                                <Text style={[
-                                  styles.assigneeMiniAvatarText,
-                                  { color: isAssigned ? pal.assigneeInitialSelected : t.color.textOnPrimary },
-                                ]}>
-                                  {p.name.charAt(0).toUpperCase()}
-                                </Text>
-                              </View>
-                              <Text
-                                style={[
-                                  styles.assigneeChipText,
-                                  isAssigned && styles.assigneeChipTextSelected,
-                                ]}
-                              >
-                                {p.name}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  </Card>
-                ))}
-
-                <SecondaryButton
-                  label="+ Add Item"
-                  onPress={() =>
-                    setItems((prev) => [
-                      ...prev,
-                      {
-                        name: '',
-                        priceCents: 0,
-                        isAlcohol: false,
-                        assigneeIds: allParticipants.map((p) => p.id),
-                      },
-                    ])
-                  }
-                  testID="add-item-btn"
-                />
-
-                {/* Charge Lines */}
-                <SectionLabel style={styles.fieldLabel}>TAX, GRATUITY & CHARGES</SectionLabel>
-                {chargeLines.map((cl, idx) => (
-                  <View key={idx} style={styles.chargeRow} testID={`charge-line-${idx}`}>
-                    <Text style={styles.chargeKind}>{cl.kind.toUpperCase()}</Text>
-                    <TextInput
-                      style={[styles.input, styles.chargeInput]}
-                      placeholder="Amount ($)"
-                      placeholderTextColor={t.scheme === 'dark' ? t.color.textSecondary : undefined}
-                      keyboardAppearance={t.scheme}
-                      keyboardType="decimal-pad"
-                      value={(cl.amountCents / 100).toFixed(2)}
-                      onChangeText={(v) => {
-                        const copy = [...chargeLines];
-                        const cents = Math.round((parseFloat(v) || 0) * 100);
-                        copy[idx]!.amountCents = cl.kind === 'discount' ? -Math.abs(cents) : Math.abs(cents);
-                        setChargeLines(copy);
-                      }}
-                      testID={`charge-amount-${idx}`}
-                    />
-                    {cl.kind === 'discount' ? (
-                      <View style={styles.alcoholExcludeWrap}>
-                        <Text style={styles.excludeText}>Exclude Alcohol</Text>
-                        <Switch
-                          key={t.scheme}
-                          value={Boolean(cl.excludeAlcohol)}
-                          onValueChange={(val) => {
-                            const copy = [...chargeLines];
-                            copy[idx]!.excludeAlcohol = val;
-                            setChargeLines(copy);
-                          }}
-                          {...themedSwitchProps(t, Boolean(cl.excludeAlcohol), {
-                            trackColor: { false: switchPal.trackOff, true: switchPal.trackOn },
-                            thumbColor: cl.excludeAlcohol ? switchPal.thumbOn : t.color.textOnPrimary,
-                          })}
-                        />
-                      </View>
-                    ) : null}
-                    <Pressable
-                      style={styles.iconBtn}
-                      onPress={() => setChargeLines((prev) => prev.filter((_, i) => i !== idx))}
-                      hitSlop={8}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={t.color.danger} />
-                    </Pressable>
-                  </View>
-                ))}
+                  );
+                })}
 
                 <View style={styles.chargeButtonsRow}>
-                  {CHARGE_LINE_KINDS.map((k: ChargeLineKind) => (
-                    <Pressable
-                      key={k}
-                      style={styles.addChargeBtn}
-                      onPress={() =>
-                        setChargeLines((prev) => [
-                          ...prev,
-                          {
-                            kind: k,
-                            amountCents: k === 'discount' ? -100 : 100,
-                            excludeAlcohol: k === 'discount',
-                          },
-                        ])
-                      }
-                      testID={`add-charge-${k}`}
-                    >
-                      <Text style={styles.addChargeBtnText}>+ {k}</Text>
-                    </Pressable>
-                  ))}
                   <Pressable
-                    style={styles.addChargeBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add estimated tax"
-                    testID="add-estimated-tax-btn"
+                    style={[styles.addChargeBtn, itemsSubtotalCents > 0 && styles.addChargeBtnSmart]}
                     onPress={() => {
-                      const subtotal = items.reduce((s, it) => s + (it.priceCents || 0), 0);
-                      const taxAmt = bpsOf(subtotal, BUDGET_DEFAULT_TAX_BPS.dining);
+                      const taxRateBps = expDetail?.park === 'animal-kingdom' ? 750 : 650;
+                      const taxAmt = itemsSubtotalCents > 0 ? bpsOf(itemsSubtotalCents, taxRateBps) : 0;
                       setChargeLines((prev) => [
                         ...prev,
-                        {
-                          kind: 'tax',
-                          amountCents: taxAmt,
-                          excludeAlcohol: false,
-                        },
+                        { kind: 'tax', amountCents: taxAmt, excludeAlcohol: false },
                       ]);
                     }}
+                    testID="add-charge-tax"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add estimated tax"
                   >
-                    <Text style={styles.addChargeBtnText}>+ Estimated Tax</Text>
+                    <Ionicons name="calculator-outline" size={12} color={t.color.primaryFg} />
+                    <Text style={styles.addChargeBtnText}>
+                      + Tax{itemsSubtotalCents > 0 ? ` (${(expDetail?.park === 'animal-kingdom' ? 7.5 : 6.5).toFixed(1)}%)` : ''}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.addChargeBtn, itemsSubtotalCents > 0 && styles.addChargeBtnSmart]}
+                    onPress={() => {
+                      const tipAmt = itemsSubtotalCents > 0 ? bpsOf(itemsSubtotalCents, BUDGET_DEFAULT_DINING_TIP_BPS) : 0;
+                      setChargeLines((prev) => [
+                        ...prev,
+                        { kind: 'gratuity', amountCents: tipAmt, excludeAlcohol: false },
+                      ]);
+                    }}
+                    testID="add-charge-gratuity"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add estimated gratuity"
+                  >
+                    <Ionicons name="heart-outline" size={12} color={t.color.primaryFg} />
+                    <Text style={styles.addChargeBtnText}>
+                      + Tip{itemsSubtotalCents > 0 ? ' (18%)' : ''}
+                    </Text>
                   </Pressable>
                   <Pressable
                     style={styles.addChargeBtn}
+                    onPress={() =>
+                      setChargeLines((prev) => [
+                        ...prev,
+                        { kind: 'fee', amountCents: 0, excludeAlcohol: false },
+                      ])
+                    }
+                    testID="add-charge-fee"
                     accessibilityRole="button"
-                    accessibilityLabel="Add estimated gratuity"
-                    testID="add-estimated-gratuity-btn"
+                    accessibilityLabel="Add fee charge"
+                  >
+                    <Text style={styles.addChargeBtnText}>+ Fee</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.addChargeBtn, itemsSubtotalCents > 0 && styles.addChargeBtnSmart]}
                     onPress={() => {
-                      const subtotal = items.reduce((s, it) => s + (it.priceCents || 0), 0);
-                      const tipAmt = bpsOf(subtotal, BUDGET_DEFAULT_DINING_TIP_BPS);
+                      const defaultPct = 20;
+                      const amt =
+                        itemsSubtotalCents > 0
+                          ? computeDiscountCents(defaultPct, items, true)
+                          : 0;
                       setChargeLines((prev) => [
                         ...prev,
                         {
-                          kind: 'gratuity',
-                          amountCents: tipAmt,
-                          excludeAlcohol: false,
+                          kind: 'discount',
+                          amountCents: -amt,
+                          excludeAlcohol: true,
+                          rateMode: itemsSubtotalCents > 0 ? 'pct' : 'dollar',
+                          percentage: itemsSubtotalCents > 0 ? defaultPct : undefined,
                         },
                       ]);
                     }}
+                    testID="add-charge-discount"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add discount charge"
                   >
-                    <Text style={styles.addChargeBtnText}>+ Estimated Gratuity</Text>
+                    <Ionicons name="pricetag-outline" size={12} color={t.color.primaryFg} />
+                    <Text style={styles.addChargeBtnText}>
+                      + Discount{itemsSubtotalCents > 0 ? ' (20%)' : ''}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -2382,6 +2755,7 @@ export function ExpenseFormModal({
                 onSelect={(exp: ExperienceDTO) => {
                   setExperienceId(exp.id);
                   setExperienceName(exp.name);
+                  setShowTierSuggestions(true);
                   if (
                     !description.trim() ||
                     exp.name.toLowerCase().includes(description.trim().toLowerCase())
@@ -2465,18 +2839,41 @@ export function ExpenseFormModal({
           visible={showMenuItemPicker}
           menus={expDetail?.menus ?? []}
           onConfirm={(selection) => {
+            const hasPickedTiers = Boolean(
+              (selection.tiers && selection.tiers.length > 0) || selection.tier
+            );
+            const hasPickedItems = Boolean(selection.items && selection.items.length > 0);
             const defaultAssignees =
               allParticipants.length > 0 ? allParticipants.map((p) => p.id) : [payerId];
             const drafts = selectionToExpenseItems(selection, defaultAssignees);
-            setItems((prev) => [
-              ...prev,
-              ...drafts.map((d) => ({
-                name: d.name,
-                priceCents: d.priceCents,
-                assigneeIds: d.assigneeIds,
-                isAlcohol: Boolean(d.isAlcohol),
-              })),
-            ]);
+
+            if (hasPickedTiers && !hasPickedItems) {
+              const activeTiers =
+                selection.tiers && selection.tiers.length > 0
+                  ? selection.tiers
+                  : selection.tier
+                    ? [selection.tier]
+                    : [];
+              setTiers(
+                activeTiers.map((t) => ({
+                  name: 'label' in t ? t.label : t.name,
+                  priceCents: t.priceCents,
+                })),
+              );
+              setSplitMode('tiered');
+              setShowTierSuggestions(false);
+            } else if (drafts.length > 0) {
+              setItems((prev) => [
+                ...prev,
+                ...drafts.map((d) => ({
+                  name: d.name,
+                  priceCents: d.priceCents,
+                  assigneeIds: d.assigneeIds,
+                  isAlcohol: Boolean(d.isAlcohol),
+                })),
+              ]);
+              setSplitMode('itemized');
+            }
             setShowMenuItemPicker(false);
           }}
           onCancel={() => setShowMenuItemPicker(false)}
@@ -2594,6 +2991,64 @@ const useStyles = makeStyles((t) => ({
     shadowRadius: 8,
     elevation: 2,
   },
+  heroAmountCard: {
+    backgroundColor: t.color.surface,
+    borderColor: t.color.border,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  heroAmountCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  heroAmountCardLabel: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: t.color.textSecondary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  heroManualEntryBadge: {
+    flexShrink: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+  },
+  heroManualEntryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  derivedAmountCard: {
+    backgroundColor: FORM[t.scheme].lavenderPanel,
+    borderColor: FORM[t.scheme].violetBorderSoft,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  derivedAutoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: FORM[t.scheme].lavenderWell,
+  },
+  derivedAutoBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
   heroAmountRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2671,6 +3126,59 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '700',
     color: t.color.primaryFg,
     flexShrink: 1,
+  },
+  heroVenueBtnWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: FORM[t.scheme].lavenderWell,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  heroLinkedMenuBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: FORM[t.scheme].lavenderWell,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+    gap: 8,
+  },
+  heroLinkedMenuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  heroLinkedMenuText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+    flexShrink: 1,
+  },
+  heroLinkedMenuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: t.color.surface,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  heroLinkedMenuBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: t.color.primaryFg,
   },
   tierHeroSummaryBadge: {
     alignItems: 'flex-end',
@@ -3341,7 +3849,47 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 6,
+  },
+  tierHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tierHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  tierHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  tierAppliedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: FORM[t.scheme].greenBadgeBg,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  tierAppliedIndicatorText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: FORM[t.scheme].greenDeepText,
+    flexShrink: 1,
   },
   addTierHeaderBtn: {
     flexDirection: 'row',
@@ -3507,36 +4055,6 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '600',
     marginTop: -4,
   },
-  tierViewToggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: FORM[t.scheme].addTierBg,
-    borderRadius: 8,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: FORM[t.scheme].violetBorderSoft,
-  },
-  tierViewToggleBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  tierViewToggleBtnActive: {
-    backgroundColor: t.color.primary,
-    shadowColor: FORM[t.scheme].violetShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  tierViewToggleText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: FORM[t.scheme].toggleIdleText,
-  },
-  tierViewToggleTextActive: {
-    color: t.color.textOnPrimary,
-    fontWeight: '700',
-  },
   tierQuickActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3569,181 +4087,6 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11,
     fontWeight: '600',
     color: FORM[t.scheme].resetText,
-  },
-  matrixScrollHintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: FORM[t.scheme].matrixHeaderBg,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: FORM[t.scheme].violetDivider,
-  },
-  matrixScrollHintText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: t.color.primaryFg,
-  },
-  tierMatrixCard: {
-    backgroundColor: t.color.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: FORM[t.scheme].violetHairline,
-    overflow: 'hidden',
-    marginBottom: 10,
-    shadowColor: FORM[t.scheme].violetShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tierMatrixScrollContent: {
-    minWidth: '100%',
-  },
-  tierMatrixTable: {
-    minWidth: '100%',
-  },
-  tierMatrixHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: FORM[t.scheme].matrixHeaderBg,
-    borderBottomWidth: 1,
-    borderBottomColor: FORM[t.scheme].violetDivider,
-    paddingVertical: 7,
-    paddingHorizontal: 6,
-  },
-  tierMatrixParticipantCol: {
-    width: 92,
-    paddingRight: 4,
-  },
-  tierMatrixTierCol: {
-    flex: 1,
-    minWidth: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  tierMatrixTierColThree: {
-    flex: 0,
-    width: 58,
-  },
-  tierMatrixTierColMany: {
-    flex: 0,
-    width: 66,
-  },
-  tierMatrixSubtotalCol: {
-    width: 68,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingLeft: 4,
-  },
-  tierMatrixColHeaderText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: t.color.primaryFg,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  tierMatrixColHeaderPrice: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: FORM[t.scheme].mutedVioletText,
-  },
-  tierMatrixRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: FORM[t.scheme].violetRowDivider,
-    backgroundColor: t.color.surface,
-  },
-  tierMatrixRowActive: {
-    backgroundColor: FORM[t.scheme].rowActiveBg,
-  },
-  tierMatrixRowLast: {
-    borderBottomWidth: 0,
-  },
-  tierMatrixParticipantInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  tierMatrixNameGroup: {
-    flex: 1,
-  },
-  tierMatrixParticipantName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: t.color.textPrimary,
-  },
-  payerSubtext: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: t.color.primaryFg,
-  },
-  guestSubtext: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: FORM[t.scheme].slate500Text,
-  },
-  matrixStepperPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: FORM[t.scheme].stepperPillBg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: FORM[t.scheme].violetHairline,
-    padding: 1,
-  },
-  matrixStepperPillActive: {
-    backgroundColor: t.color.surface,
-    borderColor: FORM[t.scheme].matrixPillActiveBorder,
-    shadowColor: FORM[t.scheme].violetShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  matrixStepperBtn: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: FORM[t.scheme].stepperBtnBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matrixStepperBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: t.color.primaryFg,
-    lineHeight: 13,
-  },
-  matrixCountInput: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: FORM[t.scheme].mutedVioletText2,
-    textAlign: 'center',
-    minWidth: 16,
-    paddingHorizontal: 1,
-    paddingVertical: 0,
-  },
-  matrixCountInputActive: {
-    color: t.color.primaryFg,
-    fontWeight: '800',
-  },
-  matrixSubtotalText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: FORM[t.scheme].slate400Text,
-    textAlign: 'right',
-    lineHeight: 13,
-  },
-  matrixSubtotalTextActive: {
-    color: t.color.primaryFg,
-    fontWeight: '800',
   },
   tierCountGrid: {
     flexDirection: 'row',
@@ -3814,11 +4157,24 @@ const useStyles = makeStyles((t) => ({
   itemizedScanBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     backgroundColor: FORM[t.scheme].lavenderPanel,
-    padding: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetHairline,
+  },
+  scanBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  scanBarButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   itemizedScanBarText: {
     fontSize: 11,
@@ -3832,12 +4188,145 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.color.surface,
     borderWidth: 1,
     borderColor: FORM[t.scheme].violetBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 12,
   },
   itemizedScanBtnText: {
     fontSize: 11,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  emptyItemsPromptCard: {
+    backgroundColor: FORM[t.scheme].lavenderPanel,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  emptyItemsPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  emptyItemsIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyItemsPromptTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  emptyItemsPromptSub: {
+    fontSize: 11.5,
+    color: t.color.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  emptyItemsBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  emptyItemsMenuBtn: {
+    flex: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: t.color.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  emptyItemsMenuBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textOnPrimary,
+  },
+  emptyItemsCustomBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: t.color.surface,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  emptyItemsCustomBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  emptyItemsLinkBtn: {
+    flex: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderWidth: 1,
+    borderColor: t.color.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  emptyItemsLinkBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  itemAddRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  itemAddMenuBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorder,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  itemAddMenuBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  itemAddCustomBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: t.color.surface,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetHairline,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  itemAddCustomBtnText: {
+    fontSize: 12.5,
     fontWeight: '700',
     color: t.color.primaryFg,
   },
@@ -4012,16 +4501,119 @@ const useStyles = makeStyles((t) => ({
   },
   chargeButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 6,
   },
+  discountChargeCard: {
+    backgroundColor: FORM[t.scheme].lavenderPanel,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].violetBorderSoft,
+    padding: 10,
+    marginBottom: 8,
+  },
+  discountTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  discountHeaderLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: FORM[t.scheme].slate700Text,
+  },
+  discountPresetGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  discountPresetPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].chipBorder,
+    backgroundColor: FORM[t.scheme].chipInactiveBg,
+  },
+  discountPresetPillActive: {
+    backgroundColor: FORM[t.scheme].chipActiveBg,
+    borderColor: FORM[t.scheme].chipActiveBg,
+  },
+  discountPresetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: FORM[t.scheme].chipInactiveText,
+  },
+  discountPresetTextActive: {
+    color: FORM[t.scheme].chipActiveText,
+  },
+  discountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  discountAmountWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  discountNegativePrefix: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+    marginRight: 4,
+  },
+  discountInputField: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  customPctInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FORM[t.scheme].greyWell,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].greyHairline,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    height: 38,
+  },
+  customPctInput: {
+    width: 32,
+    height: 36,
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+    textAlign: 'center',
+    padding: 0,
+  },
+  customPctSuffix: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.textSecondary,
+    marginLeft: 1,
+  },
+  discountHelperCaption: {
+    fontSize: 11,
+    color: FORM[t.scheme].slate500Text,
+    marginTop: 6,
+    lineHeight: 15,
+  },
   addChargeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: FORM[t.scheme].neutralWell,
     borderWidth: 1,
     borderColor: FORM[t.scheme].greyHairline,
+  },
+  addChargeBtnSmart: {
+    backgroundColor: FORM[t.scheme].lavenderWellAlt,
+    borderColor: FORM[t.scheme].violetBorder,
   },
   addChargeBtnText: {
     fontSize: 11.5,
@@ -4137,6 +4729,19 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: 6,
     marginVertical: 4,
+  },
+  helperInput: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: FORM[t.scheme].greyHairline,
+    backgroundColor: FORM[t.scheme].greyWell,
+    color: t.color.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   miniPresetChip: {
     paddingVertical: 4,

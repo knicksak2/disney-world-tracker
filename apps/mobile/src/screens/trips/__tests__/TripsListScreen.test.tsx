@@ -81,6 +81,8 @@ const ACTIVE_TRIP: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 function makeQueryClient(): QueryClient {
@@ -286,6 +288,28 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
     });
   });
 
+  // Feature: dining-plan-calculator, task 11.4 (Requirement 20.1): the standalone calculator needs no Trip.
+  test.each([
+    ['with no trips', [] as unknown[]],
+    ['with trips', [{ status: 'active', trips: [ACTIVE_TRIP] }]],
+  ])('R20.1: the Dining Plan calculator entry opens the standalone calculator %s', async (_label, trips) => {
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me/trips') return trips as never;
+      return [] as never;
+    });
+
+    renderTripsStack();
+
+    const entry = await screen.findByTestId('trips-dining-calculator');
+    expect(entry.props.accessibilityLabel).toBe('Dining Plan calculator: is a dining plan worth it, without making a trip');
+    fireEvent.press(entry);
+
+    expect(await screen.findByTestId('dining-calc-not-saved')).toBeTruthy();
+    expect(screen.getByText('Your entries are not saved. They stay on this screen only and are not added to any trip.')).toBeTruthy();
+    // Opening the calculator calls nothing: there is nothing to load and no dates yet.
+    expect(apiRequestMock.mock.calls.some(([m, p]) => m === 'POST' && p === '/dining-plan/calculate')).toBe(false);
+  });
+
   test('renders countdown badge for upcoming trips and status badges for active and completed trips', async () => {
     const upcomingTrip: TripDTO = {
       id: 'trip-upcoming-1',
@@ -298,6 +322,8 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       resorts: [],
       foodLists: [],
       experienceLists: [],
+      stays: [],
+      stayWarnings: [],
     };
     const pastTrip: TripDTO = {
       id: 'trip-past-1',
@@ -310,6 +336,8 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       resorts: [],
       foodLists: [],
       experienceLists: [],
+      stays: [],
+      stayWarnings: [],
     };
 
     apiRequestMock.mockImplementation(async (_method, path) => {
@@ -360,6 +388,8 @@ describe('Trips_List_Screen (R16.6, R16.7, R16.8, R16.9)', () => {
       resorts: [],
       foodLists: [],
       experienceLists: [],
+      stays: [],
+      stayWarnings: [],
     };
 
     function mockPopulatedList(): void {

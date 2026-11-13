@@ -203,6 +203,8 @@ import { createTicketPricesRepo } from './services/ticketPrices/repo.js';
 import { createTicketPriceClient } from './services/ticketPrices/ticketPriceClient.js';
 import { createTicketPricesService } from './services/ticketPrices/refreshService.js';
 import { createTripBudgetRepo } from './services/tripBudget/repo.js';
+import { createDiningPlanServiceFromRepos } from './services/diningPlan/wiring.js';
+import { createDiningPlanAdminRepo } from './services/diningPlan/adminRepo.js';
 import { DEFAULT_MICKEYS_CONFIG } from './config.js';
 import { DefaultMickeyRepo } from './services/mickeys/repo.js';
 import { HuntService } from './services/mickeys/service.js';
@@ -1190,6 +1192,19 @@ export async function buildApp(
         ticketPrices: tpConfig,
       },
     },
+    // Feature: dining-plan-calculator (task 8). The Party comes from the Trips and Trip Expenses repos, the stays from
+    // `trip_stays`, and the Budget export writes through the same Budget repo instance the Budget routes use.
+    diningPlan: {
+      pool,
+      requireSession: sessionMiddleware,
+      service: createDiningPlanServiceFromRepos({
+        pool,
+        members: tripRepo,
+        guests: tripExpenseRepo,
+        budget: tripBudgetRepo,
+        logger: createLogger(),
+      }),
+    },
     tripBooking: {
       repo: tripBookingRepo,
       requireSession: sessionMiddleware,
@@ -1306,6 +1321,7 @@ export async function buildApp(
       basicAuth: adminBasicAuth,
       photos: adminPhotos,
       ticketPrices: adminTicketPrices,
+      diningPlan: createDiningPlanAdminRepo({ pool, logger: createLogger() }),
       mickeys: adminMickeyService,
       pool,
     },

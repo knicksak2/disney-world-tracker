@@ -98,6 +98,7 @@ import {
   tripReactionInputSchema,
   tripReactionValueSchema,
   tripPostCreateSchema,
+  tripStaysPutSchema,
   uuidSchema,
 } from '@dwt/shared';
 import type { GroupFavoritesResponseDTO, TripFeedItemDTO } from '@dwt/shared';
@@ -498,6 +499,32 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         const updatedTrip = await repo.setDayPark(id, date, body.park);
         reply.code(200);
         reply.send(updatedTrip);
+      },
+    );
+
+    // -------------------------------------------------------------------
+    // PUT /trips/:id/stays — replace the Trip's lodging Stays (trip-lodging-stays R5.2 to R5.8)
+    // -------------------------------------------------------------------
+    // Membership first, so a non-member and an unknown Trip get the identical `trip_forbidden` (R5.6); then the
+    // Organizer-only `edit_settings` action. The repo runs one transaction under the Trip row lock and writes only
+    // `trip_stays` and its `trip_resorts` projection (R5.8).
+    app.put<{ Params: { id: string } }>(
+      '/trips/:id/stays',
+      { preHandler: requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(tripIdParamsSchema, request.params);
+        const callerRole = await assertTripMember(pool, userId, id);
+        if (!can(callerRole, 'edit_settings')) {
+          throw new AppError('trip_forbidden', 'Forbidden');
+        }
+        const parsed = tripStaysPutSchema.safeParse(request.body);
+        if (!parsed.success) {
+          throw new AppError('trip_validation_failed', 'That list of stays is not valid.', {
+            field: staysIssueField(parsed.error),
+          });
+        }
+        return repo.replaceStays(id, parsed.data.stays);
       },
     );
 
@@ -1787,6 +1814,23 @@ function requireUser(request: FastifyRequest): string {
     throw new AppError('unauthorized', 'Authentication is required.');
   }
   return userId;
+}
+
+/**
+ * The `field` for a rejected `PUT /trips/:id/stays` body, in the same shape the stays repo uses
+ * (`stays`, `stays[2]`, `stays[2].resortId`), so a client reads one format whichever layer rejected the request.
+ * An unknown top-level key names that key.
+ */
+function staysIssueField(error: ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return 'stays';
+  const [head, index, ...rest] = issue.path;
+  if (head === 'stays' && typeof index === 'number') {
+    return rest.length > 0 ? `stays[${index}].${rest.map(String).join('.')}` : `stays[${index}]`;
+  }
+  if (issue.path.length > 0) return issue.path.map(String).join('.');
+  const keys = (issue as { keys?: unknown[] }).keys;
+  return Array.isArray(keys) && keys.length > 0 ? String(keys[0]) : 'stays';
 }
 
 /**

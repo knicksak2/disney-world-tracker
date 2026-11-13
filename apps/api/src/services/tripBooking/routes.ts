@@ -134,6 +134,7 @@ export function tripBookingRoutes(
           endDate: rm.trip.endDate,
           hasResortStay: rm.hasResortStay,
           settings: rm.settings,
+          stays: rm.stays,
         });
 
         const windows = annotateWindows(d, {
@@ -150,6 +151,7 @@ export function tripBookingRoutes(
           arrivalDate: d.arrival,
           muted: rm.viewerMuted,
           windows,
+          stays: d.stays ?? [],
         };
       },
     );
@@ -204,6 +206,7 @@ export function tripBookingRoutes(
           endDate: rm.trip.endDate,
           hasResortStay: rm.hasResortStay,
           settings: rm.settings,
+          stays: rm.stays,
         });
 
         const targetWindow = d.windows.find((w) => w.kind === kind && w.dropOn === dropOn);

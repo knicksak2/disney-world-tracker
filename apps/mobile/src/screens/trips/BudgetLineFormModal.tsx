@@ -47,6 +47,7 @@ import {
 } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
+import { CurrencyInputField } from '../../components/CurrencyInputField';
 import { DatePickerField } from '../../components/DatePickerField';
 import { MenuItemPicker } from '../../components/MenuItemPicker';
 import { PriceBadge } from '../../components/PriceBadge';
@@ -3549,15 +3550,14 @@ export function BudgetLineFormModal({
                       </View>
                       <View style={styles.allocInputWrap}>
                         <Text style={styles.allocCurrencyPrefix}>$</Text>
-                        <TextInput
+                        <CurrencyInputField
                           accessibilityLabel={`Allocation for ${traveler.name}`}
-                          keyboardType="decimal-pad"
                           placeholder="0.00"
                           placeholderTextColor={palette.hintText}
-                          value={currentCents > 0 ? (currentCents / 100).toFixed(2) : '0.00'}
+                          cents={currentCents}
+                          allowEmpty={false}
                           editable={isSelected}
-                          onChangeText={(t) => {
-                            const cents = parseDollarInputToCents(t) ?? 0;
+                          onChangeCents={(cents) => {
                             setAllocationAmounts((prev) => ({ ...prev, [traveler.id]: cents }));
                           }}
                           style={[

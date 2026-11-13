@@ -28,6 +28,7 @@ import { z } from 'zod';
 import type { Park, ReservationKind, TripReactionValue } from './enums.js';
 import { RESERVATION_KINDS } from './enums.js';
 import type { TripPostPhotoSlotDTO } from './dto/Photos.js';
+import type { TripStayDTO, TripStayWarningDTO } from './tripStays.js';
 import {
   ianaTzSchema,
   isoDateSchema,
@@ -817,6 +818,13 @@ export interface TripDTO {
   readonly earlyEntryEligible?: boolean | undefined;
   /** Per-date touring hours and event settings dictionary keyed by YYYY-MM-DD. */
   readonly dayTouringHours?: Record<string, DayTouringHoursDTO> | undefined;
+  /**
+   * The Trip's lodging Stays in order: scheduled Stays by check-in, then unscheduled ones (`trip-lodging-stays` R1.1,
+   * R5.1). An empty array for a Trip with none.
+   */
+  readonly stays: readonly TripStayDTO[];
+  /** Advisory findings about `stays` (gaps, undated stays, nights outside the Trip; `trip-lodging-stays` R5.7). */
+  readonly stayWarnings: readonly TripStayWarningDTO[];
 }
 
 /** One Trip_Member with their display info and role. */

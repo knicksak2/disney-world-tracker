@@ -100,6 +100,8 @@ const TRIP_FIXTURE: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 const MEMBERS_FIXTURE: TripMemberDTO[] = [
@@ -461,7 +463,6 @@ describe('TripExpensesScreen', () => {
 
     fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
     fireEvent.changeText(screen.getByTestId('expense-description-input'), 'Water Park Tickets');
-    fireEvent.changeText(screen.getByTestId('expense-amount-input'), '80.00');
 
     // Add two tiers (mode switch cleared tiers per Req 8.3)
     fireEvent.press(screen.getByTestId('add-tier-btn'));
@@ -475,6 +476,8 @@ describe('TripExpensesScreen', () => {
     // Assign 1 Adult to USER_1 and 1 Child to GUEST_1
     fireEvent.changeText(screen.getByTestId(`tier-count-0-${USER_1}`), '1');
     fireEvent.changeText(screen.getByTestId(`tier-count-1-${GUEST_1}`), '1');
+
+    expect(screen.getByTestId('derived-tier-amount-value')).toHaveTextContent('$80.00');
 
     fireEvent.press(screen.getByTestId('submit-expense-button'));
 
@@ -1224,7 +1227,7 @@ describe('TripExpensesScreen', () => {
     });
   });
 
-  it('supports switching between table matrix and cards view and quick-assigning tickets to all', async () => {
+  it('supports quick-assigning tickets to all and displaying participant tier cards', async () => {
     renderScreen();
 
     await waitFor(() => expect(screen.getByTestId('add-expense-button')).toBeTruthy());
@@ -1236,10 +1239,9 @@ describe('TripExpensesScreen', () => {
     fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('tier-view-toggle-matrix')).toBeTruthy();
-      expect(screen.getByTestId('tier-view-toggle-cards')).toBeTruthy();
       expect(screen.getByTestId('tier-quick-action-all')).toBeTruthy();
       expect(screen.getByText(/0 tickets assigned/i)).toBeTruthy();
+      expect(screen.getByTestId('participant-tier-card-user-1')).toBeTruthy();
     });
 
     // Tap quick action to assign 1 Adult ticket to all participants (3 members in fixture)
@@ -1248,13 +1250,6 @@ describe('TripExpensesScreen', () => {
     await waitFor(() => {
       expect(screen.getByText(/3 tickets assigned/i)).toBeTruthy();
       expect(screen.getByTestId('derived-tier-amount-value')).toHaveTextContent('$150.00');
-    });
-
-    // Toggle to cards view
-    fireEvent.press(screen.getByTestId('tier-view-toggle-cards'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('participant-tier-card-user-1')).toBeTruthy();
       expect(screen.getByTestId('participant-tier-subtotal-user-1')).toHaveTextContent('Subtotal: $50.00');
     });
 
@@ -1288,8 +1283,15 @@ describe('TripExpensesScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('tax-mode-dollar-btn')).toBeTruthy();
-      expect(screen.getByTestId('tax-dollar-input')).toBeTruthy();
+      expect(screen.getByTestId('tax-preset-6-5')).toBeTruthy();
       expect(screen.getByTestId('apply-tier-tax-tip-btn')).toBeTruthy();
+    });
+
+    // Switch to exact tax dollar mode
+    fireEvent.press(screen.getByTestId('tax-mode-dollar-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tax-dollar-input')).toBeTruthy();
     });
 
     // Input exact tax $10.00
@@ -1617,12 +1619,6 @@ describe('TripExpensesScreen', () => {
       await screen.findByTestId('expense-form-modal');
       fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
 
-      // Matrix view (default).
-      await waitFor(() => expect(screen.getByTestId('tier-view-toggle-matrix')).toBeTruthy());
-      expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('dark');
-
-      // Cards view.
-      fireEvent.press(screen.getByTestId('tier-view-toggle-cards'));
       await waitFor(() => expect(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).toBeTruthy());
       expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('dark');
 
@@ -1671,33 +1667,6 @@ describe('TripExpensesScreen', () => {
         ),
       );
       expect(flat(screen.getByTestId('split-mode-chip-even')).backgroundColor).toBe('transparent');
-    });
-
-    it('tier matrix: the active stepper border is distinct from the idle steppers', async () => {
-      setTestScheme('dark');
-      renderScreen();
-      fireEvent.press(await screen.findByTestId('add-expense-button'));
-      await screen.findByTestId('expense-form-modal');
-      fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
-      await waitFor(() => expect(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).toBeTruthy());
-
-      // Before any count, the pill is idle with the violet hairline.
-      expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe(
-        DARK_TONAL.violet.border,
-      );
-      fireEvent.press(screen.getByTestId(`tier-count-inc-0-${USER_1}`));
-      await waitFor(() =>
-        expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe(
-          darkTheme.color.primaryFg,
-        ),
-      );
-      const active = flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`));
-      const idle = flat(screen.getByTestId(`tier-matrix-pill-1-${USER_1}`));
-      expect(idle.borderColor).toBe(DARK_TONAL.violet.border);
-      expect(active.borderColor).not.toBe(idle.borderColor);
-      expect(
-        contrastRatio(active.borderColor as string, active.backgroundColor as string),
-      ).toBeGreaterThanOrEqual(3);
     });
 
     // Feature: dark-mode polish pass (Requirement 9.15): the alcohol Switch.
@@ -1824,9 +1793,8 @@ describe('TripExpensesScreen', () => {
       fireEvent.press(await screen.findByTestId('add-expense-button'));
       await screen.findByTestId('expense-form-modal');
       fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
-      await waitFor(() => expect(screen.getByTestId('tier-view-toggle-cards')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).toBeTruthy());
       expect(screen.getByTestId(`tier-count-0-${USER_1}`).props.keyboardAppearance).toBe('light');
-      fireEvent.press(screen.getByTestId('tier-view-toggle-cards'));
       fireEvent.press(await screen.findByTestId(`tier-count-inc-0-${USER_1}`));
       await waitFor(() =>
         expect(flat(screen.getByTestId(`tier-count-pill-0-${USER_1}`)).borderColor).toBe('#bca5db'),
@@ -1836,12 +1804,6 @@ describe('TripExpensesScreen', () => {
       );
       // Selected split-mode chip keeps today's white fill (visual-verify pass).
       expect(flat(screen.getByTestId('split-mode-chip-tiered')).backgroundColor).toBe('#ffffff');
-      // Matrix view: the active stepper keeps today's white fill and #bca5db border.
-      fireEvent.press(screen.getByTestId('tier-view-toggle-matrix'));
-      await waitFor(() =>
-        expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).borderColor).toBe('#bca5db'),
-      );
-      expect(flat(screen.getByTestId(`tier-matrix-pill-0-${USER_1}`)).backgroundColor).toBe('#ffffff');
 
       fireEvent.press(screen.getByTestId('split-mode-chip-itemized'));
       fireEvent.press(screen.getByTestId('add-item-btn'));

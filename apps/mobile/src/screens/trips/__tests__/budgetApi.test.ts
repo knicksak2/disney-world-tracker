@@ -24,6 +24,7 @@ import {
   createBudgetLine,
   editBudgetLine,
   deleteBudgetLine,
+  linkBudgetLineExpense,
   putTravelerProfile,
   deleteTravelerProfile,
   patchBudgetSettings,
@@ -32,6 +33,7 @@ import {
   useCreateBudgetLine,
   useEditBudgetLine,
   useDeleteBudgetLine,
+  useLinkBudgetLineExpense,
   usePutTravelerProfile,
   useDeleteTravelerProfile,
   usePatchBudgetSettings,
@@ -133,6 +135,16 @@ describe('budgetApi', () => {
       await expect(deleteBudgetLine(tripId, lineId)).resolves.toBeUndefined();
       expect(mockApiRequest).toHaveBeenCalledTimes(1);
       expect(mockApiRequest).toHaveBeenCalledWith('DELETE', `/trips/${tripId}/budget/lines/${lineId}`);
+    });
+
+    it('linkBudgetLineExpense issues PUT /trips/:id/budget/lines/:lineId/link with { expenseId } and resolves void (204)', async () => {
+      mockApiRequest.mockResolvedValueOnce(null);
+
+      await expect(linkBudgetLineExpense(tripId, 'line-7', 'exp-42')).resolves.toBeUndefined();
+      expect(mockApiRequest).toHaveBeenCalledTimes(1);
+      expect(mockApiRequest).toHaveBeenCalledWith('PUT', `/trips/${tripId}/budget/lines/line-7/link`, {
+        expenseId: 'exp-42',
+      });
     });
 
     it('putTravelerProfile issues PUT /trips/:id/budget/travelers with input and returns TravelerProfileDTO (200)', async () => {
@@ -294,6 +306,23 @@ describe('budgetApi', () => {
         await result.current.mutateAsync('line-del');
       });
 
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: budgetKeys.detail(tripId) });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: budgetKeys.suggestions(tripId) });
+    });
+
+    it('useLinkBudgetLineExpense calls the link route and invalidates detail + suggestions on success', async () => {
+      const { queryClient, wrapper } = createTestWrapper();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+      mockApiRequest.mockResolvedValueOnce(null);
+
+      const { result } = renderHook(() => useLinkBudgetLineExpense(tripId), { wrapper });
+      await act(async () => {
+        await result.current.mutateAsync({ lineId: 'line-7', expenseId: 'exp-42' });
+      });
+
+      expect(mockApiRequest).toHaveBeenCalledWith('PUT', `/trips/${tripId}/budget/lines/line-7/link`, {
+        expenseId: 'exp-42',
+      });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: budgetKeys.detail(tripId) });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: budgetKeys.suggestions(tripId) });
     });

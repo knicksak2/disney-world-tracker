@@ -340,6 +340,19 @@ The following are explicitly out of scope for v1: booking or purchasing anything
 5. THE `apps/api` and `apps/mobile` packages SHALL import every contract listed in criterion 1 from `@dwt/shared` and SHALL NOT declare a local copy of any of them. THE monorepo type-check SHALL fail if either app's use of a contract does not match its `@dwt/shared` declaration.
 6. IF a request body of this feature does not satisfy its shared Zod schema, THEN THE Booking_Timeline_Service SHALL reject the request with `trip_validation_failed` and SHALL leave all stored data unchanged.
 
+### Requirement 16: Booking windows per lodging stay (added by the `trip-lodging-stays` spec)
+
+**User Story:** As a Trip_Member on a split stay, I want booking windows computed for each hotel reservation, so that I do not miss the dining window for the second hotel. This requirement is additive. The behavior is defined in `.kiro/specs/trip-lodging-stays/requirements.md` (Requirement 9); this section states only what the Booking_Timeline_Service must do.
+
+#### Acceptance Criteria
+
+1. WHEN the Trip has at least one dated Stay, THE Booking_Timeline_Service SHALL derive the Booking_Windows of each lodging segment from that segment's own lodging kind and check-in, with the segment's dates from check-in to check-out inclusive as its Stay_Dates, and SHALL merge two windows that share a Window_Key into one whose covered dates are the sorted union.
+2. WHEN the Trip has no dated Stay, THE Booking_Timeline_Service SHALL return output deeply equal to the derivation of Requirements 1 and 2, so the Booking_Timeline of such a Trip is unchanged by this requirement.
+3. WHILE the Trip has a dated Stay, THE Booking_Timeline_Service SHALL ignore the trip-level `stayType` and `checkInOverride` of Requirement 2 and SHALL still apply the trip-level `lightningLaneTiming` to every segment; THE Booking_Timeline_Screen settings SHALL then disable the two ignored controls with the note "Set per stay in Trip settings".
+4. THE BookingTimelineDTO SHALL gain, additively, a `stays` list of the segments the windows were derived from (empty when Requirement 16.2 applies), and the value `'stays'` for `stayType.source` and `arrivalDate.source` when they come from the first segment.
+5. THE Reminder_Runner SHALL use the same derivation, so a later reservation's windows produce reminders with the existing idempotent claim keys of Requirement 9, and SHALL load the Stays of all candidate Trips in one statement.
+6. THE `BOOKING_RULES_VERSION` SHALL NOT change because of this requirement.
+
 ## Configuration and Constants
 
 All values below are the defaults an implementer SHALL use. Booking_Rules values live in `@dwt/shared` as code constants because they change only with a Disney policy change and a `BOOKING_RULES_VERSION` bump; operational values are environment variables with the defaults shown.

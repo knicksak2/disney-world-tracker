@@ -54,6 +54,8 @@ function createMockTrip(overrides: Partial<TripDTO> = {}): TripDTO {
     resorts: [],
     foodLists: [],
     experienceLists: [],
+    stays: [],
+    stayWarnings: [],
     dayTouringHours: {},
     ...overrides,
   };

@@ -470,6 +470,7 @@ export default function TripBookingTimelineScreen({
           visible={isSettingsModalVisible}
           tripStart={tripStart}
           initialSettings={initialModalSettings}
+          setPerStay={timeline.stayType.source === 'stays'}
           onConfirm={handleConfirmSettings}
           onCancel={() => setIsSettingsModalVisible(false)}
         />

@@ -127,8 +127,10 @@ export function formatDropMoment(dropAt: string): string {
  * Returns source label for display in settings summary card (R6.7).
  */
 export function sourceLabel(
-  source: 'auto' | 'trip_start' | 'override',
-): 'Detected automatically' | 'Set by an Organizer' {
+  source: 'auto' | 'trip_start' | 'override' | 'stays',
+): 'Detected automatically' | 'Set by an Organizer' | "From the Trip's stays" {
+  // 'stays' (trip-lodging-stays R9.7): derived from the Trip's dated stays, so not an Organizer override here.
+  if (source === 'stays') return "From the Trip's stays";
   return source === 'override' ? 'Set by an Organizer' : 'Detected automatically';
 }
 

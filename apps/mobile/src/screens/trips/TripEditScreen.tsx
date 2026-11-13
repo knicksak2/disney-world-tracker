@@ -7,12 +7,12 @@
 //     Edit control on the Trip_Detail_View. Reads `GET /trips/:id` (sharing the
 //     detail screen's query cache) to pre-fill the form, and `GET /resorts` to
 //     populate the "where you stayed" picker.
-//   - Submitting sends `PATCH /trips/:id` with the full editable field set —
-//     name, description, start/end dates, and `resortIds`. The body is
-//     validated client-side by the shared `tripEditSchema` (identical rules to
-//     create) before the request. `resortIds` is always sent, so the recorded
-//     Resort stay is replaced wholesale with the current selection; clearing it
-//     is an empty array (R21.5).
+//   - Submitting sends `PATCH /trips/:id` with name, description and start/end
+//     dates, validated client-side by the shared `tripEditSchema` (identical
+//     rules to create). The legacy `resortIds` is no longer sent.
+//   - "Where you're staying" (trip-lodging-stays R7.4) replaces the old resort
+//     multi-select: the Stays card opens the Stay sheet, and each save or
+//     removal sends the whole list with `PUT /trips/:id/stays`.
 //   - Editing and deletion are Organizer-gated server-side (R3.8): a non-organizer / missing
 //     Trip collapses to `trip_forbidden`, surfaced as friendly copy. On save success
 //     the detail and list queries are invalidated so both reflect the edit, and
@@ -40,14 +40,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   tripEditSchema,
-  TRIP_RESORT_LIMIT,
   type ResortDTO,
   type TripDTO,
+  type TripGuestDTO,
+  type TripMemberDTO,
+  type TripStayDTO,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { DatePickerField } from '../../components/DatePickerField';
-import { ResortPicker } from '../../components/ResortPicker';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -61,6 +62,20 @@ import {
 } from '../../theme/components';
 import { tripDetailKeys } from './TripDetailScreen';
 import { tripsListKeys } from './TripsListScreen';
+import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
+import { TripStaySheet } from './TripStaySheet';
+import { TripStaysCard } from './TripStaysCard';
+import { useReplaceTripStays } from './tripStaysApi';
+import {
+  guestKey,
+  memberKey,
+  newStayDraft,
+  stayToDraft,
+  staysAfterRemove,
+  staysAfterSave,
+  type StayDraft,
+  type StayPerson,
+} from './tripStaysView';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,8 +126,23 @@ export default function TripEditScreen({
   const [draftDescription, setDraftDescription] = useState('');
   const [draftStart, setDraftStart] = useState('');
   const [draftEnd, setDraftEnd] = useState('');
-  const [draftResortIds, setDraftResortIds] = useState<readonly string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Lodging Stays (trip-lodging-stays R7.4): each sheet save or removal PUTs the whole list at once, independently of
+  // the Trip's own "Save changes". The list shown is the cached Trip's, which the mutation hook updates.
+  const membersQuery = useQuery<readonly TripMemberDTO[], ApiError>({
+    queryKey: ['trips', 'members', tripId],
+    queryFn: () => apiRequest<readonly TripMemberDTO[]>('GET', `/trips/${tripId}/members`),
+    retry: false,
+  });
+  const guestsQuery = useQuery<readonly TripGuestDTO[], ApiError>({
+    queryKey: tripExpenseKeys.guests(tripId),
+    queryFn: () => fetchTripGuests(tripId),
+    retry: false,
+  });
+  const replaceStays = useReplaceTripStays(tripId);
+  const [stayDraft, setStayDraft] = useState<StayDraft | null>(null);
+  const [staysError, setStaysError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialized && tripQuery.data !== undefined) {
@@ -121,7 +151,6 @@ export default function TripEditScreen({
       setDraftDescription(trip.description);
       setDraftStart(trip.startDate);
       setDraftEnd(trip.endDate);
-      setDraftResortIds(trip.resorts.map((resort) => resort.id));
       setInitialized(true);
     }
   }, [initialized, tripQuery.data]);
@@ -130,31 +159,17 @@ export default function TripEditScreen({
     if (formError !== null) setFormError(null);
   };
 
-  const toggleResort = (resortId: string): void => {
-    setDraftResortIds((current) => {
-      if (current.includes(resortId)) {
-        return current.filter((id) => id !== resortId);
-      }
-      if (current.length >= TRIP_RESORT_LIMIT) {
-        return current;
-      }
-      return [...current, resortId];
-    });
-    clearError();
-  };
-
   const editMutation = useMutation<TripDTO, ApiError, void>({
     mutationFn: async () => {
       // Validate client-side with the shared edit schema so the form enforces
-      // the same Trip_Name/description/date rules as the server. `resortIds` is
-      // always sent so the recorded stay is replaced with the current
-      // selection (empty clears it, R21.5).
+      // the same Trip_Name/description/date rules as the server. The legacy
+      // `resortIds` is no longer sent: lodging is edited as Stays below and
+      // saved with `PUT /trips/:id/stays` (trip-lodging-stays R7.4).
       const parsed = tripEditSchema.safeParse({
         name: draftName,
         description: draftDescription,
         startDate: draftStart.trim(),
         endDate: draftEnd.trim(),
-        resortIds: draftResortIds,
       });
       if (!parsed.success) {
         throw new ApiError({
@@ -272,6 +287,40 @@ export default function TripEditScreen({
   }
 
   const resorts = resortsQuery.data ?? [];
+  const stays = tripQuery.data?.stays ?? [];
+  const people: StayPerson[] = [
+    ...(membersQuery.data ?? []).map((m) => ({ key: memberKey(m.userId), name: m.displayName })),
+    ...(guestsQuery.data ?? []).map((g) => ({ key: guestKey(g.id), name: g.name })),
+  ];
+  const tripStart = draftStart.trim() || (tripQuery.data?.startDate ?? '');
+  const tripEnd = draftEnd.trim() || (tripQuery.data?.endDate ?? '');
+
+  const saveStay = async (draft: StayDraft): Promise<void> => {
+    try {
+      await replaceStays.mutateAsync(staysAfterSave(stays, draft));
+    } catch (err) {
+      // Rethrow as plain copy; the sheet shows it and stays open (R7.4).
+      throw new Error(staysErrorMessage(err instanceof ApiError ? err : null));
+    }
+    setStaysError(null);
+    setStayDraft(null);
+  };
+
+  const removeStay = (stay: TripStayDTO): void => {
+    Alert.alert(`Remove ${stay.displayName}?`, 'This stay will be removed from the trip.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          setStaysError(null);
+          replaceStays.mutate(staysAfterRemove(stays, stay.id), {
+            onError: (err) => setStaysError(staysErrorMessage(err)),
+          });
+        },
+      },
+    ]);
+  };
 
   return (
     <ScreenContainer>
@@ -349,18 +398,25 @@ export default function TripEditScreen({
           testID="trip-edit-end"
         />
 
-        {resorts.length > 0 ? (
-          <>
-            <Text style={styles.label}>Where you stayed (optional)</Text>
-            <ResortPicker
-              resorts={resorts}
-              selectedIds={draftResortIds}
-              onToggle={toggleResort}
-              disabled={busy}
-              testIDPrefix="trip-edit"
-            />
-          </>
-        ) : null}
+        <TripStaysCard
+          mode="edit"
+          stays={stays}
+          stayWarnings={tripQuery.data?.stayWarnings ?? []}
+          people={people}
+          onAdd={() => setStayDraft(newStayDraft(stays, tripStart, tripEnd))}
+          onEdit={(stay) => setStayDraft(stayToDraft(stay))}
+          onRemove={removeStay}
+          disabled={busy || replaceStays.isPending}
+          error={staysError}
+        />
+        <TripStaySheet
+          visible={stayDraft !== null}
+          initialDraft={stayDraft}
+          resorts={resorts}
+          people={people}
+          onSave={saveStay}
+          onClose={() => setStayDraft(null)}
+        />
 
         {formError !== null ? (
           <Text
@@ -421,6 +477,20 @@ function firstIssueMessage(error: {
     return 'Please check the trip name and dates and try again.';
   }
   return first;
+}
+
+/** Map a failed Stays save to user-facing copy (the server names the problem in its message). */
+function staysErrorMessage(err: ApiError | null): string {
+  if (err === null) return 'We could not save the stays. Please try again.';
+  switch (err.code) {
+    case 'trip_forbidden':
+    case 'trip_not_found':
+      return 'This trip is no longer available, or you can no longer edit it.';
+    case 'trip_validation_failed':
+      return err.message.length > 0 ? err.message : 'Please check the stay and try again.';
+    default:
+      return 'We had trouble reaching the server. Please try again.';
+  }
 }
 
 /** Map an API/validation error to user-facing copy for the edit form. */

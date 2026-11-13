@@ -358,6 +358,7 @@ This plan adds three things to the Trip Hub: a **derived** booking timeline (Adv
 - `apps/api` runs v8 coverage with thresholds on `src/services/planning/**`; this feature does not touch that path. If the implementer wants the same protection for the new pure modules, extend the threshold globs; never weaken them.
 - Task 15.1 is intentionally last and operator-run. Task 13.2 may remain unchecked if Disney's pages cannot be confirmed; in that case say so in the final report and do not enable the Reminder_Cron.
 - Local `apps/api/.env` and `.env.dev` must gain `TRIP_BOOKING_CRON_SECRET` before running the API after task 8.1.
+- Requirement 16 (windows per lodging stay) is implemented by `.kiro/specs/trip-lodging-stays/tasks.md` task 6, not by a task in this plan.
 
 ## Task Dependency Graph
 

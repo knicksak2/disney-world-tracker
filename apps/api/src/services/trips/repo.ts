@@ -65,11 +65,14 @@ import type {
   TripReactionSummary,
   TripReactionValue,
   TripResortDTO,
+  TripStayDTO,
+  TripStayInput,
+  TripStayWarningDTO,
   TripSummaryDTO,
   RodeWithTagState,
   ReservationKind,
 } from '@dwt/shared';
-import { MEAL_WINDOWS, tripReactionValueSchema } from '@dwt/shared';
+import { MEAL_WINDOWS, computeStayWarnings, tripReactionValueSchema } from '@dwt/shared';
 import type { PoolClient } from 'pg';
 
 import type { DbPool } from '../../db/pool.js';
@@ -87,6 +90,13 @@ import {
 } from './permissions.js';
 import { assertTripMember } from './authz.js';
 import { ACTIVE_ORGANIZER_COUNT_SQL, actingRole } from './effectiveRole.js';
+import {
+  followTripDates,
+  isTripStaysAvailable,
+  replaceTripStays,
+  selectTripStaysByTrip,
+  translateLegacyResortIds,
+} from './stays.js';
 import { deriveTripSummary } from './summary.js';
 import { deriveTripStatus } from './tripStatus.js';
 import { groupTripsByStatus, type TripStatusGroup } from './tripsList.js';
@@ -404,6 +414,16 @@ export interface TripRepo {
     park: Park | null,
     now?: Date,
   ): Promise<TripDTO>;
+
+  /**
+   * Replace a Trip's lodging Stays with exactly `stays` (trip-lodging-stays R5.2, R5.3, R5.5): one transaction that
+   * locks the Trip row first, so concurrent replaces serialize. Throws `trip_validation_failed` (with `field` naming the
+   * stay) and changes nothing on any rejection; `trip_not_found` when the Trip is gone. Authorization is the caller's.
+   */
+  replaceStays(
+    tripId: string,
+    stays: readonly TripStayInput[],
+  ): Promise<{ stays: TripStayDTO[]; stayWarnings: TripStayWarningDTO[] }>;
 
   /**
    * Permanently delete a Trip. Every child entity cascades via the migration's
@@ -999,6 +1019,7 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
     editTrip: (tripId, input, now) => editTrip(ctx, tripId, input, now),
     setDayPark: (tripId, date, park, now) =>
       setDayPark(ctx, tripId, date, park, now),
+    replaceStays: (tripId, stays) => replaceStays(ctx, tripId, stays),
     deleteTrip: (tripId) => deleteTrip(ctx, tripId),
     sendInvite: (tripId, inviterId, inviteeId) =>
       sendInvite(ctx, tripId, inviterId, inviteeId),
@@ -1160,6 +1181,7 @@ function rowToDto(
   resorts: readonly TripResortDTO[],
   foodLists: readonly TripFoodListDTO[] = [],
   experienceLists: readonly TripExperienceListDTO[] = [],
+  stays: readonly TripStayDTO[] = [],
 ): TripDTO {
   const startDate = toIsoDate(row.start_date);
   const endDate = toIsoDate(row.end_date);
@@ -1179,6 +1201,8 @@ function rowToDto(
     status: deriveTripStatus(startDate, endDate, wdwToday(now)),
     createdAt: toIsoTimestamp(row.created_at),
     resorts,
+    stays,
+    stayWarnings: computeStayWarnings({ startDate, endDate }, stays),
     foodLists,
     experienceLists,
     ...(row.walking_speed !== undefined ? { walkingSpeed: row.walking_speed } : {}),
@@ -1231,6 +1255,48 @@ async function selectTripResorts(
 ): Promise<TripResortDTO[]> {
   const byTrip = await selectTripResortsByTrip(q, [tripId]);
   return byTrip.get(tripId) ?? [];
+}
+
+/**
+ * Read the lodging Stays of one or more Trips in one statement (trip-lodging-stays R5.1). Answers an empty map when the
+ * `trip_stays` table does not exist yet, which keeps suites that load a fixed migration list without `0073` working.
+ */
+async function selectStaysByTripIfAvailable(
+  ctx: TripRepoContext,
+  q: Queryable,
+  tripIds: readonly string[],
+): Promise<Map<string, TripStayDTO[]>> {
+  if (tripIds.length === 0 || !(await isTripStaysAvailable(ctx.pool))) {
+    return new Map();
+  }
+  return selectTripStaysByTrip(q, tripIds);
+}
+
+/** Read the Stays of a single Trip, defaulting to an empty array. */
+async function selectTripStays(
+  ctx: TripRepoContext,
+  q: Queryable,
+  tripId: string,
+): Promise<TripStayDTO[]> {
+  return (await selectStaysByTripIfAvailable(ctx, q, [tripId])).get(tripId) ?? [];
+}
+
+/**
+ * Apply the legacy `resortIds` field of a Trip create or edit (trip-lodging-stays R4.2). With `trip_stays` present the
+ * ids are translated into Stays and `trip_resorts` is rewritten from them; without the table this is the original
+ * wholesale `trip_resorts` replace.
+ */
+async function applyLegacyResortIds(
+  ctx: TripRepoContext,
+  client: PoolClient,
+  trip: { readonly id: string; readonly startDate: string; readonly endDate: string },
+  resortIds: readonly string[],
+): Promise<void> {
+  if (await isTripStaysAvailable(ctx.pool)) {
+    await translateLegacyResortIds(client, trip, resortIds);
+    return;
+  }
+  await replaceTripResorts(client, trip.id, resortIds);
 }
 
 /**
@@ -1797,13 +1863,20 @@ async function createTrip(
     // A newly created Trip has no prior stay, so only read the display
     // projection back when at least one Resort was actually recorded.
     let resorts: TripResortDTO[] = [];
+    let stays: TripStayDTO[] = [];
     if (input.resortIds !== undefined && input.resortIds.length > 0) {
-      await replaceTripResorts(client, row.id, input.resortIds);
+      await applyLegacyResortIds(
+        ctx,
+        client,
+        { id: row.id, startDate: toIsoDate(row.start_date), endDate: toIsoDate(row.end_date) },
+        input.resortIds,
+      );
       resorts = await selectTripResorts(client, row.id);
+      stays = await selectTripStays(ctx, client, row.id);
     }
 
     await client.query('COMMIT');
-    return rowToDto(row, now, resorts, [], []);
+    return rowToDto(row, now, resorts, [], [], stays);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -1838,9 +1911,10 @@ async function getTripForMember(
     return null;
   }
   const resorts = await selectTripResorts(ctx.pool, tripId);
+  const stays = await selectTripStays(ctx, ctx.pool, tripId);
   const foodLists = await selectTripFoodLists(ctx, tripId);
   const experienceLists = await selectTripExperienceLists(ctx, tripId);
-  return rowToDto(row, now, resorts, foodLists, experienceLists);
+  return rowToDto(row, now, resorts, foodLists, experienceLists, stays);
 }
 
 // ---------------------------------------------------------------------------
@@ -1937,15 +2011,32 @@ async function editTrip(
     // when no scalar Trip field changed; an empty array clears it (R21.1). An
     // unknown/inactive Resort id aborts the whole edit via the transaction.
     if (input.resortIds !== undefined) {
-      await replaceTripResorts(client, tripId, input.resortIds);
+      await applyLegacyResortIds(
+        ctx,
+        client,
+        { id: tripId, startDate: effectiveStart, endDate: effectiveEnd },
+        input.resortIds,
+      );
+    }
+
+    // trip-lodging-stays R4.4: a lone Stay that spans the old Trip dates follows a date edit. After the resortIds
+    // translation above, so Stays it just created (already dated like the new Trip) are not moved a second time.
+    if ((input.startDate !== undefined || input.endDate !== undefined) && (await isTripStaysAvailable(ctx.pool))) {
+      await followTripDates(
+        client,
+        tripId,
+        { startDate: toIsoDate(currentRow.start_date), endDate: toIsoDate(currentRow.end_date) },
+        { startDate: effectiveStart, endDate: effectiveEnd },
+      );
     }
 
     if (assignments.length === 0) {
       const resorts = await selectTripResorts(client, tripId);
+      const stays = await selectTripStays(ctx, client, tripId);
       const foodLists = await selectTripFoodLists(ctx, tripId);
       const experienceLists = await selectTripExperienceLists(ctx, tripId);
       await client.query('COMMIT');
-      return rowToDto(currentRow, now, resorts, foodLists, experienceLists);
+      return rowToDto(currentRow, now, resorts, foodLists, experienceLists, stays);
     }
 
     params.push(tripId);
@@ -1963,10 +2054,11 @@ async function editTrip(
     }
 
     const resorts = await selectTripResorts(client, tripId);
+    const stays = await selectTripStays(ctx, client, tripId);
     const foodLists = await selectTripFoodLists(ctx, tripId);
     const experienceLists = await selectTripExperienceLists(ctx, tripId);
     await client.query('COMMIT');
-    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists);
+    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists, stays);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -1988,6 +2080,36 @@ async function editTrip(
  * updates `day_touring_hours` and `updated_at = now()`, and returns the updated TripDTO.
  * A missing row surfaces as `trip_not_found`.
  */
+async function replaceStays(
+  ctx: TripRepoContext,
+  tripId: string,
+  input: readonly TripStayInput[],
+): Promise<{ stays: TripStayDTO[]; stayWarnings: TripStayWarningDTO[] }> {
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Lock the Trip row first so two concurrent replaces of one Trip serialize (trip-lodging-stays R5.5).
+    const locked = await client.query<{ start_date: Date | string; end_date: Date | string }>(
+      `SELECT start_date, end_date FROM trips WHERE id = $1 FOR UPDATE`,
+      [tripId],
+    );
+    const row = locked.rows[0];
+    if (!row) {
+      throw new AppError('trip_not_found', 'Trip not found.');
+    }
+    const startDate = toIsoDate(row.start_date);
+    const endDate = toIsoDate(row.end_date);
+    const stays = await replaceTripStays(client, { id: tripId, startDate, endDate }, input);
+    await client.query('COMMIT');
+    return { stays, stayWarnings: computeStayWarnings({ startDate, endDate }, stays) };
+  } catch (err) {
+    await safeRollback(client);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function setDayPark(
   ctx: TripRepoContext,
   tripId: string,
@@ -2046,10 +2168,11 @@ async function setDayPark(
     }
 
     const resorts = await selectTripResorts(client, tripId);
+    const stays = await selectTripStays(ctx, client, tripId);
     const foodLists = await selectTripFoodLists(ctx, tripId);
     const experienceLists = await selectTripExperienceLists(ctx, tripId);
     await client.query('COMMIT');
-    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists);
+    return rowToDto(updatedRow, now, resorts, foodLists, experienceLists, stays);
   } catch (err) {
     await safeRollback(client);
     throw err;
@@ -5312,6 +5435,12 @@ async function listMyTrips(
     ctx,
     result.rows.map((row) => row.id),
   );
+  // One more batched statement fans the lodging Stays out per Trip (trip-lodging-stays R5.1).
+  const staysByTrip = await selectStaysByTripIfAvailable(
+    ctx,
+    ctx.pool,
+    result.rows.map((row) => row.id),
+  );
   const trips = result.rows.map((row) =>
     rowToDto(
       row,
@@ -5319,6 +5448,7 @@ async function listMyTrips(
       resortsByTrip.get(row.id) ?? [],
       foodListsByTrip.get(row.id) ?? [],
       experienceListsByTrip.get(row.id) ?? [],
+      staysByTrip.get(row.id) ?? [],
     ),
   );
   return groupTripsByStatus(trips, wdwToday(now));

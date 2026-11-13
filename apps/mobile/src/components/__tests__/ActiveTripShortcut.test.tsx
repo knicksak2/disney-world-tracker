@@ -100,6 +100,8 @@ function activeTrip(id: string, name: string): TripDTO {
     resorts: [],
     foodLists: [],
     experienceLists: [],
+    stays: [],
+    stayWarnings: [],
   };
 }
 

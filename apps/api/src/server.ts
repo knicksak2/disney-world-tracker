@@ -98,6 +98,10 @@ import {
   type TripBudgetRoutesOptions,
 } from './services/tripBudget/routes.js';
 import {
+  diningPlanRoutes,
+  type DiningPlanRoutesOptions,
+} from './services/diningPlan/routes.js';
+import {
   tripBookingRoutes,
   type TripBookingRoutesOptions,
 } from './services/tripBooking/routes.js';
@@ -275,6 +279,11 @@ export interface BuildServerServices {
    * settings, suggestions, and quotes.
    */
   readonly tripBudget?: TripBudgetRoutesOptions;
+  /**
+   * Dining Plan calculator routes (dining-plan-calculator task 8): the Trip's dining scenario, the stateless
+   * calculator and the Budget export.
+   */
+  readonly diningPlan?: DiningPlanRoutesOptions;
   /**
    * Trip Booking Timeline routes (tasks 6-8). Wires booking timeline,
    * settings, done marks, reminder mutes, and packing list.
@@ -625,6 +634,10 @@ export function buildServer(
 
   if (services.tripBudget !== undefined) {
     void app.register(tripBudgetRoutes(services.tripBudget));
+  }
+
+  if (services.diningPlan !== undefined) {
+    void app.register(diningPlanRoutes(services.diningPlan));
   }
 
   if (services.accountDeletion !== undefined) {

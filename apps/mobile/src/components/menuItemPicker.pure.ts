@@ -10,6 +10,7 @@
  */
 
 import {
+  extractMenuPriceOffers,
   normalizeMenuName,
   normalizeTierName,
   parseMenuPriceString,
@@ -22,6 +23,24 @@ import {
 export function isAlcoholicGroupType(type?: string | null): boolean {
   if (!type) return false;
   return type.trim().toLowerCase() === 'alcoholic beverage';
+}
+
+export function isPricingAnnouncement(itemName: string, groupName?: string | null): boolean {
+  if (groupName && /pricing|prix fixe|buffet pricing/i.test(groupName)) {
+    return true;
+  }
+  const cleanItem = itemName.trim();
+  if (/\$?(\d+(?:\.\d{2})?)\s*(?:per|\/)\s*(adult|child|guest|senior|person)/i.test(cleanItem)) {
+    return true;
+  }
+  if (/(Adult|Child|Guest|Senior)\s*:\s*\$?(\d+(?:\.\d{2})?)/i.test(cleanItem)) {
+    return true;
+  }
+  return false;
+}
+
+export function isInformationalDisclaimer(itemName: string): boolean {
+  return /^(guests must speak|ask a cast member|please inform|allergy disclaimer)/i.test(itemName.trim());
 }
 
 export interface PickerItemVariant {
@@ -39,6 +58,7 @@ export interface PickerItemRow {
   readonly variants: readonly PickerItemVariant[];
   readonly defaultPriceCents: number | null;
   readonly isPriceless: boolean;
+  readonly isFeastItem: boolean;
   readonly isAlcohol: boolean;
 }
 
@@ -77,11 +97,14 @@ export function buildPickerRows(
 ): PickerSection[] {
   if (!menus || menus.length === 0) return [];
 
+  const allOffers = extractMenuPriceOffers(menus);
   const sections: PickerSection[] = [];
 
   for (let mIdx = 0; mIdx < menus.length; mIdx++) {
     const menu = menus[mIdx]!;
     const menuType = menu.menuType || 'Menu';
+    const menuOffers = allOffers.filter((o) => !o.menuType || o.menuType === menuType);
+    const menuHasBuffetOffers = menuOffers.length > 0;
 
     for (let gIdx = 0; gIdx < (menu.groups ?? []).length; gIdx++) {
       const group = menu.groups[gIdx]!;
@@ -89,12 +112,22 @@ export function buildPickerRows(
       const groupType = group.type ?? null;
       const isAlcohol = isAlcoholicGroupType(groupType);
 
+      const groupIsFeast =
+        /all-you-care-to-enjoy|feast|family-style|buffet/i.test(groupName) ||
+        (menuHasBuffetOffers &&
+          (group.items ?? []).length > 0 &&
+          (group.items ?? []).every(
+            (it) => !it.price && !it.priceCents && (!it.prices || it.prices.length === 0)
+          ));
+
       const items: PickerItemRow[] = [];
 
       for (let iIdx = 0; iIdx < (group.items ?? []).length; iIdx++) {
         const item = group.items[iIdx]!;
         const rawName = item.name;
         if (!rawName || rawName.trim().length === 0) continue;
+        if (isPricingAnnouncement(rawName, groupName)) continue;
+        if (isInformationalDisclaimer(rawName)) continue;
 
         const variants: PickerItemVariant[] = [];
 
@@ -117,6 +150,7 @@ export function buildPickerRows(
 
         const isPriceless = variants.length === 0;
         const defaultPriceCents = variants.length === 1 ? variants[0]!.cents : null;
+        const isFeastItem = isPriceless && groupIsFeast;
 
         items.push({
           id: `${mIdx}-${gIdx}-${iIdx}-${rawName}`,
@@ -128,6 +162,7 @@ export function buildPickerRows(
           variants,
           defaultPriceCents,
           isPriceless,
+          isFeastItem,
           isAlcohol,
         });
       }
@@ -239,38 +274,23 @@ export function selectionToExpenseItems(
  * Converts picker selection into MenuPriceRef for Budget line allocations.
  */
 export function selectionToBudgetPriceRef(selection: PickerSelection): MenuPriceRef {
-  if (selection.tiers && selection.tiers.length > 1) {
-    const tierItems = selection.tiers.map((t) => ({
-      name: normalizeMenuName(t.name),
-      priceCents: t.priceCents,
-      priceLabel: null,
-      quantity: typeof t.quantity === 'number' ? Math.max(1, t.quantity) : 1,
-    }));
-    const regularItems = (selection.items ?? []).map((item) => ({
-      name: normalizeMenuName(item.name),
-      priceCents: item.priceCents,
-      priceLabel: item.priceLabel ? item.priceLabel.slice(0, 60) : null,
-      quantity: item.quantity,
-      ...(item.isAlcohol ? { isAlcohol: true } : {}),
-    }));
-    return {
-      kind: 'menu',
-      items: [...tierItems, ...regularItems],
-    };
-  }
-
-  if (selection.tier) {
+  const tiers: SelectedTierState[] = [];
+  if (selection.tiers && selection.tiers.length > 0) {
+    tiers.push(...selection.tiers);
+  } else if (selection.tier) {
     const rawLabel = 'label' in selection.tier ? selection.tier.label : selection.tier.name;
-    return {
-      kind: 'menu',
-      tier: {
-        name: normalizeTierName(rawLabel),
-        priceCents: selection.tier.priceCents,
-      },
-    };
+    const qty =
+      'quantity' in selection.tier && typeof selection.tier.quantity === 'number'
+        ? selection.tier.quantity
+        : 1;
+    tiers.push({
+      name: normalizeTierName(rawLabel),
+      priceCents: selection.tier.priceCents,
+      quantity: qty,
+    });
   }
 
-  const items = (selection.items ?? []).map((item) => ({
+  const regularItems = (selection.items ?? []).map((item) => ({
     name: normalizeMenuName(item.name),
     priceCents: item.priceCents,
     priceLabel: item.priceLabel ? item.priceLabel.slice(0, 60) : null,
@@ -278,9 +298,34 @@ export function selectionToBudgetPriceRef(selection: PickerSelection): MenuPrice
     ...(item.isAlcohol ? { isAlcohol: true } : {}),
   }));
 
+  // If there are multiple tiers OR both tiers and regular items, project tiers as items
+  // to satisfy priceRefSchema refinement ("exactly one of items or tier")
+  if (tiers.length > 1 || (tiers.length > 0 && regularItems.length > 0)) {
+    const tierItems = tiers.map((t) => ({
+      name: normalizeMenuName(t.name),
+      priceCents: t.priceCents,
+      priceLabel: null,
+      quantity: typeof t.quantity === 'number' ? Math.max(1, t.quantity) : 1,
+    }));
+    return {
+      kind: 'menu',
+      items: [...tierItems, ...regularItems],
+    };
+  }
+
+  if (tiers.length === 1) {
+    return {
+      kind: 'menu',
+      tier: {
+        name: normalizeTierName(tiers[0]!.name),
+        priceCents: tiers[0]!.priceCents,
+      },
+    };
+  }
+
   return {
     kind: 'menu',
-    items,
+    items: regularItems,
   };
 }
 

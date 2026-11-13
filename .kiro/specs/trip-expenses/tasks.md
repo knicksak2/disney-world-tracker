@@ -144,8 +144,8 @@ No external vendor, credential, or network call is introduced anywhere in this p
     - Tier builder (name + per-unit price, quantity & subtotal summary per tier). Per-participant Tier_Count entry with stepper controls (`-` / `+`) and live participant subtotal preview. Real-time auto-calculation of Total Amount from tiers × counts, auto-populating Amount with optional extra fees adjustment. Loading/seeding of `tierCounts` on edit so existing tiered counts and totals are preserved.
     - _Requirements: 4.1, 4.2, 4.3, 4.6, 4.7_
   - [x] 10.5 Add-Expense modal — `itemized` mode (manual entry)
-    - Item rows (name + price), per-item Assignee multi-select with the "everyone on this expense" one-tap control (Req 5.5), Charge_Line rows (kind, amount-or-percentage-for-gratuity per Req 5.9, scope selector, "exclude alcohol items" toggle for `discount` per Req 14.2), per-item `isAlcohol` toggle (Req 14.1), live-computed derived Amount and per-person totals.
-    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.11, 5.12, 5.13, 5.14, 14.1, 14.2, 14.4_
+    - Item rows (name + price), per-item Assignee multi-select with the "everyone on this expense" one-tap control (Req 5.5), Charge_Line rows (kind, amount-or-percentage-for-gratuity per Req 5.9, percentage presets and alcohol exclusion calculation for discount per Req 14.5, scope selector, "exclude alcohol items" toggle for `discount` per Req 14.2), per-item `isAlcohol` toggle (Req 14.1), live-computed derived Amount and per-person totals.
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.11, 5.12, 5.13, 5.14, 14.1, 14.2, 14.4, 14.5_
   - [x] 10.6 Edit-Expense modal and Split_Mode-change UX
     - Reuses the task 10.3–10.5 mode-specific forms seeded from the existing Expense; switching Split_Mode in the edit form clears the previously-entered mode's fields and requires the new mode's fields to be filled before saving (mirrors Req 8.3's server-side reset).
     - _Requirements: 8.1, 8.2, 8.3_

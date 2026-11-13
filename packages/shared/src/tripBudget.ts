@@ -238,6 +238,15 @@ export const dismissSuggestionBodySchema = z.object({
 }).strict();
 export type DismissSuggestionBody = z.infer<typeof dismissSuggestionBodySchema>;
 
+/**
+ * Body of `PUT /trips/:id/budget/lines/:lineId/link` (trip-budget Requirement 23.5):
+ * the Expense a Budget_Line was logged as.
+ */
+export const budgetLineLinkBodySchema = z.object({
+  expenseId: uuidSchema,
+}).strict();
+export type BudgetLineLinkBody = z.infer<typeof budgetLineLinkBodySchema>;
+
 export const travelerProfileInputSchema = z.object({
   memberId: uuidSchema.optional(),
   guestId: uuidSchema.optional(),

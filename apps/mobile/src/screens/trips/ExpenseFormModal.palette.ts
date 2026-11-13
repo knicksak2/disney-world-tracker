@@ -75,15 +75,12 @@ export const FORM = definePalette({
     cardActiveBg: '#fdfbff',
     subtotalActiveBg: '#f3ebfa',
     quickActionBg: '#f5effa',
-    matrixHeaderBg: '#faf6fe',
     rowActiveBg: '#fcfaff',
     stepperPillBg: '#f8f4fc',
     stepperBtnBg: '#f0e6fa',
     // Active tier count pill (cards view): today's quickActionBg + violetBorderActive.
     tierPillActiveBg: '#f5effa',
     tierPillActiveBorder: '#bca5db',
-    // Active matrix-view stepper pill border (today's violetBorderActive).
-    matrixPillActiveBorder: '#bca5db',
     // Selected split-mode chip fill (today's `t.color.surface` in light).
     modeChipSelectedBg: '#ffffff',
     // Hero amount placeholder (neutral T, L ≥ 0.12).
@@ -113,7 +110,6 @@ export const FORM = definePalette({
     // Neutral text (T): L < 0.12 → textPrimary band.
     slate600Text: '#475569',
     slate700Text: '#334155',
-    toggleIdleText: '#6b5880',
     // Neutral wells (S) and lines (B).
     neutralWell: '#f8fafc',
     greyWell: '#f1f5f9',
@@ -155,7 +151,6 @@ export const FORM = definePalette({
     cardActiveBg: DARK_TONAL.violet.tint,
     subtotalActiveBg: DARK_TONAL.violet.tint,
     quickActionBg: DARK_TONAL.violet.tint,
-    matrixHeaderBg: DARK_TONAL.violet.tint,
     rowActiveBg: DARK_TONAL.violet.tint,
     stepperPillBg: DARK_TONAL.violet.tint,
     stepperBtnBg: DARK_TONAL.violet.tint,
@@ -163,9 +158,6 @@ export const FORM = definePalette({
     // primaryFg is 6.12:1 on the pill tint and 8.37:1 on surface.
     tierPillActiveBg: DARK_TONAL.violet.tint,
     tierPillActiveBorder: darkColor.primaryFg,
-    // Matrix view: same ruling as the cards-view pill. The idle pill's border is
-    // violet.border, so violetBorderActive alone left the active cell indistinct.
-    matrixPillActiveBorder: darkColor.primaryFg,
     // Selected split-mode chip is lighter than its `surfaceAlt` track (Requirement 9.12).
     modeChipSelectedBg: darkColor.borderStrong,
     placeholder: darkColor.textSecondary,
@@ -189,7 +181,6 @@ export const FORM = definePalette({
     checkIdleIcon: darkColor.textSecondary,
     slate600Text: darkColor.textPrimary,
     slate700Text: darkColor.textPrimary,
-    toggleIdleText: darkColor.textPrimary,
     neutralWell: darkColor.surfaceAlt,
     greyWell: darkColor.surfaceAlt,
     greyDivider: darkColor.border,

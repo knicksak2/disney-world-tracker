@@ -118,7 +118,7 @@ export function extractMenuPriceOffers(
   if (!menus || menus.length === 0) return [];
 
   const offers: MenuPriceOffer[] = [];
-  const seenLabels = new Set<string>();
+  const seenKeys = new Set<string>();
 
   for (const menu of menus) {
     const menuType = menu.menuType ?? '';
@@ -131,8 +131,9 @@ export function extractMenuPriceOffers(
       if (fixedMatch && fixedMatch[1] && fixedMatch[2]) {
         const cents = decimalStringToCents(fixedMatch[1]);
         const label = groupName.trim();
-        if (cents !== null && cents > 0 && !seenLabels.has(label)) {
-          seenLabels.add(label);
+        const seenKey = `${menuType}::${label}`;
+        if (cents !== null && cents > 0 && !seenKeys.has(seenKey)) {
+          seenKeys.add(seenKey);
           offers.push({
             kind: 'fixed_menu',
             label,
@@ -156,8 +157,9 @@ export function extractMenuPriceOffers(
           const cents = decimalStringToCents(perMatch[1]);
           const rawAudience = perMatch[2];
           const label = rawAudience.charAt(0).toUpperCase() + rawAudience.slice(1).toLowerCase();
-          if (cents !== null && cents > 0 && !seenLabels.has(label)) {
-            seenLabels.add(label);
+          const seenKey = `${menuType}::${label}`;
+          if (cents !== null && cents > 0 && !seenKeys.has(seenKey)) {
+            seenKeys.add(seenKey);
             offers.push({
               kind: 'per_person_tier',
               label,
@@ -176,8 +178,9 @@ export function extractMenuPriceOffers(
           const cents = decimalStringToCents(colonMatch[2]);
           const rawAudience = colonMatch[1];
           const label = rawAudience.charAt(0).toUpperCase() + rawAudience.slice(1).toLowerCase();
-          if (cents !== null && cents > 0 && !seenLabels.has(label)) {
-            seenLabels.add(label);
+          const seenKey = `${menuType}::${label}`;
+          if (cents !== null && cents > 0 && !seenKeys.has(seenKey)) {
+            seenKeys.add(seenKey);
             offers.push({
               kind: 'per_person_tier',
               label,
@@ -201,8 +204,9 @@ export function extractMenuPriceOffers(
           }
           if (itemCents !== null && itemCents > 0) {
             const label = item.name.trim();
-            if (label && !seenLabels.has(label)) {
-              seenLabels.add(label);
+            const seenKey = `${menuType}::${label}`;
+            if (label && !seenKeys.has(seenKey)) {
+              seenKeys.add(seenKey);
               let aud: 'adult' | 'child' | 'person' | null = null;
               if (/\badult\b/i.test(label)) aud = 'adult';
               else if (/\bchild\b/i.test(label)) aud = 'child';
@@ -236,9 +240,13 @@ export function extractTierPriceSuggestions(
   if (!menus || menus.length === 0) return [];
 
   const offers = extractMenuPriceOffers(menus);
+  const multipleMenus = new Set(offers.map((o) => o.menuType).filter(Boolean)).size > 1;
   return offers
     .filter((o) => o.kind === 'per_person_tier')
-    .map((o) => ({ name: o.label, priceCents: o.priceCents }));
+    .map((o) => ({
+      name: multipleMenus && o.menuType ? `${o.menuType} ${o.label}` : o.label,
+      priceCents: o.priceCents,
+    }));
 }
 
 /** Returns true if group type indicates alcohol */
@@ -358,3 +366,49 @@ export function computeMenuEstimatePerPerson(
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Menu group classification (dining-plan-calculator task 1.2). Additive; nothing above changes.
+// ---------------------------------------------------------------------------
+
+/** What a menu group holds, for choosing an entree, dessert, appetizer or drink price. */
+export type MenuGroupClass = 'entree' | 'kids' | 'dessert' | 'appetizer' | 'beverage' | 'alcohol' | 'other';
+
+const ALCOHOL_GROUP_CLASS_REGEX = /alcohol|cocktail|wine|beer|spirit/i;
+/**
+ * Alcohol-free wording removed before the alcohol test: "Non-Alcoholic Drinks", "Mocktails" and "Zero-Proof" would
+ * otherwise match `alcohol` or `cocktail` and price a soft drink as a cocktail.
+ */
+const ALCOHOL_FREE_REGEX = /non[-\s]?alcoholic|alcohol[-\s]?free|zero[-\s]?proof|mocktails?/gi;
+const KIDS_GROUP_CLASS_REGEX = /kid|child/i;
+const DESSERT_GROUP_CLASS_REGEX = /dessert|sweet/i;
+const APPETIZER_GROUP_CLASS_REGEX = /appetizer|starter|small plate|shareable/i;
+/**
+ * `tea` only as a word: the design's plain `tea` alternative also matched "Steaks", which would have classified a
+ * steak group as a beverage group before the entree test ran.
+ */
+const BEVERAGE_GROUP_CLASS_REGEX = /beverage|drink|soda|coffee|\btea\b|\bteas\b|mocktail/i;
+
+/**
+ * Classifies a menu group by its `type` and `name` (case-insensitive). The first match wins, in the order alcohol,
+ * kids, dessert, appetizer, beverage, entree, other; entree reuses the entree heuristics of
+ * `computeMenuEstimatePerPerson`. Total: never throws.
+ */
+export function classifyMenuGroup(group: { readonly name?: string | null; readonly type?: string | null }): MenuGroupClass {
+  const text = `${typeof group.type === 'string' ? group.type : ''} ${typeof group.name === 'string' ? group.name : ''}`;
+  if (ALCOHOL_GROUP_CLASS_REGEX.test(text.replace(ALCOHOL_FREE_REGEX, ' '))) return 'alcohol';
+  if (KIDS_GROUP_CLASS_REGEX.test(text)) return 'kids';
+  if (DESSERT_GROUP_CLASS_REGEX.test(text)) return 'dessert';
+  if (APPETIZER_GROUP_CLASS_REGEX.test(text)) return 'appetizer';
+  if (BEVERAGE_GROUP_CLASS_REGEX.test(text)) return 'beverage';
+  if (ENTREE_GROUP_REGEX.test(text) && !NON_ENTREE_GROUP_REGEX.test(text)) return 'entree';
+  return 'other';
+}
+
+/**
+ * Representative integer cents of one menu item: its `priceCents`, else the mean of its variant prices, else its
+ * parsed `price` string; null when it has no positive price.
+ */
+export function menuGroupItemCents(item: MenuItemDTO): number | null {
+  return resolveItemRepresentativeCents(item);
+}

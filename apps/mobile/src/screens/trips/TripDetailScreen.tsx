@@ -45,6 +45,7 @@ import {
   type PlannedItemDTO,
   type TripDTO,
   type TripFeedItemDTO,
+  type TripGuestDTO,
   type TripMemberDTO,
   type TripStatus,
 } from '@dwt/shared';
@@ -76,6 +77,9 @@ import GroupFavoritesSection from './GroupFavoritesSection';
 import TripMickeySection from './TripMickeySection';
 import TripDayParksSection, { isKnownPark } from './TripDayParksSection';
 import { getTodayWDW } from './wdwDate';
+import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
+import { TripStaysCard } from './TripStaysCard';
+import { glanceLodgingName, guestKey, memberKey, type StayPerson } from './tripStaysView';
 import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
@@ -108,6 +112,7 @@ export interface HubSection {
     | 'TripReservations'
     | 'TripExpenses'
     | 'TripBudget'
+    | 'TripDiningPlan'
     | 'TripBookingTimeline'
     | 'TripPackingList'
     | 'TripFeed'
@@ -171,6 +176,13 @@ const HUB_SECTION_DEFS: readonly HubSectionDef[] = [
     title: 'Budget',
     body: 'Plan costs, save per week, compare to what you spent.',
     icon: 'wallet-outline',
+  },
+  {
+    key: 'diningPlan',
+    route: 'TripDiningPlan',
+    title: 'Dining Plan',
+    body: 'Is the dining plan worth it? Compare plans for your meals.',
+    icon: 'restaurant-outline',
   },
   {
     key: 'booking',
@@ -428,6 +440,14 @@ export default function TripDetailScreen({
     retry: false,
   });
 
+  // Trip guests, for the "N of M people" line of the Where-you're-staying card (trip-lodging-stays R7.1).
+  const guestsQuery = useQuery<readonly TripGuestDTO[], ApiError>({
+    queryKey: tripExpenseKeys.guests(tripId),
+    queryFn: () => fetchTripGuests(tripId),
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+
   // Query planned items for the auto-computed glance card and tool grid badges
   const itemsQuery = useQuery<readonly PlannedItemDTO[], ApiError>({
     queryKey: tripPlannedListKeys.items(tripId),
@@ -469,6 +489,12 @@ export default function TripDetailScreen({
     members.some(
       (member) => member.userId === callerId && member.role === 'organizer',
     );
+
+  const guests = Array.isArray(guestsQuery.data) ? guestsQuery.data : [];
+  const stayPeople: StayPerson[] = [
+    ...members.map((m) => ({ key: memberKey(m.userId), name: m.displayName })),
+    ...guests.map((g) => ({ key: guestKey(g.id), name: g.name })),
+  ];
 
   const plannedItems = Array.isArray(itemsQuery.data) ? itemsQuery.data : [];
   const feedItems = Array.isArray(feedQuery.data) ? feedQuery.data : [];
@@ -582,7 +608,8 @@ export default function TripDetailScreen({
   const glance = deriveGlanceCard(
     plannedItems,
     todayDate,
-    trip.resorts?.[0]?.name,
+    // Tonight's lodging, so a split stay names the right hotel each day (trip-lodging-stays R8).
+    glanceLodgingName(trip, wdwToday),
     todayDayPark,
   );
   const dayText = trip ? getVacationDayText(trip.startDate, trip.endDate) : null;
@@ -621,32 +648,24 @@ export default function TripDetailScreen({
           <Text style={styles.description}>{trip.description}</Text>
         ) : null}
 
-        {/* Hero Card: Resort info & Crew Preview row */}
+        {/* Hero Card: Where you're staying summary & Crew Preview row */}
         <View style={styles.heroCard} testID="trip-detail-hero">
-          {trip.resorts.length > 0 ? (
-            <View style={styles.resorts} testID="trip-detail-resorts">
-              <View style={styles.resortChips}>
-                {trip.resorts.map((resort) => (
-                  <View
-                    key={resort.id}
-                    style={styles.resortChip}
-                    testID={`trip-detail-resort-${resort.id}`}
-                  >
-                    <Ionicons
-                      name="bed-outline"
-                      size={14}
-                      color={t.color.primaryFg}
-                    />
-                    <Text style={styles.resortChipText}>{resort.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
+          {/* Where you're staying (trip-lodging-stays R7.1 to R7.3, R7.7): replaces the resort chip row inside
+              heroCard. Read-only; an Organizer gets "Add dates" on an undated stay, which opens the Trip edit form. */}
+          {trip.stays.length > 0 ? (
+            <TripStaysCard
+              mode="read"
+              stays={trip.stays}
+              stayWarnings={trip.stayWarnings}
+              people={stayPeople}
+              today={wdwToday}
+              {...(isOrganizer ? { onAddDates: () => navigation.navigate('TripEdit', { tripId }) } : {})}
+            />
           ) : null}
 
           {/* Elevated Crew Row (R18.1 Members section control) */}
           <Pressable
-            style={styles.crewRow}
+            style={[styles.crewRow, trip.stays.length > 0 && styles.crewRowWithStays]}
             onPress={() => {
               navigation.navigate('TripMembers', { tripId });
             }}
@@ -1115,6 +1134,51 @@ export default function TripDetailScreen({
                   </View>
                 </Pressable>
               </View>
+              <View style={styles.financeRow} testID="trip-detail-finances-dining-row">
+                {/* Tile: Dining Plan (dining-plan-calculator R1.1) */}
+                <Pressable
+                  style={styles.financeTile}
+                  onPress={() =>
+                    navigation.navigate('TripDiningPlan', { tripId })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Dining Plan: is the dining plan worth it? Compare plans for your meals."
+                  testID="trip-detail-section-diningPlan"
+                >
+                  <View
+                    style={[
+                      styles.financeIconWrap,
+                      { backgroundColor: tile.financeBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="restaurant-outline"
+                      size={18}
+                      color={tile.financeIcon}
+                    />
+                  </View>
+                  <View style={styles.financeTextWrap}>
+                    <View style={styles.financeTitleRow}>
+                      <Text style={styles.financeTitle} numberOfLines={1}>
+                        Dining Plan
+                      </Text>
+                      <View style={styles.compactBadge}>
+                        <Text
+                          style={[
+                            styles.tileBadgeText,
+                            { color: t.color.primaryFg },
+                          ]}
+                        >
+                          Compare
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.financeDesc} numberOfLines={2}>
+                      Is the dining plan worth it? Compare plans for your meals.
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
             </View>
 
             {/* Tier 3: Prep & Memories (3-up Compact Strip) */}
@@ -1460,35 +1524,18 @@ const useStyles = makeStyles((t) => ({
     shadowRadius: 8,
     elevation: 2,
   },
-  resorts: {
-    gap: theme.spacing.xs,
-  },
-  resortChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-  },
-  resortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    backgroundColor: `${t.color.primary}12`,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-  },
-  resortChipText: {
-    ...theme.typography.meta,
-    color: t.color.primaryFg,
-    fontWeight: '600',
-  },
-
   // Crew Row
   crewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 4,
+  },
+  crewRowWithStays: {
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+    paddingTop: theme.spacing.sm,
+    marginTop: 2,
   },
   crewLeft: {
     flexDirection: 'row',

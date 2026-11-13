@@ -38,6 +38,7 @@ import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { themedSwitchProps } from '../../theme/switchColors';
 import { RECEIPT_REVIEW } from './ReceiptReviewModal.palette';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
+import { CurrencyInputField } from '../../components/CurrencyInputField';
 import {
   type DraftReceiptItem,
   type DraftReceiptChargeLine,
@@ -442,12 +443,10 @@ export function ReceiptReviewModal({
                           testID={`receipt-item-name-${item.id}`}
                         />
 
-                        <TextInput
+                        <CurrencyInputField
                           style={[styles.input, styles.itemPriceInput]}
-                          value={(item.priceCents / 100).toFixed(2)}
-                          keyboardType="decimal-pad"
-                          onChangeText={(v) => {
-                            const cents = Math.round((parseFloat(v) || 0) * 100);
+                          cents={item.priceCents}
+                          onChangeCents={(cents) => {
                             setItems((prev) =>
                               prev.map((it) =>
                                 it.id === item.id ? { ...it, priceCents: cents } : it
@@ -583,14 +582,16 @@ export function ReceiptReviewModal({
                             : t.color.starRating
                         }
                       />
-                      <TextInput
+                      <CurrencyInputField
                         style={[styles.input, styles.chargePriceInput]}
-                        value={(cl.amountCents / 100).toFixed(2)}
-                        keyboardType="decimal-pad"
-                        onChangeText={(v) => {
-                          const cents = Math.round((parseFloat(v) || 0) * 100);
+                        cents={Math.abs(cl.amountCents)}
+                        onChangeCents={(cents) => {
                           setChargeLines((prev) =>
-                            prev.map((c) => (c.id === cl.id ? { ...c, amountCents: cents } : c))
+                            prev.map((c) =>
+                              c.id === cl.id
+                                ? { ...c, amountCents: cl.kind === 'discount' ? -Math.abs(cents) : Math.abs(cents) }
+                                : c
+                            )
                           );
                         }}
                         placeholder="0.00"

@@ -171,6 +171,7 @@ describe('bookingTimelineView', () => {
       expect(sourceLabel('override')).toBe('Set by an Organizer');
       expect(sourceLabel('auto')).toBe('Detected automatically');
       expect(sourceLabel('trip_start')).toBe('Detected automatically');
+      expect(sourceLabel('stays')).toBe("From the Trip's stays");
     });
   });
 });

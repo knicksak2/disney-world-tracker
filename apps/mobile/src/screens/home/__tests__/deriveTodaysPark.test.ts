@@ -17,6 +17,8 @@ describe('deriveTodaysPark', () => {
     resorts: [],
     foodLists: [],
     experienceLists: [],
+    stays: [],
+    stayWarnings: [],
     ...overrides,
   });
 

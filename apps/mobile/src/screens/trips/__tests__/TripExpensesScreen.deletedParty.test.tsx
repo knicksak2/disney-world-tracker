@@ -57,6 +57,8 @@ const TRIP: TripDTO = {
   resorts: [],
   foodLists: [],
   experienceLists: [],
+  stays: [],
+  stayWarnings: [],
 };
 
 // The roster omits the deleted person (OMIT surface); they only appear as a party in the data.

@@ -43,6 +43,14 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
     "title": "Budget",
   },
   {
+    "body": "Is the dining plan worth it? Compare plans for your meals.",
+    "color": "#5b2a86",
+    "icon": "restaurant-outline",
+    "key": "diningPlan",
+    "route": "TripDiningPlan",
+    "title": "Dining Plan",
+  },
+  {
     "body": "Key booking dates and dining reservation windows.",
     "color": "#7e57c2",
     "icon": "calendar-number-outline",
@@ -85,7 +93,7 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
 ]
 `;
 
-exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 17 expected screens and matches snapshot 1`] = `
+exports[`Feature: navigation-redesign, Property 6: Trip section structure untouched (Requirements 5.1, 5.2) TripsStack registers exactly the 19 expected screens and matches snapshot 1`] = `
 [
   {
     "name": "TripsList",
@@ -117,6 +125,14 @@ exports[`Feature: navigation-redesign, Property 6: Trip section structure untouc
   },
   {
     "name": "TripBudget",
+    "options": undefined,
+  },
+  {
+    "name": "TripDiningPlan",
+    "options": undefined,
+  },
+  {
+    "name": "DiningPlanCalculator",
     "options": undefined,
   },
   {

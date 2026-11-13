@@ -416,9 +416,52 @@ This feature **depends on** `trips` (membership, roles, the permission matrix, t
 13. THE Budget line form's Ticket Quote Calculator SHALL present an Official Disney Pricing card featuring a horizontal Ticket Duration stepper; a 2-column party ticket quantities grid with Adults (10+) and Children (3–9) steppers and daily rate subtext; a 2×2 Ticket Type selection grid with thematic icons (✨ 1-Park Base, 🏰 Park Hopper, 🌊 Park Hopper Plus, ⛳ Water Parks & Sports); Pricing Tier pill buttons for Standard Guest and Florida Resident (Discount); an automated Disney Quote card displaying the calculated total and 6.5% FL Tax coverage; and smart ticket line description generation with Whole Trip planned day default.
 14. THE `TripDetailScreen` Vacation Tools section SHALL organize the 9 hub tiles into a 4 + 2 + 3 tiered layout inside `testID="trip-detail-grid"` so every tool remains 1 tap away without a 5th orphan row: Tier 1 renders the 2×2 Core Itinerary feature cards (`Planned List`, `Schedule Builder`, `Reservations`, `Trip Activity`); Tier 2 (`FINANCES`, `testID="trip-detail-finances-row"`) pairs `Budget` (`testID="trip-detail-section-budget"`) and `Expenses` (`testID="trip-detail-section-expenses"`) side-by-side as compact horizontal cards with emerald accents; and Tier 3 (`PREP & MEMORIES`, `testID="trip-detail-prep-row"`) renders `Booking timeline` (`testID="trip-detail-section-booking"`), `Packing list` (`testID="trip-detail-section-packing"`), and `Trip Album` (`testID="trip-detail-section-album"`) as a 3-across compact strip with semantic sky, teal, and pink accents, while keeping `HUB_SECTIONS` byte-for-byte unchanged and preserving all existing sections on `TripDetailScreen`.
 
+### Requirement 23: Log a Budget_Line as an Expense
+
+**User Story:** As a Trip_Member who paid for something we budgeted, I want to turn that Budget_Line into an Expense with who paid and who got what already filled in, so that I do not re-enter the description, date, category, amount and people from scratch. This requirement is additive. It builds on the soft link of Requirement 17 and the Expense form of `trip-expenses` (its Requirement 17). It does not merge the two data models (Requirement 1.2 and 1.3 still hold): the Expense is created through the existing Expense routes and the Budget_Line only records which Expense it became.
+
+#### Acceptance Criteria
+
+1. THE Budget_Screen SHALL show, on every Budget_Line whose `linkedExpenseId` is null, a control with the visible text "Log as expense" and the `accessibilityLabel` `Log <description> as expense` that opens the Expense form as a new Expense pre-filled from that line, and SHALL issue no create call until the member saves the form.
+2. THE pure mapping `budgetLineToExpenseDraft(line, payerId)` (Mobile_App, `budgetToExpenseDraft.ts`) SHALL produce the pre-fill as follows, using only fields of `BudgetLineDTO`:
+   1. `description` is the line description trimmed and cut to `EXPENSE_DESCRIPTION_MAX` (200) characters.
+   2. `date` is the line's `plannedDate`, or null when the line has none (the form then keeps its own default of today).
+   3. `category` is `BUDGET_TO_EXPENSE_CATEGORY[line.category]` (Requirement 17.1).
+   4. `splitMode` is `exact`.
+   5. Each Budget_Allocation contributes `effectiveCents + taxCents + tipCents` for its Person_Key (an allocation that works out to 0 is left out), so the shares of all people sum to the line's `totalCents`, and `amountCents` is that sum (the line total including tax and tip, because an Expense records what was actually charged).
+   6. `experienceId` is the line's `experienceId` only when the mapped Expense category is `dining` (the Expense schema accepts a Catalog link only for `dining`); it is null otherwise.
+   7. `payerId` is the member opening the form, and the member MAY change it before saving.
+3. THE Expense form SHALL keep every pre-filled person's amount (including the opening member's) so that changing the payer does not silently move that person's share onto the payer: the Payer's share remains the implicit remainder of Requirement 3 of `trip-expenses`, and each other allocated person keeps the amount from the Budget_Line.
+4. EVERY pre-filled field SHALL remain editable (description, date, category, amount, payer, per-person amounts, split mode), the existing Expense validation SHALL apply unchanged, and the form SHALL state in text that the values were pre-filled from the budget estimate and should be matched to the real receipt.
+5. WHEN the Expense is saved, THE Mobile_App SHALL send `PUT /trips/:id/budget/lines/:lineId/link` with the body `{ expenseId }` of the saved Expense, and THE Trip_Service SHALL set `linked_expense_id` on that line and return 204.
+6. THE link route SHALL authorize with `edit_budget` (any Trip_Member or Organizer) and NOT with the creator-or-organizer rule of Requirement 2.5, because the member who paid is not necessarily the member who planned the line; it SHALL answer `trip_forbidden` for a non-member and for an unknown Trip, `trip_not_found` for a line that is not on the Trip, and `trip_validation_failed` for an `expenseId` that is not an Expense of the same Trip (Requirement 17.3) or a body that fails the strict schema.
+7. THE link route SHALL be race-safe and idempotent: it SHALL set the link only where `linked_expense_id` is null, SHALL answer 204 when the line is already linked to the same `expenseId`, and SHALL answer `trip_validation_failed` when the line is already linked to a different Expense, so two members tapping "Log as expense" at the same time cannot overwrite each other's link.
+8. THE link route SHALL write only `trip_budget_lines.linked_expense_id` (and `updated_at`), SHALL read `expenses` only to verify the Trip, and SHALL NOT change any Expense, Balance or Settlement (Requirement 17.5).
+9. IF the Expense is saved but the link request fails, THEN THE Mobile_App SHALL close the form, keep the Expense, show the text "Expense saved, but it could not be linked to this budget line.", refetch the Budget, and SHALL NOT retry by creating a second Expense.
+10. WHEN a Budget_Line has a `linkedExpenseId`, THE Budget_Screen SHALL show the text "Logged as expense" with a check icon and an `accessibilityLabel` of the same text on that line, SHALL NOT show the "Log as expense" control for it, and SHALL leave the line editable; editing a linked line SHALL keep its link (Requirement 2.2).
+11. WHEN the Expense is deleted, THE line SHALL become unlinked again through the existing `ON DELETE SET NULL` (Requirement 17.4) and the "Log as expense" control SHALL reappear after the Budget is refetched.
+12. WHEN the Expense is saved, THE Mobile_App SHALL invalidate the Expense list and balances query keys (as the Expense form already does) and the Budget query keys (Requirement 22.6).
+13. THE feature SHALL add no migration (the column, its foreign key and `ON DELETE SET NULL` exist since `0068`), SHALL add no permission action, and SHALL NOT create a Budget_Line from an Expense.
+14. THE Budget read (`GET /trips/:id/budget`) SHALL return each line's stored `linkedExpenseId` (null when unlinked); a read that always reports null is a defect (it was one until this requirement, because `loadBudget` did not map the column).
+
+### Requirement 24: Budget_Lines written by the Dining Plan export (added by the `dining-plan-calculator` spec)
+
+**User Story:** As a Trip_Member who has decided on a dining plan (or on no plan), I want the plan cost, the meals I will still pay for and the tips put into the Trip Budget in one step, so that my savings plan covers dining without retyping the numbers. This requirement is additive and changes no Budget code; the export itself is defined in `.kiro/specs/dining-plan-calculator/requirements.md` (Requirement 26). It writes Budget_Lines into the Trip's own Budget and is not the Budget export of Requirement 21.6, which would take a Budget out of the app and remains out of scope.
+
+#### Acceptance Criteria
+
+1. Budget_Lines whose `suggestion_key` starts with `dining_plan:` (`dining_plan:plan:<stayKey>`, `dining_plan:oop`, `dining_plan:tips`) SHALL be created, updated and deleted only by the Dining Plan export, through the existing Budget repo methods (`createLine`, `editLine`, `removeLine`), each with `priceSource` `user_entered` and `applyTip` false.
+2. THE Budget's own Suggestions (Requirement 16) SHALL NEVER produce a key with the `dining_plan:` prefix, and the unique `(trip_id, suggestion_key)` index SHALL keep at most one line per key, so a repeated export updates the same lines in place.
+3. FOR every other purpose such a line SHALL be an ordinary Budget_Line: it SHALL appear in the Budget read, totals, buckets, savings plan and budget-versus-actual like any other line, SHALL be editable and deletable through the Budget routes with their usual authorization (Requirement 2.5), and MAY be linked to an Expense (Requirement 23), and a later export SHALL keep that link.
+4. A plan-cost line SHALL hold pre-tax amounts (the calculator's tax-inclusive plan share converted at the Budget's dining tax rate), and the tips line SHALL use category `other`, so the Budget's own tax and gratuity rules (Requirement 7) apply to these lines unchanged.
+5. THE export SHALL act toward the Budget repo with the Organizer role only for keyed lines that the same export request listed for the same Trip, after checking that the caller may perform both `edit_dining_plan` and `edit_budget` (dining-plan-calculator Requirement 26.15); it SHALL NOT read for modification, change or delete any Budget_Line without the `dining_plan:` prefix.
+
 ## Out of Scope
 
 The following are deliberately deferred; none may be implemented without a spec amendment:
+
+- Creating a Budget_Line from an existing Expense (the reverse of Requirement 23), and a manual "unlink" control for the soft link.
+- Showing a linked Expense's actual amount beside a Budget_Line, and any mobile presentation of `vsActual` (Requirement 17.6) beyond what already ships.
 
 - Annual Pass prices (HTML-only source, four values, changes about yearly), Passholder, DVC and other discounted ticket prices, and single-day water park tickets (all `user_entered`).
 - Prices from authorized resellers, discount-ticket sellers, military or special offers.

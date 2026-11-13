@@ -247,3 +247,67 @@ describe('BookingSettingsModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('BookingSettingsModal when the timeline comes from the Trip stays (trip-lodging-stays R9.6)', () => {
+  const tripStart = '2025-06-15';
+  const settings = { stayType: null, lightningLaneTiming: null, checkInOverride: null };
+
+  test('disables lodging type and check-in override with the note; Lightning Lane timing still saves', () => {
+    const onConfirm = jest.fn();
+    render(
+      <BookingSettingsModal
+        visible={true}
+        tripStart={tripStart}
+        initialSettings={settings}
+        setPerStay={true}
+        onConfirm={onConfirm}
+        onCancel={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('booking-settings-per-stay-note').props.children).toBe('Set per stay in Trip settings');
+    expect(screen.getByTestId('booking-settings-per-stay-note-check-in').props.children).toBe(
+      'Set per stay in Trip settings',
+    );
+    expect(screen.queryByTestId('check-in-range-text')).toBeNull();
+
+    // Lodging type: every option is disabled and pressing one changes nothing.
+    for (const id of ['stay-type-automatic', 'stay-type-resort', 'stay-type-partner-hotel', 'stay-type-off-site']) {
+      expect(screen.getByTestId(id).props.accessibilityState).toEqual(
+        expect.objectContaining({ disabled: true }),
+      );
+    }
+    fireEvent.press(screen.getByTestId('stay-type-resort'));
+    expect(screen.getByTestId('stay-type-resort').props.accessibilityState.selected).toBe(false);
+
+    // Check-in override: the picker is disabled and does not open.
+    const picker = screen.getByTestId('check-in-override-picker');
+    expect(picker.props.accessibilityState).toEqual({ disabled: true });
+    fireEvent.press(picker);
+    expect(screen.queryByTestId('check-in-override-picker-calendar')).toBeNull();
+
+    // Lightning Lane timing stays active.
+    const timing = screen.getByTestId('ll-timing-3-days-before-(whole-trip)');
+    expect(timing.props.accessibilityState).toEqual({ selected: false });
+    fireEvent.press(timing);
+    fireEvent.press(screen.getByTestId('confirm-booking-settings'));
+    expect(onConfirm).toHaveBeenCalledWith({ lightningLaneTiming: 'three_day' });
+  });
+
+  test('without the flag (an auto or override source) the note is absent and the controls are enabled', () => {
+    render(
+      <BookingSettingsModal
+        visible={true}
+        tripStart={tripStart}
+        initialSettings={settings}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('booking-settings-per-stay-note')).toBeNull();
+    expect(screen.getByTestId('check-in-range-text')).toBeTruthy();
+    expect(screen.getByTestId('check-in-override-picker').props.accessibilityState).toEqual({ disabled: false });
+    fireEvent.press(screen.getByTestId('stay-type-resort'));
+    expect(screen.getByTestId('stay-type-resort').props.accessibilityState).toEqual({ selected: true });
+  });
+});

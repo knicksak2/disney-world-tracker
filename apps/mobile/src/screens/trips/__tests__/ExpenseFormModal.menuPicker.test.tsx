@@ -18,9 +18,8 @@ import {
   bpsOf,
   BUDGET_DEFAULT_TAX_BPS,
   BUDGET_DEFAULT_DINING_TIP_BPS,
-  type MenuDTO,
-  type TripMemberDTO,
 } from '@dwt/shared';
+import type { MenuDTO, TripMemberDTO } from '@dwt/shared';
 
 // Mocks
 jest.mock('expo-constants', () => ({
@@ -567,5 +566,423 @@ describe('ExpenseFormModal - Menu Item Picker Integration (Task 19.1)', () => {
         amountCents: 1800,
       }),
     );
+  });
+
+  test('linked restaurant renders hero menu hook-up bar and opens menu picker from hero in any split mode', async () => {
+    mockedApiRequest.mockResolvedValue({ menus: MOCK_MENUS, name: "Chef Mickey's" });
+
+    renderModal({
+      initialExpense: {
+        id: 'exp-hero-menu-1',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 5000,
+        date: '2026-11-01',
+        category: 'dining',
+        description: "Chef Mickey's",
+        splitMode: 'even',
+        experienceId: 'exp-chef-mickeys',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // 1. Linked restaurant menu hook-up bar is rendered in hero card
+    await screen.findByTestId('hero-linked-menu-bar');
+    expect(screen.getByText("Chef Mickey's • Menu Available")).toBeTruthy();
+
+    const viewMenuBtn = screen.getByTestId('hero-view-menu-button');
+    expect(viewMenuBtn).toBeTruthy();
+
+    // 2. Tapping "View Menu" opens the menu item picker
+    fireEvent.press(viewMenuBtn);
+    await screen.findByText('Steak');
+    expect(screen.getByText('Chicken')).toBeTruthy();
+
+    // 3. Canceling closes the menu picker without altering split mode
+    fireEvent.press(within(screen.getByTestId('expense-menu-item-picker')).getByLabelText('Cancel'));
+    expect(screen.queryByText('Steak')).toBeNull();
+    expect(screen.getByTestId('split-mode-chip-even')).toBeTruthy();
+  });
+
+  test('applied suggested tiers persist across split mode tab switches and do not reset to defaults', async () => {
+    mockedApiRequest.mockResolvedValue({ menus: PRIX_FIXE_MENUS, name: "Chef Mickey's" });
+
+    renderModal({
+      initialExpense: {
+        id: 'exp-tier-persist-1',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 10500,
+        date: '2026-11-01',
+        category: 'dining',
+        description: "Chef Mickey's",
+        splitMode: 'tiered',
+        experienceId: 'exp-chef-mickeys',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // 1. Suggestions banner appears and user applies suggestions
+    await screen.findByTestId('tier-suggestions-banner');
+    fireEvent.press(screen.getByTestId('apply-tier-suggestions-btn'));
+
+    // Applied values are Adult $65.00 and Child $40.00
+    expect(screen.getByDisplayValue('Adult')).toBeTruthy();
+    expect(screen.getByDisplayValue('65.00')).toBeTruthy();
+    expect(screen.getByDisplayValue('Child')).toBeTruthy();
+    expect(screen.getByDisplayValue('40.00')).toBeTruthy();
+    expect(screen.getByTestId('tier-applied-indicator')).toBeTruthy();
+
+    // 2. User switches to EXACT split mode tab
+    fireEvent.press(screen.getByTestId('split-mode-chip-exact'));
+    expect(screen.getByText('PER-PERSON SHARES')).toBeTruthy();
+
+    // 3. User switches back to TIERED split mode tab
+    fireEvent.press(screen.getByTestId('split-mode-chip-tiered'));
+
+    // 4. Assert tiers did NOT reset to random $50.00 / $30.00 default!
+    expect(screen.getByDisplayValue('Adult')).toBeTruthy();
+    expect(screen.getByDisplayValue('65.00')).toBeTruthy();
+    expect(screen.getByDisplayValue('Child')).toBeTruthy();
+    expect(screen.getByDisplayValue('40.00')).toBeTruthy();
+    expect(screen.queryByDisplayValue('50.00')).toBeNull();
+    expect(screen.queryByDisplayValue('30.00')).toBeNull();
+
+    // 5. Menu Suggestions button in header allows re-applying at any time
+    expect(screen.getByTestId('reapply-tier-suggestions-btn')).toBeTruthy();
+    expect(screen.getByTestId('tiered-pick-from-menu-button')).toBeTruthy();
+  });
+
+  test('itemized mode shows prominent menu prompt card when empty and dual add buttons when populated', async () => {
+    mockedApiRequest.mockResolvedValue({ name: 'Steakhouse 71', menus: MOCK_MENUS });
+
+    renderModal({
+      initialExpense: {
+        id: 'exp-init-empty-itemized',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 0,
+        date: '2026-11-01',
+        category: 'dining',
+        description: 'Dinner at Steakhouse',
+        splitMode: 'itemized',
+        experienceId: 'exp-rest-1',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // 1. In empty state with cached menu, prominent prompt card is visible
+    expect(await screen.findByTestId('itemized-empty-prompt')).toBeTruthy();
+    expect(screen.getByText('Steakhouse 71 Menu Available')).toBeTruthy();
+    expect(screen.getByTestId('pick-from-menu-button')).toBeTruthy();
+    expect(screen.getByTestId('add-item-btn')).toBeTruthy();
+    expect(screen.getByText('CALCULATED TOTAL')).toBeTruthy();
+    expect(screen.getByText('Auto-Calculated')).toBeTruthy();
+    // Header row buttons are not duplicated above the prompt card when items are empty
+    expect(screen.queryByTestId('itemized-header-menu-btn')).toBeNull();
+    expect(screen.queryByTestId('itemized-header-custom-btn')).toBeNull();
+
+    // 2. Tapping custom item adds an item card and switches to dual action row
+    fireEvent.press(screen.getByTestId('add-item-btn'));
+    expect(screen.getByTestId('item-card-0')).toBeTruthy();
+    expect(screen.queryByTestId('itemized-empty-prompt')).toBeNull();
+    // Now that items exist, header row quick actions become accessible
+    expect(screen.getByTestId('itemized-header-menu-btn')).toBeTruthy();
+    expect(screen.getByTestId('itemized-header-custom-btn')).toBeTruthy();
+
+    // 3. Below the item card, both "+ From Menu" and "+ Custom Item" are accessible
+    expect(screen.getByTestId('pick-from-menu-button')).toBeTruthy();
+    expect(screen.getByText('+ From Menu')).toBeTruthy();
+    expect(screen.getByText('+ Custom Item')).toBeTruthy();
+  });
+
+  test('confirming combined buffet tiers and drinks appends all as itemized rows and switches splitMode to itemized', async () => {
+    const combinedMenus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        groups: [
+          {
+            name: "'Ohana Dinner Pricing",
+            items: [
+              { name: '$69 per adult, plus tax and gratuity' },
+              { name: '$46 per child (Guests ages 3-9), plus tax and gratuity' },
+            ],
+          },
+          {
+            name: 'Specialty Cocktails',
+            type: 'Alcoholic Beverage',
+            items: [
+              { name: 'Lapu Lapu', priceCents: 2400 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    mockedApiRequest.mockResolvedValue({ menus: combinedMenus });
+    mockedCreateExpense.mockResolvedValue({ id: 'exp-combined-1' } as any);
+
+    renderModal({
+      initialExpense: {
+        id: 'exp-init-combined',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 0,
+        date: '2026-11-01',
+        category: 'dining',
+        description: "'Ohana Dinner",
+        splitMode: 'itemized',
+        experienceId: 'exp-ohana',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // Open Menu Item Picker
+    const pickBtn = await screen.findByTestId('pick-from-menu-button');
+    fireEvent.press(pickBtn);
+
+    // Select Adult buffet tier ($69.00)
+    await screen.findByLabelText('Adult: $69.00');
+    fireEvent.press(screen.getByLabelText('Adult: $69.00'));
+
+    // Select Lapu Lapu ($24.00)
+    fireEvent.press(screen.getByLabelText('Lapu Lapu'));
+
+    // Subtotal should be $69 + $24 = $93.00
+    expect(screen.getByText('Subtotal: $93.00')).toBeTruthy();
+
+    // Confirm
+    fireEvent.press(screen.getByLabelText('Confirm selection'));
+
+    // Picker closes, itemized mode shows both rows
+    await waitFor(() => {
+      expect(screen.queryByTestId('expense-menu-item-picker')).toBeNull();
+    });
+
+    // Submitting expense sends both items
+    const submitBtn = screen.getByTestId('submit-expense-button');
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      expect(mockedEditExpense).toHaveBeenCalledTimes(1);
+    });
+
+    const calledPayload = mockedEditExpense.mock.calls[0]![2] as any;
+    expect(calledPayload.items).toHaveLength(2);
+    expect(calledPayload.items[0]).toEqual({
+      name: 'Adult',
+      priceCents: 6900,
+      assigneeIds: [USER_1, USER_2],
+      isAlcohol: false,
+    });
+    expect(calledPayload.items[1]).toEqual({
+      name: 'Lapu Lapu',
+      priceCents: 2400,
+      assigneeIds: [USER_1, USER_2],
+      isAlcohol: true,
+    });
+  });
+
+  it('calculates discount percentage accurately against eligible items excluding alcohol (Req 14.5, Property 22)', async () => {
+    mockedApiRequest.mockResolvedValue({ menus: [] });
+    renderModal({
+      initialExpense: {
+        id: 'exp-discount-test',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 9300,
+        description: "'Ohana Dinner",
+        date: '2026-11-09',
+        category: 'dining',
+        splitMode: 'itemized',
+        experienceId: 'exp-ohana',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [
+          {
+            id: 'item-1',
+            expenseId: 'exp-discount-test',
+            name: "'Ohana Dinner",
+            priceCents: 6900,
+            isAlcohol: false,
+            assigneeIds: [USER_1, USER_2],
+          },
+          {
+            id: 'item-2',
+            expenseId: 'exp-discount-test',
+            name: 'Lapu Lapu',
+            priceCents: 2400,
+            isAlcohol: true,
+            assigneeIds: [USER_1, USER_2],
+          },
+        ],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // Smart button shows 20%
+    const addDiscountBtn = await screen.findByTestId('add-charge-discount');
+    expect(addDiscountBtn).toHaveTextContent('+ Discount (20%)');
+
+    // Tap + Discount (20%)
+    fireEvent.press(addDiscountBtn);
+
+    // Charge line appears with 20% of $69 non-alcohol = $13.80
+    const chargeCard = await screen.findByTestId('charge-line-0');
+    expect(chargeCard).toBeTruthy();
+    const amountInput = screen.getByTestId('charge-amount-0');
+    expect(amountInput.props.value).toBe('13.80');
+    expect(screen.getByText(/20% of \$69\.00 non-alcoholic items/)).toBeTruthy();
+
+    // Toggle Exclude Alcohol to OFF -> recalculates 20% of $93.00 = $18.60
+    const excludeToggle = screen.getByTestId('discount-exclude-alcohol-0');
+    fireEvent(excludeToggle, 'valueChange', false);
+    expect(amountInput.props.value).toBe('18.60');
+    expect(screen.getByText(/20% of \$93\.00 total items/)).toBeTruthy();
+
+    // Tap 10% preset pill -> recalculates 10% of $93.00 = $9.30
+    fireEvent.press(screen.getByTestId('discount-preset-10-0'));
+    expect(amountInput.props.value).toBe('9.30');
+
+    // Tap Flat $ preset pill -> switches to flat dollar mode
+    fireEvent.press(screen.getByTestId('discount-mode-dollar-0'));
+    fireEvent.changeText(amountInput, '15.00');
+    expect(amountInput.props.value).toBe('15.00');
+
+    // Submit expense
+    const submitBtn = screen.getByTestId('submit-expense-button');
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      expect(mockedEditExpense).toHaveBeenCalledTimes(1);
+    });
+
+    const calledPayload = mockedEditExpense.mock.calls[0]![2] as any;
+    expect(calledPayload.chargeLines).toHaveLength(1);
+    expect(calledPayload.chargeLines[0]).toEqual({
+      kind: 'discount',
+      amountCents: -1500,
+      excludeAlcohol: false,
+    });
+  });
+
+  test('custom percentage discount calculates against non-alcohol items and updates on custom input (Requirement 14.5)', async () => {
+    mockedEditExpense.mockResolvedValue({ id: 'exp-discount-custom' } as any);
+
+    renderModal({
+      initialExpense: {
+        id: 'exp-discount-custom',
+        tripId: TRIP_ID,
+        payerId: USER_1,
+        createdByUserId: USER_1,
+        amountCents: 9300,
+        date: '2026-11-01',
+        category: 'dining',
+        description: "'Ohana Dinner with Drinks",
+        splitMode: 'itemized',
+        experienceId: 'exp-ohana',
+        resortId: null,
+        createdAt: '2026-10-25T12:00:00Z',
+        shares: [],
+        tiers: [],
+        items: [
+          {
+            id: 'item-1',
+            expenseId: 'exp-discount-custom',
+            name: "'Ohana Dinner",
+            priceCents: 6900,
+            isAlcohol: false,
+            assigneeIds: [USER_1, USER_2],
+          },
+          {
+            id: 'item-2',
+            expenseId: 'exp-discount-custom',
+            name: 'Lapu Lapu',
+            priceCents: 2400,
+            isAlcohol: true,
+            assigneeIds: [USER_1, USER_2],
+          },
+        ],
+        chargeLines: [],
+        refunds: [],
+      },
+    });
+
+    // Tap + Discount (20%)
+    const addDiscountBtn = await screen.findByTestId('add-charge-discount');
+    fireEvent.press(addDiscountBtn);
+
+    // Initial 20% calculation
+    const amountInput = screen.getByTestId('charge-amount-0');
+    expect(amountInput.props.value).toBe('13.80');
+
+    // Tap Custom % preset pill
+    const customPill = screen.getByTestId('discount-mode-custom-0');
+    fireEvent.press(customPill);
+
+    // Custom % text input appears with default 15% -> 15% of $69 = $10.35
+    const customPctInput = screen.getByTestId('discount-custom-pct-input-0');
+    expect(customPctInput.props.value).toBe('15');
+    expect(amountInput.props.value).toBe('10.35');
+    expect(screen.getByText(/15% of \$69\.00 non-alcoholic items/)).toBeTruthy();
+
+    // Type 40% (e.g. Cast Member dining discount) -> 40% of $69 = $27.60
+    fireEvent.changeText(customPctInput, '40');
+    expect(amountInput.props.value).toBe('27.60');
+    expect(screen.getByText(/40% of \$69\.00 non-alcoholic items \(excludes \$24\.00 alcohol\)/)).toBeTruthy();
+
+    // Toggle Exclude Alcohol to OFF -> 40% of $93 = $37.20
+    const excludeToggle = screen.getByTestId('discount-exclude-alcohol-0');
+    fireEvent(excludeToggle, 'valueChange', false);
+    expect(amountInput.props.value).toBe('37.20');
+    expect(screen.getByText(/40% of \$93\.00 total items/)).toBeTruthy();
+
+    // Submit expense
+    const submitBtn = screen.getByTestId('submit-expense-button');
+    fireEvent.press(submitBtn);
+
+    await waitFor(() => {
+      expect(mockedEditExpense).toHaveBeenCalledTimes(1);
+    });
+
+    const calledPayload = mockedEditExpense.mock.calls[0]![2] as any;
+    expect(calledPayload.chargeLines).toHaveLength(1);
+    expect(calledPayload.chargeLines[0]).toEqual({
+      kind: 'discount',
+      amountCents: -3720,
+      excludeAlcohol: false,
+    });
   });
 });

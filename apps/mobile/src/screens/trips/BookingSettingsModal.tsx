@@ -41,7 +41,16 @@ export interface BookingSettingsModalProps {
   readonly initialSettings: SettingsFormValues;
   readonly onConfirm: (changes: BookingSettingsUpdateInput) => void;
   readonly onCancel: () => void;
+  /**
+   * True when the timeline is derived from the Trip's dated stays (`stayType.source === 'stays'`, trip-lodging-stays
+   * R9.6): the trip-level lodging type and check-in override are then ignored, so both controls are disabled with a
+   * note. Lightning Lane timing still applies to every stay and stays editable.
+   */
+  readonly setPerStay?: boolean;
 }
+
+/** Shown in place of the two controls the Trip's stays now decide (trip-lodging-stays R9.6). */
+export const SET_PER_STAY_NOTE = 'Set per stay in Trip settings';
 
 const STAY_TYPE_OPTIONS: readonly { readonly label: string; readonly value: StayType | null }[] = [
   { label: 'Automatic', value: null },
@@ -66,6 +75,7 @@ export function BookingSettingsModal({
   initialSettings,
   onConfirm,
   onCancel,
+  setPerStay = false,
 }: BookingSettingsModalProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -166,6 +176,11 @@ export function BookingSettingsModal({
               <Text style={styles.sectionSubtitle}>
                 Controls when Advance Dining and Lightning Lane windows open.
               </Text>
+              {setPerStay ? (
+                <Text style={styles.perStayNote} testID="booking-settings-per-stay-note">
+                  {SET_PER_STAY_NOTE}
+                </Text>
+              ) : null}
               {STAY_TYPE_OPTIONS.map((opt) => {
                 const isSelected = stayType === opt.value;
                 const optId = `stay-type-${opt.label.toLowerCase().replace(/\s+/g, '-')}`;
@@ -173,10 +188,16 @@ export function BookingSettingsModal({
                   <Pressable
                     key={opt.label}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: isSelected }}
+                    accessibilityState={setPerStay ? { selected: isSelected, disabled: true } : { selected: isSelected }}
                     accessibilityLabel={opt.label}
+                    // Only when locked: a `disabled={false}` would add `disabled: false` to accessibilityState.
+                    {...(setPerStay ? { disabled: true } : {})}
                     onPress={() => setStayType(opt.value)}
-                    style={[styles.radioRow, isSelected && styles.radioRowSelected]}
+                    style={[
+                      styles.radioRow,
+                      isSelected && styles.radioRowSelected,
+                      setPerStay && styles.controlDisabled,
+                    ]}
                     testID={optId}
                   >
                     <View
@@ -231,19 +252,26 @@ export function BookingSettingsModal({
             {/* Check-In Date Override */}
             <View style={styles.section}>
               <SectionLabel>CHECK-IN OVERRIDE DATE</SectionLabel>
-              <Text style={styles.rangeText} testID="check-in-range-text">
-                {rangeText}
-              </Text>
+              {setPerStay ? (
+                <Text style={styles.perStayNote} testID="booking-settings-per-stay-note-check-in">
+                  {SET_PER_STAY_NOTE}
+                </Text>
+              ) : (
+                <Text style={styles.rangeText} testID="check-in-range-text">
+                  {rangeText}
+                </Text>
+              )}
               <DatePickerField
                 value={checkInOverride ?? ''}
                 onChange={handleDateChange}
                 minimumDate={range.min}
                 maximumDate={range.max}
                 placeholder="No override (use trip start)"
+                disabled={setPerStay}
                 accessibilityLabel="Check-in override date"
                 testID="check-in-override-picker"
               />
-              {checkInOverride !== null ? (
+              {checkInOverride !== null && !setPerStay ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Clear check-in override"
@@ -326,6 +354,15 @@ const useStyles = makeStyles((t) => ({
     ...t.typography.meta,
     color: t.color.textSecondary,
     marginBottom: 8,
+  },
+  perStayNote: {
+    ...t.typography.meta,
+    color: t.color.textPrimary,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  controlDisabled: {
+    opacity: 0.5,
   },
   radioRow: {
     flexDirection: 'row',

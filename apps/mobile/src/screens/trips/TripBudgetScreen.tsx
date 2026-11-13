@@ -35,8 +35,11 @@ import {
   fetchBudgetSuggestions,
   useDeleteBudgetLine,
   useDismissBudgetSuggestion,
+  useLinkBudgetLineExpense,
   usePatchBudgetSettings,
 } from './budgetApi';
+import { budgetLineToExpenseDraft } from './budgetToExpenseDraft';
+import { ExpenseFormModal } from './ExpenseFormModal';
 import { BudgetLineFormModal, type BudgetDraftProp } from './BudgetLineFormModal';
 import { BudgetTravelersModal } from './BudgetTravelersModal';
 import { BudgetSettingsModal } from './BudgetSettingsModal';
@@ -119,6 +122,8 @@ export interface TripBudgetScreenProps {
   readonly isOrganizer?: boolean;
 }
 
+const LINK_FAILED_TEXT = 'Expense saved, but it could not be linked to this budget line.';
+
 const BUDGET_CATEGORY_META: Record<
   BudgetCategory,
   { label: string; icon: keyof typeof Ionicons.glyphMap }
@@ -177,7 +182,9 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
   const meQuery = useQuery<{ user?: { id?: string } }>({
     queryKey: ['me'],
     queryFn: () => apiRequest<{ user?: { id?: string } }>('GET', '/me'),
-    enabled: isOrganizerProp === undefined,
+    // Always on: "Log as expense" needs the caller's id (the Expense payer defaults to the caller)
+    // even when the `isOrganizer` prop is supplied.
+    enabled: true,
   });
 
   const tripQuery = useQuery<TripDTO>({
@@ -190,6 +197,18 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
   const dismissMutation = useDismissBudgetSuggestion(tripId);
   const deleteLineMutation = useDeleteBudgetLine(tripId);
   const patchBudgetSettings = usePatchBudgetSettings(tripId);
+
+  // Log a Budget_Line as an Expense (trip-budget Requirement 23)
+  const linkExpenseMutation = useLinkBudgetLineExpense(tripId);
+  const [expenseDraftLine, setExpenseDraftLine] = useState<BudgetLineDTO | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const expenseDraft = useMemo(
+    () => (expenseDraftLine ? budgetLineToExpenseDraft(expenseDraftLine) : null),
+    [expenseDraftLine],
+  );
+  const callerUserId = meQuery.data?.user?.id;
+  // The Expense form needs the member roster and the caller's id (it defaults the payer to the caller).
+  const canLogExpense = Boolean(callerUserId) && Array.isArray(membersQuery.data);
 
   // Quick & Custom savings deposits
   const [showCustomDeposit, setShowCustomDeposit] = useState<boolean>(false);
@@ -291,6 +310,22 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
       await dismissMutation.mutateAsync({ suggestionKey });
     } catch {
       // handled by mutation error
+    }
+  };
+
+  const handleLogAsExpense = (line: BudgetLineDTO) => {
+    setLinkError(null);
+    setExpenseDraftLine(line);
+  };
+
+  // After the Expense is saved: record which Expense the line became. A failure here never
+  // re-creates the Expense (Requirement 23.9); the line simply stays unlinked.
+  const handleExpenseSaved = async (lineId: string, expenseId: string) => {
+    try {
+      await linkExpenseMutation.mutateAsync({ lineId, expenseId });
+    } catch {
+      setLinkError(LINK_FAILED_TEXT);
+      void budgetQuery.refetch();
     }
   };
 
@@ -728,6 +763,17 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
               : `By ${currentView.charAt(0).toUpperCase() + currentView.slice(1)}`}
           </Text>
 
+          {linkError ? (
+            <View
+              style={styles.linkErrorBox}
+              accessibilityLiveRegion="polite"
+              testID="budget-link-error"
+            >
+              <Ionicons name="alert-circle-outline" size={16} color={palette.overByText} />
+              <Text style={[styles.linkErrorText, { color: palette.overByText }]}>{linkError}</Text>
+            </View>
+          ) : null}
+
           {/* 1. Party view: list of lines */}
           {currentView === 'party' && (
             <>
@@ -806,6 +852,41 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                             {line.taxCents > 0 ? ` + Tax ${formatCents(line.taxCents)}` : ''}
                             {line.tipCents > 0 ? ` + Tip ${formatCents(line.tipCents)}` : ''}
                           </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.lineExpenseRow}>
+                        {line.linkedExpenseId ? (
+                          <View
+                            accessible
+                            accessibilityLabel="Logged as expense"
+                            style={styles.loggedMark}
+                            testID={`logged-expense-${line.id}`}
+                          >
+                            <Ionicons name="checkmark-circle" size={14} color={palette.leftText} />
+                            <Text style={[styles.loggedMarkText, { color: palette.leftText }]}>
+                              Logged as expense
+                            </Text>
+                          </View>
+                        ) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Log ${line.description} as expense`}
+                            accessibilityState={{ disabled: !canLogExpense }}
+                            disabled={!canLogExpense}
+                            onPress={() => handleLogAsExpense(line)}
+                            hitSlop={6}
+                            style={[
+                              styles.logExpenseBtn,
+                              { borderColor: palette.savingsText, opacity: canLogExpense ? 1 : 0.5 },
+                            ]}
+                            testID={`log-expense-${line.id}`}
+                          >
+                            <Ionicons name="receipt-outline" size={14} color={palette.savingsText} />
+                            <Text style={[styles.logExpenseBtnText, { color: palette.savingsText }]}>
+                              Log as expense
+                            </Text>
+                          </Pressable>
                         )}
                       </View>
                     </Pressable>
@@ -940,6 +1021,20 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
           }}
         />
       )}
+
+      {/* Log as expense: the Expense form, pre-filled from the chosen line (Requirement 23) */}
+      {expenseDraftLine && expenseDraft && callerUserId && Array.isArray(membersQuery.data) ? (
+        <ExpenseFormModal
+          visible
+          tripId={tripId}
+          initialDraft={expenseDraft}
+          members={membersQuery.data}
+          guests={guestsQuery.data ?? []}
+          callerId={callerUserId}
+          onClose={() => setExpenseDraftLine(null)}
+          onSaved={(expense) => handleExpenseSaved(expenseDraftLine.id, expense.id)}
+        />
+      ) : null}
 
       {/* Travelers Modal */}
       <BudgetTravelersModal
@@ -1431,6 +1526,45 @@ const useStyles = makeStyles((t) =>
       fontSize: 11,
       fontWeight: '600',
       color: t.color.textSecondary,
+    },
+    lineExpenseRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 8,
+    },
+    logExpenseBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: t.radius.lg,
+      borderWidth: 1,
+    },
+    logExpenseBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    loggedMark: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 4,
+    },
+    loggedMarkText: {
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    linkErrorBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: t.spacing.sm,
+    },
+    linkErrorText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
     },
     emptyState: {
       padding: t.spacing.xl,
