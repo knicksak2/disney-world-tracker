@@ -526,6 +526,12 @@ Added by the `trip-budget` spec. For any request without valid Basic Auth, `GET 
 
 **Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8**
 
+### Property 12: Pin set-resolution health and active-user award aggregation accuracy
+
+For any generated `EvalExperience[]` catalog, pin award table (`user_pins`), showcase placements (`pin_showcase_placements`), and active/non-active accounts (`users` with `deletion_state = 'active'` vs `'pending_deletion' | 'purging' | 'tombstone'`), the pin health and admin aggregation functions (`evaluatePinSetHealth`, `summarizePinAwards`, and `AdminRepo.getPinSystemSummary`) produce exact invariant results: (a) `evaluatePinSetHealth` returns one row per entry in `PIN_SETS` in `Object.keys(PIN_SETS)` order where `matchedCount === resolveSet(setId, catalog).length`, `expectedCount === (res.kind === 'ids' ? res.ids.length : null)`, `missingIds` contains the exact unfound curated `ids`, `referencingPinIds` lists every pin in `PINS` whose `criteria` (or nested `compound` criteria) references `setId`, and `status` is `'empty'` when `matchedCount === 0`, `'partial'` when `matchedCount > 0` and (`missingIds.length > 0` or `matchedCount` is below any referencing pin's numeric `required` threshold), and `'ok'` otherwise; (b) `summarizePinAwards` produces one row per pin in `PINS` where `sum(byPin.unlockedCount) === totalUnlocked`, `sum(byPin.claimedCount) === totalClaimed`, and `claimedCount <= unlockedCount`; (c) non-active accounts (`deletion_state <> 'active'`) are excluded from active-user counts, unlocked/claimed pin totals, per-pin counts, and showcase placement totals in `getPinSystemSummary`. All `/admin/pins*` routes enforce Basic Auth (`401` on missing/invalid credentials), same-origin `POST` checks (`403` on cross-origin), `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: private, no-store`, and `pin-catalog-mockup.html` plus its companion JS assets are never modified.
+
+**Validates: Requirements 12.4, 21.1, 21.2, 21.3, 21.4**
+
 ## Error Handling
 
 Three new `ErrorCode` values are added to `packages/shared/src/errors.ts`, mapped via

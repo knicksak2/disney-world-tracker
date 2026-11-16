@@ -109,6 +109,10 @@ import {
   accountDeletionRoutes,
   type AccountDeletionRoutesOptions,
 } from './services/accountDeletion/routes.js';
+import {
+  feedbackRoutes,
+  type FeedbackRoutesOptions,
+} from './services/feedback/routes.js';
 import { legalRoutes } from './services/legal/routes.js';
 import {
   pinRoutes,
@@ -294,6 +298,8 @@ export interface BuildServerServices {
    * routes and the `x-cron-secret`-gated purge cron route. Opt-in like every other service.
    */
   readonly accountDeletion?: AccountDeletionRoutesOptions;
+  /** In-app feedback: `POST /me/feedback` (Feature: in-app-feedback). */
+  readonly feedback?: FeedbackRoutesOptions;
   /**
    * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
    * the internal sampling cron endpoint (R3, R6, R11).
@@ -690,6 +696,9 @@ export function buildServer(
 
   if (services.mickeys !== undefined) {
     void app.register(mickeyRoutes(services.mickeys));
+  }
+  if (services.feedback !== undefined) {
+    void app.register(feedbackRoutes(services.feedback));
   }
 
   if (services.friendFoodRatings !== undefined) {

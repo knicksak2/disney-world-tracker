@@ -144,6 +144,16 @@ export interface AuthRoutesOptions {
    * account is restorable, login FAILS CLOSED with `invalid_credentials` and the reset hook is not passed.
    */
   readonly accountRestore?: AccountRestorePort;
+  /**
+   * Optional password hasher/verifier override; defaults to the production
+   * Argon2id `hash` / `verify` helpers from `./password.js`. Used by property
+   * tests that exercise the full register/login pipeline 100+ times without
+   * spending 64 MiB per iteration.
+   */
+  readonly passwordHasher?: {
+    hash(plaintext: string): Promise<string>;
+    verify(encoded: string, plaintext: string): Promise<boolean>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +289,8 @@ async function handleRegister(
 ): Promise<AuthSessionResponseDTO> {
   const input = parseInput(registerInputSchema, request.body);
 
-  const passwordHash = await hashPassword(input.password);
+  const hashFn = opts.passwordHasher?.hash ?? hashPassword;
+  const passwordHash = await hashFn(input.password);
   const tokenPair = generateToken();
   const issuedAt = now();
   const absoluteExpiresAt = new Date(issuedAt.getTime() + ABSOLUTE_TTL_MS);
@@ -420,9 +431,10 @@ async function handleLogin(
     }
   }
 
+  const verifyFn = opts.passwordHasher?.verify ?? verifyPassword;
   const passwordOk =
     userRow !== null
-      ? await verifyPassword(userRow.password_hash, input.password)
+      ? await verifyFn(userRow.password_hash, input.password)
       : false;
 
   if (!passwordOk) {
@@ -580,7 +592,9 @@ async function handleChangePassword(
     throw new AppError('unauthorized', 'Session is no longer valid.');
   }
 
-  const currentOk = await verifyPassword(
+  const verifyFn = opts.passwordHasher?.verify ?? verifyPassword;
+  const hashFn = opts.passwordHasher?.hash ?? hashPassword;
+  const currentOk = await verifyFn(
     userRow.password_hash,
     input.currentPassword,
   );
@@ -590,7 +604,7 @@ async function handleChangePassword(
     throw new AppError('invalid_credentials', 'Current password is incorrect.');
   }
 
-  const newPasswordHash = await hashPassword(input.newPassword);
+  const newPasswordHash = await hashFn(input.newPassword);
 
   // The bearer token of the session that authorized this request. Used to
   // preserve the current session while revoking every other one.
@@ -804,7 +818,8 @@ async function handleResetPassword(
     throw new AppError('invalid_code', 'Invalid or expired verification code.');
   }
 
-  const newPasswordHash = await hashPassword(input.newPassword);
+  const hashFn = opts.passwordHasher?.hash ?? hashPassword;
+  const newPasswordHash = await hashFn(input.newPassword);
   const restorePort = opts.accountRestore;
   const outcome = await repo.completeReset(
     record.id,

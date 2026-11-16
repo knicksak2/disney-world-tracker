@@ -10,6 +10,7 @@ import type { MenuDTO, PriceQuoteDTO } from '@dwt/shared';
 
 import { BudgetLineFormModal } from '../BudgetLineFormModal';
 import * as budgetApi from '../budgetApi';
+import * as apiClient from '../../../api/client';
 
 const mockMutateAsync = jest.fn().mockResolvedValue({ id: 'saved-line-1' });
 
@@ -1280,8 +1281,12 @@ describe('BudgetLineFormModal (Task 18.2, Requirements 2.1-2.7, 14.8, 14.12, 22.
     expect(screen.queryByLabelText('Increase buffet kids')).toBeNull();
     expect(screen.queryByLabelText('Decrease buffet kids')).toBeNull();
 
-    // 3. Misleading drink-average (~$8.26/person) is NOT rendered
+    // 3. Misleading drink-average (~$8.26/person), Menu Average tab, and Quick-Service chip are NOT rendered
     expect(screen.queryByLabelText('Apply menu average')).toBeNull();
+    expect(screen.queryByText('Menu Average')).toBeNull();
+    expect(screen.queryByText('Quick-Service (~$20)')).toBeNull();
+    expect(screen.getByLabelText('Buffet / Character').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('Pick Menu Items')).toBeTruthy();
 
     // 4. Standalone theme park picker is NOT rendered because experience is linked
     expect(screen.queryByLabelText('Magic Kingdom')).toBeNull();
@@ -1298,6 +1303,232 @@ describe('BudgetLineFormModal (Task 18.2, Requirements 2.1-2.7, 14.8, 14.12, 22.
     expect(screen.getByText('test')).toBeTruthy();
     expect(screen.getByText('user')).toBeTruthy();
     expect(screen.getByText('You')).toBeTruthy();
+  });
+
+  it('a-la-carte table-service restaurants hide Buffet / Fixed and Quick-Service chips and default to Menu Average', async () => {
+    const skipperMenus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        serviceStyle: 'Table Service',
+        groups: [
+          {
+            name: 'Entrees',
+            type: 'Entrees',
+            items: [
+              { name: 'Tastes like Chicken Because it is!', price: '$27.00', priceCents: 2700 },
+              { name: 'Curried Vegetable Crew Stew', price: '$23.00', priceCents: 2300 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        tripStart="2026-12-15"
+        tripEnd="2026-12-20"
+        members={[
+          { id: 'u1', name: 'Alice' },
+          { id: 'u2', name: 'Bob' },
+        ]}
+        initialDraft={{
+          category: 'dining',
+          experienceId: 'skipper-canteen-exp',
+          description: 'Skipper Canteen',
+          plannedDate: '2026-12-15',
+        }}
+        restaurantMenus={skipperMenus}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Buffet / Fixed tab and hardcoded $65/$42 steppers are NOT rendered
+    expect(screen.queryByText('Buffet / Fixed')).toBeNull();
+    expect(screen.queryByLabelText('Increase buffet adults')).toBeNull();
+
+    // Quick-Service (~$20) is NOT rendered on a linked Table Service restaurant
+    expect(screen.queryByText('Quick-Service (~$20)')).toBeNull();
+
+    // Menu Average tab is rendered and selected by default, with real menu average ($25/person * 2 = $50.00)
+    const menuAvgTab = screen.getByLabelText('Table-Service ~$45/person');
+    expect(menuAvgTab.props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('Pick Menu Items')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Apply menu average'));
+    expect(screen.getByDisplayValue('50.00')).toBeTruthy();
+  });
+
+  it('quick-service restaurants hide Buffet / Fixed and keep Quick-Service (~$20) option', async () => {
+    const qsMenus: MenuDTO[] = [
+      {
+        menuType: 'Lunch',
+        serviceStyle: 'Quick Service',
+        groups: [
+          {
+            name: 'Entrees',
+            type: 'Entrees',
+            items: [
+              { name: 'Cheeseburger', price: '$13.00', priceCents: 1300 },
+              { name: 'Chicken Strips', price: '$11.00', priceCents: 1100 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        members={[{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]}
+        initialDraft={{
+          category: 'dining',
+          experienceId: 'cosmic-rays-exp',
+          description: "Cosmic Ray's",
+          plannedDate: '2026-12-15',
+        }}
+        restaurantMenus={qsMenus}
+        onCancel={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Buffet / Fixed')).toBeNull();
+    expect(screen.getByLabelText('Table-Service ~$45/person').props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByLabelText('Quick-Service ~$20/person'));
+    expect(screen.getByDisplayValue('40.00')).toBeTruthy();
+  });
+
+  it('displays separate adult and kid menu averages at the top and allocates adult vs child rates on Apply', async () => {
+    const menusWithKids: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        serviceStyle: 'Table Service',
+        groups: [
+          {
+            name: 'Entrees',
+            type: 'Entrees',
+            items: [
+              { name: 'Steak', price: '$38.00', priceCents: 3800 },
+              { name: 'Chicken', price: '$28.00', priceCents: 2800 },
+            ],
+          },
+          {
+            name: "Kids' Create-Your-Own Selections",
+            items: [
+              { name: 'Kids Pasta', price: '$13.00', priceCents: 1300 },
+              { name: 'Kids Fish', price: '$15.00', priceCents: 1500 },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        members={[{ id: 'u1', name: 'Alice' }]}
+        guests={[{ id: 'g1', name: 'Kid', isGuest: true }]}
+        initialDraft={{
+          category: 'dining',
+          experienceId: 'skipper-canteen-exp',
+          description: 'Skipper Canteen',
+          plannedDate: '2026-12-15',
+        }}
+        restaurantMenus={menusWithKids}
+        onCancel={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText('Use Menu Average (~$33.00 adult · ~$14.00 kid)')).toBeTruthy();
+    expect(screen.getByText("Based on 2 entrées & 2 kids' · 1 adult + 1 kid = $47.00")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Apply menu average'));
+    expect(screen.getByLabelText('Manual price').props.value).toBe('47.00');
+    expect(screen.getByLabelText('Allocation for Alice').props.value).toBe('33.00');
+    expect(screen.getByLabelText('Allocation for Kid').props.value).toBe('14.00');
+  });
+
+  it('multi-meal-period buffet offers (Breakfast + Dinner) render with unique keys and no duplicate-key errors', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const multiMealMenus: MenuDTO[] = [
+      {
+        menuType: 'Breakfast',
+        serviceStyle: 'Buffet',
+        groups: [
+          {
+            name: 'Breakfast Pricing',
+            items: [
+              { name: '$49 per adult', price: '$49.00' },
+              { name: '$30 per child', price: '$30.00' },
+            ],
+          },
+        ],
+      },
+      {
+        menuType: 'Dinner',
+        serviceStyle: 'Buffet',
+        groups: [
+          {
+            name: 'Dinner Pricing',
+            items: [
+              { name: '$58 per adult', price: '$58.00' },
+              { name: '$36 per child', price: '$36.00' },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        members={[
+          { id: 'u1', name: 'Alice' },
+          { id: 'u2', name: 'Bob' },
+        ]}
+        guests={[{ id: 'g1', name: 'Kid', isGuest: true }]}
+        initialDraft={{
+          category: 'dining',
+          experienceId: 'ohana-exp',
+          description: "'Ohana",
+          plannedDate: '2026-12-15',
+        }}
+        restaurantMenus={multiMealMenus}
+        onCancel={jest.fn()}
+      />
+    );
+
+    const dupKeyErrors = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes('Encountered two children with the same key')
+    );
+    errorSpy.mockRestore();
+
+    expect(dupKeyErrors).toHaveLength(0);
+    // Breakfast is selected initially, showing only the 2 Breakfast steppers (2 Adult + 1 Child = $128.00)
+    expect(screen.getByLabelText('Meal period Breakfast').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText('Meal period Dinner').props.accessibilityState.selected).toBe(false);
+    expect(screen.getByText('2 Adult')).toBeTruthy();
+    expect(screen.getByText('1 Child')).toBeTruthy();
+    expect(screen.getByText('$49.00/ea')).toBeTruthy();
+    expect(screen.getByText('$30.00/ea')).toBeTruthy();
+    expect(screen.queryByText('$58.00/ea')).toBeNull();
+    expect(screen.getByLabelText('Manual price').props.value).toBe('128.00');
+
+    // 1-tap switch to Dinner transfers 2 Adult + 1 Child to Dinner rates ($58 + $58 + $36 = $152.00)
+    fireEvent.press(screen.getByLabelText('Meal period Dinner'));
+    expect(screen.getByLabelText('Meal period Dinner').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('2 Adult')).toBeTruthy();
+    expect(screen.getByText('1 Child')).toBeTruthy();
+    expect(screen.getByText('$58.00/ea')).toBeTruthy();
+    expect(screen.getByText('$36.00/ea')).toBeTruthy();
+    expect(screen.queryByText('$49.00/ea')).toBeNull();
+    expect(screen.getByLabelText('Manual price').props.value).toBe('152.00');
+    expect(screen.getByLabelText('Allocation for Alice').props.value).toBe('58.00');
+    expect(screen.getByLabelText('Allocation for Kid').props.value).toBe('36.00');
   });
 
   it('renders Ticket Quote Calculator with 6-category grid and mockup styling', async () => {
@@ -1442,5 +1673,489 @@ describe('BudgetLineFormModal (Task 18.2, Requirements 2.1-2.7, 14.8, 14.12, 22.
     );
     const noInset = StyleSheet.flatten(screen.getByTestId('budget-line-form-modal-header').props.style);
     expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
+  });
+
+  it('hydrates linked Disney restaurant name, meal period, and tier quantities when editing a dining line', async () => {
+    const apiSpy = jest.spyOn(apiClient, 'apiRequest').mockImplementation(async (_method, path) => {
+      if (path === '/catalog/exp-ohana') {
+        return {
+          id: 'exp-ohana',
+          name: "'Ohana",
+          park: 'Magic Kingdom',
+          category: 'Restaurant',
+          menus: [
+            {
+              menuType: 'Breakfast',
+              serviceStyle: 'Buffet',
+              groups: [
+                {
+                  name: 'Breakfast Pricing',
+                  items: [
+                    { name: '$58 per adult', price: '$58.00' },
+                    { name: '$36 per child', price: '$36.00' },
+                  ],
+                },
+              ],
+            },
+            {
+              menuType: 'Dinner',
+              serviceStyle: 'Buffet',
+              groups: [
+                {
+                  name: 'Dinner Pricing',
+                  items: [
+                    { name: '$69 per adult', price: '$69.00' },
+                    { name: '$46 per child', price: '$46.00' },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+      }
+      return [];
+    });
+
+    try {
+      renderWithClient(
+        <BudgetLineFormModal
+          visible={true}
+          tripId={tripId}
+          tripStart="2026-12-15"
+          tripEnd="2026-12-20"
+          members={[
+            { id: 'u1', name: 'knicksak2' },
+            { id: 'u2', name: 'test' },
+            { id: 'u3', name: 'user' },
+          ]}
+          guests={[{ id: 'g1', name: 'kid', isGuest: true }]}
+          initialLine={{
+            id: 'line-ohana-1',
+            tripId,
+            createdBy: 'u1',
+            category: 'dining',
+            description: "'Ohana",
+            plannedDate: '2026-12-15',
+            park: null,
+            experienceId: 'exp-ohana',
+            priceSource: 'disney_menu',
+            priceLabelKind: 'current',
+            effectivePriceSource: 'disney_menu',
+            asOf: '2026-11-15',
+            attribution: 'disney',
+            applyTip: true,
+            linkedExpenseId: null,
+            suggestionKey: null,
+            subtotalCents: 25300,
+            taxCents: 1645,
+            tipCents: 4554,
+            totalCents: 31499,
+            allocations: [
+              { id: 'a1', memberId: 'u1', guestId: null, storedCents: 6900, effectiveCents: 6900, taxCents: 449, tipCents: 1242, priceRef: { kind: 'menu', tier: { name: 'Adult', priceCents: 6900 } } },
+              { id: 'a2', memberId: 'u2', guestId: null, storedCents: 6900, effectiveCents: 6900, taxCents: 449, tipCents: 1242, priceRef: { kind: 'menu', tier: { name: 'Adult', priceCents: 6900 } } },
+              { id: 'a3', memberId: 'u3', guestId: null, storedCents: 6900, effectiveCents: 6900, taxCents: 449, tipCents: 1242, priceRef: { kind: 'menu', tier: { name: 'Adult', priceCents: 6900 } } },
+              { id: 'a4', memberId: null, guestId: 'g1', storedCents: 4600, effectiveCents: 4600, taxCents: 298, tipCents: 828, priceRef: { kind: 'menu', tier: { name: 'Child', priceCents: 4600 } } },
+            ],
+          }}
+          onCancel={jest.fn()}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Change restaurant')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('Select Disney Restaurant')).toBeNull();
+      expect(screen.getByText('Linked Restaurant')).toBeTruthy();
+      expect(screen.getByLabelText('Meal period Dinner').props.accessibilityState?.selected).toBe(true);
+      expect(screen.getByText('3 Adult')).toBeTruthy();
+      expect(screen.getByText('1 Child')).toBeTruthy();
+    } finally {
+      apiSpy.mockRestore();
+    }
+  });
+
+  it('hydrates selected Disney resort name and nightly rate when editing a lodging line', async () => {
+    const apiSpy = jest.spyOn(apiClient, 'apiRequest').mockImplementation(async (_method, path) => {
+      if (path === '/resorts') {
+        return {
+          resorts: [
+            { id: 'res-movies', name: "Disney's All-Star Movies Resort" },
+            { id: 'res-pop', name: "Disney's Pop Century Resort" },
+          ],
+        };
+      }
+      return [];
+    });
+
+    try {
+      renderWithClient(
+        <BudgetLineFormModal
+          visible={true}
+          tripId={tripId}
+          tripStart="2026-12-15"
+          tripEnd="2026-12-31"
+          members={[{ id: 'u1', name: 'knicksak2' }]}
+          initialLine={{
+            id: 'line-hotel-1',
+            tripId,
+            createdBy: 'u1',
+            category: 'lodging',
+            description: "Disney's All-Star Movies Resort",
+            plannedDate: '2026-12-15',
+            park: null,
+            experienceId: null,
+            priceSource: 'user_entered',
+            priceLabelKind: 'your_price',
+            effectivePriceSource: 'user_entered',
+            asOf: '2026-11-15',
+            attribution: null,
+            applyTip: false,
+            linkedExpenseId: null,
+            suggestionKey: null,
+            subtotalCents: 200000,
+            taxCents: 0,
+            tipCents: 0,
+            totalCents: 200000,
+            allocations: [
+              { id: 'a1', memberId: 'u1', guestId: null, storedCents: 200000, effectiveCents: 200000, taxCents: 0, tipCents: 0, priceRef: null },
+            ],
+          }}
+          onCancel={jest.fn()}
+        />
+      );
+
+      expect(screen.queryByText('Select Disney Resort Hotel')).toBeNull();
+      expect(screen.getByText('Selected Disney Resort')).toBeTruthy();
+      expect(screen.getByLabelText('Change resort')).toBeTruthy();
+      expect(screen.getByDisplayValue("Disney's All-Star Movies Resort")).toBeTruthy();
+      expect(screen.getByText('16 nights')).toBeTruthy();
+      expect(screen.getByDisplayValue('125.00')).toBeTruthy();
+    } finally {
+      apiSpy.mockRestore();
+    }
+  });
+
+  it('Exclude Me, Only Me, and You badge target callerId instead of trip creator when someone else created the trip', async () => {
+    const saveSpy = jest.fn();
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        callerId="user-alex"
+        members={[
+          { id: 'user-lexie', name: 'Lexie' },
+          { id: 'user-alex', name: 'Alex' },
+          { id: 'user-sam', name: 'Sam' },
+        ]}
+        initialDraft={{ category: 'lodging', description: 'Resort Stay' }}
+        onSaveSuccess={saveSpy}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // "You" badge is attached to Alex (callerId), NOT Lexie (trip creator at index 0)
+    const lexieCard = screen.getByLabelText('Include Lexie in split');
+    const alexCard = screen.getByLabelText('Include Alex in split');
+    expect(within(lexieCard).queryByText('You')).toBeNull();
+    expect(within(alexCard).getByText('You')).toBeTruthy();
+
+    // Enter $150.00 and tap Exclude Me
+    fireEvent.changeText(screen.getByLabelText('Manual price'), '150.00');
+    fireEvent.press(screen.getByLabelText('Exclude me so others split'));
+
+    // Alex is excluded ($0.00); Lexie and Sam split $75.00 each
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('0.00');
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('75.00');
+    expect(screen.getByLabelText('Allocation for Sam').props.value).toBe('75.00');
+    expect(screen.getByLabelText('Include Alex in split').props.accessibilityState.checked).toBe(false);
+    expect(screen.getByLabelText('Include Lexie in split').props.accessibilityState.checked).toBe(true);
+
+    // Tap Only Me -> Alex gets 100% ($150.00), Lexie and Sam get $0.00
+    fireEvent.press(screen.getByLabelText('I pay all 100%'));
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('150.00');
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('0.00');
+    expect(screen.getByLabelText('Allocation for Sam').props.value).toBe('0.00');
+
+    // Tap Exclude Me again and save -> payload excludes Alex and sends Lexie & Sam
+    fireEvent.press(screen.getByLabelText('Exclude me so others split'));
+    fireEvent.press(screen.getByLabelText('Save line'));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allocations: [
+            expect.objectContaining({ memberId: 'user-lexie', amountCents: 7500 }),
+            expect.objectContaining({ memberId: 'user-sam', amountCents: 7500 }),
+          ],
+        })
+      );
+      expect(saveSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('matches child and under3 age brackets from TravelerProfileDTO across ticket quotes, Exclude Me, and Smart Rates', async () => {
+    const adultQuote: PriceQuoteDTO = {
+      priceCents: 19400,
+      taxCents: 1261,
+      effectivePriceSource: 'disney_ticket_calendar',
+      priceLabelKind: 'current',
+      asOf: '2026-10-26',
+      attribution: 'disney',
+      parkAssumed: false,
+    };
+    const childQuote: PriceQuoteDTO = {
+      priceCents: 18400,
+      taxCents: 1196,
+      effectivePriceSource: 'disney_ticket_calendar',
+      priceLabelKind: 'current',
+      asOf: '2026-10-26',
+      attribution: 'disney',
+      parkAssumed: false,
+    };
+    mockFetchQuotes.mockResolvedValueOnce([adultQuote, childQuote]);
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        tripStart="2026-11-01"
+        callerId="user-alex"
+        members={[
+          { id: 'user-lexie', name: 'Lexie' },
+          { id: 'user-leo', name: 'Leo' },
+          { id: 'user-alex', name: 'Alex' },
+        ]}
+        guests={[{ id: 'guest-mia', name: 'Mia', isGuest: true }]}
+        travelers={[
+          {
+            id: 'p1',
+            memberId: 'user-lexie',
+            guestId: null,
+            label: 'Lexie',
+            ageBracket: 'adult',
+            ticketOption: 'base',
+            ticketDays: 1,
+            ticketStartDate: '2026-11-01',
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p2',
+            memberId: 'user-leo',
+            guestId: null,
+            label: 'Leo',
+            ageBracket: 'child',
+            ticketOption: 'base',
+            ticketDays: 1,
+            ticketStartDate: '2026-11-01',
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p3',
+            memberId: 'user-alex',
+            guestId: null,
+            label: 'Alex',
+            ageBracket: 'adult',
+            ticketOption: 'base',
+            ticketDays: 1,
+            ticketStartDate: '2026-11-01',
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p4',
+            memberId: null,
+            guestId: 'guest-mia',
+            label: 'Mia',
+            ageBracket: 'under3',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+        ]}
+        initialDraft={{
+          category: 'tickets',
+          park: 'Magic Kingdom',
+        }}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Leo (without "kid"/"child" in name) is labeled Child (3–9) and Mia is Under 3 (Free)
+    expect(within(screen.getByLabelText('Include Leo in split')).getByText('Child (3–9)')).toBeTruthy();
+    expect(within(screen.getByLabelText('Include Mia in split')).getByText('Under 3 (Free)')).toBeTruthy();
+
+    // Tap "Use Profiles" -> prefills 2 Adults, 1 Child (skips Mia under3)
+    fireEvent.press(screen.getByLabelText('Use traveler profiles'));
+    fireEvent.press(screen.getByLabelText('Get ticket quote'));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('572.00')).toBeTruthy();
+    });
+
+    // Child rate ($184) goes to Leo (index 1), Adult rates ($194) go to Lexie (index 0) and Alex (index 2), Mia is $0
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('194.00');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('184.00');
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('194.00');
+    expect(screen.getByLabelText('Allocation for Mia').props.value).toBe('0.00');
+
+    // Exclude Me (Alex) preserves adult-vs-child ratio between Lexie and Leo instead of splitting 50/50
+    fireEvent.press(screen.getByLabelText('Exclude me so others split'));
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('0.00');
+    expect(screen.getByLabelText('Allocation for Mia').props.value).toBe('0.00');
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('293.57');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('278.43');
+  });
+
+  it('allocates child rates accurately on dining buffets and Smart Rates regardless of traveler order', async () => {
+    const ohanaMenus: MenuDTO[] = [
+      {
+        menuType: 'Dinner',
+        serviceStyle: 'Buffet',
+        groups: [
+          {
+            name: 'Dinner Pricing',
+            items: [
+              { name: '$69 per adult', price: '$69.00' },
+              { name: '$46 per child', price: '$46.00' },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        callerId="user-alex"
+        members={[
+          { id: 'user-lexie', name: 'Lexie' },
+          { id: 'user-alex', name: 'Alex' },
+        ]}
+        guests={[
+          { id: 'guest-leo', name: 'Leo', isGuest: true },
+          { id: 'guest-mia', name: 'Mia', isGuest: true },
+        ]}
+        travelers={[
+          {
+            id: 'p1',
+            memberId: 'user-lexie',
+            guestId: null,
+            label: 'Lexie',
+            ageBracket: 'adult',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p2',
+            memberId: 'user-alex',
+            guestId: null,
+            label: 'Alex',
+            ageBracket: 'adult',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p3',
+            memberId: null,
+            guestId: 'guest-leo',
+            label: 'Leo',
+            ageBracket: 'child',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+          {
+            id: 'p4',
+            memberId: null,
+            guestId: 'guest-mia',
+            label: 'Mia',
+            ageBracket: 'under3',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+        ]}
+        initialDraft={{
+          category: 'dining',
+          experienceId: 'ohana-exp',
+          description: "'Ohana",
+          plannedDate: '2026-12-15',
+        }}
+        restaurantMenus={ohanaMenus}
+        onCancel={jest.fn()}
+      />
+    );
+
+    // Auto-prefills 2 Adult ($69) + 1 Child ($46) = $184.00, skipping under3 Mia ($0.00)
+    expect(screen.getByDisplayValue('184.00')).toBeTruthy();
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('69.00');
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('69.00');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('46.00');
+    expect(screen.getByLabelText('Allocation for Mia').props.value).toBe('0.00');
+
+    // Exclude Me (Alex) -> remaining paying diners Lexie (69) and Leo (46) split $184 proportionally ($110.40 and $73.60)
+    fireEvent.press(screen.getByLabelText('Exclude me so others split'));
+    expect(screen.getByLabelText('Allocation for Alex').props.value).toBe('0.00');
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('110.40');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('73.60');
+  });
+
+  it('allocates $65 adult / $42 child on fallback buffet steppers instead of splitting evenly', async () => {
+    renderWithClient(
+      <BudgetLineFormModal
+        visible={true}
+        tripId={tripId}
+        callerId="user-lexie"
+        members={[{ id: 'user-lexie', name: 'Lexie' }]}
+        guests={[{ id: 'guest-leo', name: 'Leo', isGuest: true }]}
+        travelers={[
+          {
+            id: 'p1',
+            memberId: null,
+            guestId: 'guest-leo',
+            label: 'Leo',
+            ageBracket: 'child',
+            ticketOption: null,
+            ticketDays: null,
+            ticketStartDate: null,
+            discountGroup: 'std-gst',
+            passType: 'none',
+          },
+        ]}
+        initialDraft={{ category: 'dining', plannedDate: '2026-12-15' }}
+        onCancel={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByLabelText('Increase buffet kids'));
+    expect(screen.getByLabelText('Manual price').props.value).toBe('107.00');
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('65.00');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('42.00');
+
+    // Manual price + Split Evenly -> $53.50 each, then Smart Rates restores $65 adult / $42 child
+    fireEvent.changeText(screen.getByLabelText('Manual price'), '107.00');
+    fireEvent.press(screen.getByLabelText('Split among everyone'));
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('53.50');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('53.50');
+
+    fireEvent.press(screen.getByLabelText('Smart rate match for adults and kids'));
+    expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('65.00');
+    expect(screen.getByLabelText('Allocation for Leo').props.value).toBe('42.00');
   });
 });

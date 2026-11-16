@@ -22,6 +22,9 @@ import { registerPhotoRoutes } from './photoRoutes.js';
 import { registerTicketPriceRoutes } from './ticketPriceRoutes.js';
 import { registerMickeyRoutes } from './mickeyRoutes.js';
 import { registerDiningPlanRoutes } from './diningPlanRoutes.js';
+import { registerFeedbackRoutes } from './feedbackRoutes.js';
+import { registerPinRoutes } from './pinRoutes.js';
+import type { AdminFeedbackPort } from '../feedback/repo.js';
 import type { AdminDiningPlanPort } from '../diningPlan/adminPort.js';
 import type { AdminMickeyService } from '../mickeys/adminService.js';
 import type { DbPool } from '../../db/pool.js';
@@ -82,6 +85,10 @@ export interface AdminRoutesOptions {
   readonly pool?: DbPool | undefined;
   /** dining-plan-calculator Requirement 18: plan prices, defaults, location rules and the seed action. */
   readonly diningPlan?: AdminDiningPlanPort | undefined;
+  /** in-app-feedback Requirement 5 / admin-panel Requirement 20: the User Feedback section. */
+  readonly feedback?: AdminFeedbackPort | undefined;
+  /** admin-panel Requirement 21.4: override directory containing read-only Series 1 pin catalogue assets. */
+  readonly pinCatalogDir?: string | undefined;
 }
 
 export interface AdminSectionLink {
@@ -199,6 +206,14 @@ export const ADMIN_SECTIONS: readonly AdminSectionLink[] = [
     badge: 'Content Moderation',
   },
   {
+    path: '/admin/pins',
+    title: 'Pins & Achievements',
+    description: 'Series 1 catalog coverage, set resolution health, global unlock/claim metrics, and read-only visual catalogue.',
+    category: 'User Operations & Security',
+    icon: '🏅',
+    badge: 'Gamification & Catalog',
+  },
+  {
     path: '/admin/mickeys',
     title: 'Hidden Mickeys',
     description: 'Review pending submissions, soft-hidden reports, ready-to-promote community entries, and inactive rides.',
@@ -275,6 +290,15 @@ export const DINING_PLAN_ADMIN_SECTION: AdminSectionLink = {
   badge: 'Curated Rules',
 };
 
+export const FEEDBACK_ADMIN_SECTION: AdminSectionLink = {
+  path: '/admin/feedback',
+  title: 'User Feedback',
+  description: 'Bug reports and ideas sent from the app: read, triage, resolve, or delete.',
+  category: 'User Operations & Security',
+  icon: '💬',
+  badge: 'In-App Reports',
+};
+
 export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
   return async function adminPlugin(fastify) {
     if (options.ticketPrices) {
@@ -294,6 +318,17 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
       }
     } else {
       const idx = ADMIN_SECTIONS.findIndex((s) => s.path === DINING_PLAN_ADMIN_SECTION.path);
+      if (idx !== -1) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).splice(idx, 1);
+      }
+    }
+    // The User Feedback section is listed only when its port is supplied, like the Dining Plan section.
+    if (options.feedback) {
+      if (!ADMIN_SECTIONS.some((s) => s.path === FEEDBACK_ADMIN_SECTION.path)) {
+        (ADMIN_SECTIONS as AdminSectionLink[]).push(FEEDBACK_ADMIN_SECTION);
+      }
+    } else {
+      const idx = ADMIN_SECTIONS.findIndex((s) => s.path === FEEDBACK_ADMIN_SECTION.path);
       if (idx !== -1) {
         (ADMIN_SECTIONS as AdminSectionLink[]).splice(idx, 1);
       }
@@ -1768,6 +1803,16 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
             { header: 'Name', cell: (p) => escapeHtml(pinDefMap.get(p.pinId)?.name ?? p.pinId) },
             { header: 'Tier', cell: (p) => escapeHtml(pinDefMap.get(p.pinId)?.tier ?? '-') },
             { header: 'Track', cell: (p) => escapeHtml(pinDefMap.get(p.pinId)?.track ?? '-') },
+            { header: 'Description', cell: (p) => escapeHtml(pinDefMap.get(p.pinId)?.description ?? '-') },
+            {
+              header: 'Progress',
+              cell: (p) =>
+                p.unlocked || p.awardedAt
+                  ? '<span class="badge badge-success">Complete</span>'
+                  : escapeHtml(
+                      `${p.currentValue ?? 0} / ${p.targetValue ?? 1} (${p.percentComplete ?? 0}%)`,
+                    ),
+            },
             {
               header: 'Unlocked At',
               cell: (p) => (p.awardedAt ? localTime(p.awardedAt) : '<span class="text-muted">Locked</span>'),
@@ -1785,11 +1830,14 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
               'Detailed achievement and pin unlock status for this user account. The operator can trigger a global pin reconciliation batch to evaluate all accounts.',
             )}
             <div class="card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
                 <h2>Pin Board Diagnostic: ${escapeHtml(userId)}</h2>
-                <form method="POST" action="/admin/users/${escapeHtml(userId)}/pins/reconcile">
-                  <button type="submit" class="btn">Trigger Pin Reconciliation</button>
-                </form>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                  <a href="/admin/pins" class="btn btn-secondary">Pins Console</a>
+                  <form method="POST" action="/admin/users/${escapeHtml(userId)}/pins/reconcile" style="margin: 0;">
+                    <button type="submit" class="btn">Trigger Pin Reconciliation</button>
+                  </form>
+                </div>
               </div>
               <p class="text-muted" style="margin-bottom: 1rem;">
                 Total Pins: ${pinsList.length} | Unlocked: ${pinsList.filter((p) => p.awardedAt).length}
@@ -1988,6 +2036,10 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
     // Dining Plan Calculator (dining-plan-calculator task 9)
     // -------------------------------------------------------------------------
     await registerDiningPlanRoutes(fastify, options);
+    // -------------------------------------------------------------------------
+    // User Feedback (in-app-feedback)
+    // -------------------------------------------------------------------------
+    await registerFeedbackRoutes(fastify, options);
 
     // -------------------------------------------------------------------------
     // Hidden Mickeys Review Queue & Operations (Task 7.2)
@@ -1995,5 +2047,10 @@ export function adminRoutes(options: AdminRoutesOptions): FastifyPluginAsync {
     if (options.mickeys || options.pool) {
       await registerMickeyRoutes(fastify, options);
     }
+
+    // -------------------------------------------------------------------------
+    // Pins & Achievements Console & Visual Catalogue (admin-panel Requirement 21)
+    // -------------------------------------------------------------------------
+    await registerPinRoutes(fastify, options);
   };
 }

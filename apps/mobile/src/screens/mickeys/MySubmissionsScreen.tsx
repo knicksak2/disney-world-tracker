@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MickeyStatus } from '@dwt/shared';
@@ -23,6 +24,8 @@ export default function MySubmissionsScreen(): JSX.Element {
   const navigation = useNavigation<NavigationProp>();
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.lg + (insets?.top ?? 0);
 
   const { data: submissions, isLoading, refetch } = useMySubmissions();
 
@@ -71,7 +74,7 @@ export default function MySubmissionsScreen(): JSX.Element {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View testID="my-submissions-header" style={[styles.header, { paddingTop: headerTopPadding }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"

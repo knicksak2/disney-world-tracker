@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatCentsAsDollarString, type DiningPlanResultDTO, type DiningScenarioCode } from '@dwt/shared';
+import { formatCentsAsDollarString, type DiningPartyPersonDTO, type DiningPlanResultDTO, type DiningScenarioCode } from '@dwt/shared';
 
 import { theme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -15,6 +15,7 @@ import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { DINING_PALETTE } from './diningPlan.palette';
 import {
   alternativeMatrixRows,
+  ageGroupCostLines,
   combinationView,
   netSavingsText,
   scenarioRows,
@@ -51,11 +52,13 @@ function Row({
   expanded,
   onToggle,
   barPercent,
+  perPersonLines,
 }: {
   readonly row: ScenarioRowView;
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly barPercent: number;
+  readonly perPersonLines: ReadonlyArray<{ readonly label: string; readonly value: string }>;
 }): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -127,6 +130,9 @@ function Row({
           <Figure label="Snacks you pay for" value={row.snacks} />
           <Figure label="Refillable mugs you pay for" value={row.mugs} />
           <Figure label="Total" value={row.total} strong />
+          {perPersonLines.map((line) => (
+            <Figure key={line.label} label={line.label} value={line.value} />
+          ))}
           {row.netSavings !== null ? (
             <Text style={styles.net} testID={`dining-compare-net-${row.code}`}>
               {row.netSavings}
@@ -315,7 +321,13 @@ function StaysResult({ result }: { readonly result: DiningPlanResultDTO }): JSX.
   );
 }
 
-export function DiningCompareCard({ result }: { readonly result: DiningPlanResultDTO }): JSX.Element {
+export function DiningCompareCard({
+  result,
+  party = [],
+}: {
+  readonly result: DiningPlanResultDTO;
+  readonly party?: readonly DiningPartyPersonDTO[];
+}): JSX.Element {
   const styles = useStyles();
   const rows = [...scenarioRows(result)].sort((a, b) => {
     if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
@@ -350,7 +362,8 @@ export function DiningCompareCard({ result }: { readonly result: DiningPlanResul
       {rows.map((r) => {
         const sc = result.scenarios.find((s) => s.code === r.code);
         const pct = sc && sc.available ? Math.max(15, Math.min(100, Math.round((sc.totalCents / maxCents) * 100))) : 0;
-        return <Row key={r.code} row={r} expanded={openSet.has(r.code)} onToggle={() => toggleRow(r.code)} barPercent={pct} />;
+        const perPersonLines = sc && sc.available ? ageGroupCostLines(sc, party) : [];
+        return <Row key={r.code} row={r} expanded={openSet.has(r.code)} onToggle={() => toggleRow(r.code)} barPercent={pct} perPersonLines={perPersonLines} />;
       })}
     </View>
   );

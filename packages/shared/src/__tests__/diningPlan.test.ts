@@ -138,7 +138,7 @@ describe('diningPlanSettingsSchema', () => {
       appetizersPerTable: 0,
       snacksPerPersonPerDay: 1,
       mugsWanted: 0,
-      kidsEatFree: true,
+      kidsEatFree: false,
       tipBps: null,
       taxBps: null,
       stayPlans: {},

@@ -167,6 +167,21 @@ describe('webPages unit & property tests', () => {
     }
   });
 
+  // Feature: in-app-feedback, Requirement 7.3: the privacy policy describes feedback submissions
+  it('in-app-feedback R7.3: the privacy policy describes what a feedback submission stores, who reads it, retention and deletion', () => {
+    const html = renderPrivacyPolicyHtml({ graceDays: 30, supportEmail: SUPPORT_EMAIL });
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    expect(text).toContain('Feedback You Send');
+    expect(text).toContain('the message you write');
+    expect(text).toContain('app version, platform');
+    expect(text).toContain('OS version');
+    expect(text).toContain('a copy of your account email with that message; otherwise we do not');
+    expect(text).toContain('We do not store your IP address');
+    expect(text).toContain('The app operator reads feedback in a private admin page');
+    expect(text).toContain('Feedback Messages');
+    expect(text).toContain('FEEDBACK_RETENTION_DAYS');
+    expect(text).toContain('the feedback messages you sent (including any contact email copied onto them)');
+  });
   // Feature: account-deletion, Property 34: Web account deletion and privacy policy routes
   it('Property 34: renderPrivacyPolicyHtml renders the supplied support email as an escaped mailto link and never the old placeholder', () => {
     const html = renderPrivacyPolicyHtml({ graceDays: 30, supportEmail: 'help.desk+dwt@example.org' });

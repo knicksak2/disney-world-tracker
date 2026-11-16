@@ -1,4 +1,6 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { BudgetSettingsDTO } from '@dwt/shared';
@@ -196,6 +198,39 @@ describe('BudgetSettingsModal (Task 18.4, Requirements 7.3, 7.4, 7.6, 8.5, 22.5)
 
     expect(screen.queryByLabelText('Assumed rate for dining')).toBeNull();
     expect(screen.queryByLabelText('Assumed rate for dining tip')).toBeNull();
+  });
+
+  it('header clears the status bar / camera cutout so Close and Save are tappable', () => {
+    const topInset = 48;
+    const onClose = jest.fn();
+    renderWithClient(
+      <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: 0, left: 0, right: 0 }}>
+        <BudgetSettingsModal
+          visible={true}
+          tripId={tripId}
+          settings={mockSettings}
+          onClose={onClose}
+        />
+      </SafeAreaInsetsContext.Provider>
+    );
+
+    const header = StyleSheet.flatten(screen.getByTestId('budget-settings-modal-header').props.style);
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    fireEvent.press(screen.getByLabelText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Save settings')).toBeTruthy();
+
+    screen.unmount();
+    renderWithClient(
+      <BudgetSettingsModal
+        visible={true}
+        tripId={tripId}
+        settings={mockSettings}
+        onClose={jest.fn()}
+      />
+    );
+    const noInset = StyleSheet.flatten(screen.getByTestId('budget-settings-modal-header').props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });
 

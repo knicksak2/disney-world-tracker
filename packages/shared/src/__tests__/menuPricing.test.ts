@@ -405,6 +405,43 @@ describe('menuPricing (Task 1.3)', () => {
         sampleCount: 2,
       });
     });
+
+    it('computes separate childPerPersonCents from kids meal groups while excluding kids drinks', () => {
+      const menus = [
+        {
+          menuType: 'Dinner',
+          groups: [
+            {
+              name: 'Entrees',
+              type: 'Entrees',
+              items: [
+                { name: 'Steak', price: '$38.00', priceCents: 3800 },
+                { name: 'Chicken', price: '$28.00', priceCents: 2800 },
+              ],
+            },
+            {
+              name: "Kids' Create-Your-Own Selections",
+              items: [
+                { name: 'Kids Pasta', price: '$13.00', priceCents: 1300 },
+                { name: 'Kids Fish', price: '$15.00', priceCents: 1500 },
+              ],
+            },
+            {
+              name: "Kids' Specialty Drinks",
+              items: [{ name: 'Pirate Punch', price: '$6.00', priceCents: 600 }],
+            },
+          ],
+        },
+      ];
+      const est = computeMenuEstimatePerPerson(menus);
+      expect(est).toEqual({
+        perPersonCents: 3300,
+        basis: 'entrees',
+        sampleCount: 2,
+        childPerPersonCents: 1400,
+        childSampleCount: 2,
+      });
+    });
   });
 });
 

@@ -56,5 +56,7 @@ How to talk to the user while working — this applies to every response, not ju
    - Explicitly verify that every user-facing UI component, control, thumbnail, icon, toggle, modal, and route payload actually exists in source code before outputting a completion response.
 2. **Mandatory Behavior → Test Map**:
    - Every completion response MUST include a table mapping each added/changed behavior, UI control, or engine branch to its specific test file and assertion.
-3. **Mandatory Literal Output of `npm run verify`**:
-   - Every completion response MUST paste the literal tail output of `npm run verify`, showing per-workspace test counts and exit code `0`.
+3. **Mandatory Literal Output of Verification Gate**:
+   - Every completion response MUST paste the literal tail output of the verification gate, showing test counts and exit code `0`:
+     - Use `npm run verify:api` or `npm run verify:mobile` when the change is strictly within that single app workspace (does not touch `packages/shared` or another app).
+     - Use the full `npm run verify` when the change touches `packages/shared`, spans multiple workspaces, or precedes a commit/deploy.

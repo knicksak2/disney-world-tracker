@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -304,5 +305,50 @@ describe('HiddenMickeyDetailScreen (Tasks 10.4 & 10.10, Requirements 3.2, 3.3, 4
     });
 
     alertSpy.mockRestore();
+  });
+
+  it('header clears the status bar / camera cutout so Go back is tappable', async () => {
+    mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path === '/mickeys/m-100') {
+        return mockMickeyUnfound as never;
+      }
+      if (path === '/me/trips') {
+        return [] as never;
+      }
+      return {} as never;
+    });
+    const topInset = 48;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: topInset, bottom: 0, left: 0, right: 0 },
+        }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen
+                name="HiddenMickeyDetail"
+                component={HiddenMickeyDetailScreen}
+                initialParams={{ mickeyId: 'm-100' }}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </QueryClientProvider>
+      </SafeAreaProvider>,
+    );
+
+    const header = StyleSheet.flatten((await screen.findByTestId('hidden-mickey-detail-header')).props.style);
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    expect(screen.getByLabelText('Go back')).toBeTruthy();
+
+    screen.unmount();
+    renderScreen();
+    const noInset = StyleSheet.flatten((await screen.findByTestId('hidden-mickey-detail-header')).props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

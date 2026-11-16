@@ -50,15 +50,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import Fastify, {
   type FastifyInstance,
   type preHandlerHookHandler,
 } from 'fastify';
-import pg from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { TripFeedItemDTO, TripSummaryDTO } from '@dwt/shared';
@@ -66,6 +62,7 @@ import type { TripFeedItemDTO, TripSummaryDTO } from '@dwt/shared';
 import type { DbPool } from '../../../db/pool.js';
 import { AppError } from '../../../errors/AppError.js';
 import { registerErrorHandler } from '../../../errors/handler.js';
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { pair as canonicalPair } from '../../friends/canonicalPair.js';
 import { createCompletionRepo } from '../../tracking/completion/repo.js';
 import {
@@ -75,71 +72,7 @@ import {
 import { createTripRepo, type TripRepo } from '../repo.js';
 import { tripRoutes } from '../routes.js';
 
-const { Pool } = pg;
-
-// ---------------------------------------------------------------------------
-// Live-DB discovery (mirrors services/stats/__tests__/repo.isolation.test.ts)
-// ---------------------------------------------------------------------------
-//
-// The connection string mirrors the docker-compose `postgres` service used for
-// local development (apps/api/.env.example). If no Postgres is reachable the
-// whole suite is skipped with a clear reason rather than failing.
-
-const BASE_DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
-
-/** Quick reachability probe with a short timeout so DB-less CI skips fast. */
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({
-    connectionString: BASE_DATABASE_URL,
-    connectionTimeoutMillis: 2_000,
-    max: 1,
-  });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {
-      /* ignore */
-    });
-  }
-}
-
 const DB_AVAILABLE = await probeDatabase();
-
-/** Swap the database name in a Postgres connection URL. */
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
-
-/** Absolute path to the migrations directory relative to this test file. */
-function migrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  // __tests__ → trips → services → src → apps/api
-  return resolve(here, '..', '..', '..', '..', 'migrations');
-}
-
-/** Apply every `NNNN_*.sql` migration, in lexicographic order, verbatim. */
-async function applyAllMigrations(pool: DbPool): Promise<void> {
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((name) => /^\d{4,}_.+\.sql$/i.test(name))
-    .sort((a, b) => a.localeCompare(b));
-
-  const client = await pool.connect();
-  try {
-    for (const name of files) {
-      const sql = readFileSync(join(dir, name), 'utf8');
-      await client.query(sql);
-    }
-  } finally {
-    client.release();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Seed helpers
@@ -198,9 +131,8 @@ async function readRatingValue(
 describe.skipIf(!DB_AVAILABLE)(
   'Planned List Completion Sync — summary + reused reads (integration, live Postgres)',
   () => {
-    let adminPool: DbPool;
+    let liveDb: LiveTestDb;
     let testPool: DbPool;
-    let testDbName: string;
     let repo: TripRepo;
     let app: FastifyInstance;
     let ratingEvents: RatingChangedEvent[];
@@ -213,17 +145,8 @@ describe.skipIf(!DB_AVAILABLE)(
     let currentCaller: string | null = null;
 
     beforeAll(async () => {
-      // Create a throwaway database so the developer's catalog is never touched,
-      // then apply the full migration chain verbatim.
-      testDbName = `dwt_plc_sync_${randomUUID().replace(/-/g, '')}`;
-      adminPool = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-      await adminPool.query(`CREATE DATABASE ${testDbName}`);
-
-      testPool = new Pool({
-        connectionString: withDatabaseName(BASE_DATABASE_URL, testDbName),
-        max: 5,
-      });
-      await applyAllMigrations(testPool);
+      liveDb = await createLiveTestDb('dwt_plc_sync', { maxConnections: 5 });
+      testPool = liveDb.pool as unknown as DbPool;
 
       ratingEvents = [];
       const completionRepo = createCompletionRepo(testPool);
@@ -255,20 +178,7 @@ describe.skipIf(!DB_AVAILABLE)(
 
     afterAll(async () => {
       await app?.close();
-      await testPool?.end().catch(() => {
-        /* ignore */
-      });
-      if (adminPool) {
-        // FORCE disconnects any lingering sessions so the DROP succeeds.
-        await adminPool
-          .query(`DROP DATABASE IF EXISTS ${testDbName} WITH (FORCE)`)
-          .catch(() => {
-            /* ignore */
-          });
-        await adminPool.end().catch(() => {
-          /* ignore */
-        });
-      }
+      await liveDb?.cleanup();
     });
 
     beforeEach(async () => {

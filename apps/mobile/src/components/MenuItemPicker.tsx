@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   EXPENSE_AMOUNT_MAX_CENTS,
   extractMenuPriceOffers,
@@ -84,6 +85,13 @@ export function MenuItemPicker({
   const styles = useStyles();
   const t = useAppTheme();
   const palette = usePalette(MENU_ITEM_PICKER);
+  // The full-screen Modal draws edge-to-edge, so the header must clear the
+  // status bar / camera cutout itself or Cancel / Confirm sit under it and
+  // can't be tapped. Read the context directly (as `BudgetLineFormModal` does)
+  // so this still renders where no SafeAreaProvider is mounted (tests).
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.xl + (insets?.top ?? 0);
+  const footerBottomPadding = t.spacing.sm + (insets?.bottom ?? 0);
 
   const availableMeals = useMemo(() => {
     const list: string[] = [];
@@ -474,7 +482,7 @@ export function MenuItemPicker({
       >
         <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View testID={`${testID}-header`} style={[styles.header, { paddingTop: headerTopPadding }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cancel"
@@ -944,7 +952,7 @@ export function MenuItemPicker({
         </ScrollView>
 
         {/* Footer */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
           <View style={styles.footerInfoRow}>
             <Text style={styles.selectedCountText}>
               {selectedItemsCount} {selectedItemsCount === 1 ? 'item' : 'items'} selected

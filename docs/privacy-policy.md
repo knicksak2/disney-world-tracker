@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Effective Date:** October 18, 2026  
-**Last Updated:** November 4, 2026
+**Last Updated:** November 13, 2026
 
 Welcome to **Disney World Tracker** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our [Terms of Service](/terms).
 
@@ -17,6 +17,9 @@ We store records of experiences you rate, mark completed, or add to your itinera
 
 ### User Photos
 When you choose to upload photos (food logs, dish photos, or trip album photos), we process and store image files and associated metadata (such as timestamps, dish references, and captions).
+
+### Feedback You Send
+When you use **You & Crew -> Report a problem or send feedback**, we store the message you write, the kind you choose (bug, idea, or other), and the time you sent it, linked to your account. If you leave "Include device info" on, we also store your app version, platform (iOS, Android, or web), and OS version. If you tick "You may contact me at my account email", we store a copy of your account email with that message; otherwise we do not. The app operator reads feedback in a private admin page. We do not store your IP address or device identifiers with it.
 
 ### Age Requirement (13+)
 The App is not directed at children under 13, and you must be at least 13 years old to create an account. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has an account, contact us at the support email in Section 6. We will delete that account and its data.
@@ -55,6 +58,7 @@ We retain data only as long as necessary to provide our services and maintain co
 - **Photos Under Review**: Photos escalated to human operator review are retained for a maximum of **120 hours** (`PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS`). If not approved within this window, they are automatically deleted by the system sweep.
 - **Deleted Photos**: When you delete a photo, its database row is marked deleted immediately, preventing further reads. Temporary serving URLs expire within 1 hour (`PHOTOS_GET_URL_TTL_SECONDS`), and underlying storage objects are hard-deleted on the next automated background sweep.
 - **Deleted Accounts**: When you delete your account, it is hidden immediately and then permanently erased when a grace period ends (see section 5 for the steps and exactly what is erased and what is kept). The grace period is **30 days** (`ACCOUNT_DELETION_GRACE_DAYS`, default 30). Erasure runs as a background job that works in small batches, so it can finish a few hours after the grace period ends rather than at the exact moment.
+- **Feedback Messages**: Feedback you send is kept until the app operator deletes it or you delete your account. Feedback the operator has marked resolved is automatically deleted after **90 days** (`FEEDBACK_RETENTION_DAYS`, default 90).
 - **Database Backups**: Our database host may keep backups of the database for its own recovery purposes. Copies of your data inside those backups are not edited when you delete your account; they age out on the hosting provider's own schedule. We do not state a backup retention period here because it depends on the provider's plan and has not been verified.
 
 ---
@@ -66,7 +70,7 @@ We retain data only as long as necessary to provide our services and maintain co
 - **Block Users**: You can block any photo uploader directly from the photo viewer without revealing your identity or learning theirs. Blocking immediately hides all present and future photos from that uploader across all galleries, strips, and albums. You can review and unblock users in **You & Crew** -> **Blocked Users**.
 - **Delete Your Account**: You can delete your account yourself, without contacting us. In the app, open **You & Crew** -> **Delete account**. If you have uninstalled the app or prefer to use a browser, you can also request deletion on the web at `/account-deletion`. You review what will happen, enter your password, and type `DELETE` to confirm. Sign-in is by email address and password only; the App does not use any third-party sign-in provider (such as Apple or Google), so there is no external sign-in token to revoke.
   - **Grace period**: After you confirm, every device is signed out and your account is hidden from friends and trip members. It is permanently deleted after the grace period (**30 days** by default, the number of days is shown on the confirmation step). **Signing in again with your email and password during the grace period cancels the deletion** and restores your account. Resetting your password during that time also restores it. After the grace period the account cannot be restored.
-  - **What is deleted**: your sign-in and profile (email, display name, avatar), your ratings, completions, notes, favorites, pins, friend connections, saved and shared lists, push notification registrations, and your photos. Trips you own are handed to another trip member, or deleted together with their photos if you are the only member. You are removed from trips you only joined.
+  - **What is deleted**: your sign-in and profile (email, display name, avatar), your ratings, completions, notes, favorites, pins, friend connections, saved and shared lists, push notification registrations, the feedback messages you sent (including any contact email copied onto them), and your photos. Trips you own are handed to another trip member, or deleted together with their photos if you are the only member. You are removed from trips you only joined.
   - **What is kept, anonymized**: content that other people can see and rely on is kept but shown as "Deleted user", with nothing linking it back to you. This covers comments and captions on shared trips, trip history entries, shares you sent to other people, and shared expense records (so that everyone else's balances stay correct). Reports you filed about photos are also kept without your identity.
   - **After deletion**: the email address becomes available to register again.
 

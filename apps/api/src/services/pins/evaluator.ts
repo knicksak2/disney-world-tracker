@@ -19,7 +19,14 @@
  *     lives in one place (repo) and the evaluator stays pure.
  */
 
-import type { ExperienceCategory, Park, PinCriteria, PinDTO, UserPinProgressDTO } from '@dwt/shared';
+import type {
+  ExperienceCategory,
+  Park,
+  PinCriteria,
+  PinDTO,
+  SetResolution,
+  UserPinProgressDTO,
+} from '@dwt/shared';
 import { PINS, PIN_SETS } from '@dwt/shared';
 
 // ---------------------------------------------------------------------------
@@ -362,4 +369,212 @@ export function newlyAwardedPinIds(
   return PINS.filter((pin) => !alreadyAwarded.has(pin.id) && evaluateCriteria(pin.criteria, snap).met).map(
     (p) => p.id,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Admin observability helpers (pure)
+// ---------------------------------------------------------------------------
+
+/** Set resolution health status reported in the admin Pin Console. */
+export type PinSetHealthStatus = 'ok' | 'partial' | 'empty';
+
+/** Resolution diagnostic for one named set in `PIN_SETS`. */
+export interface PinSetHealthRow {
+  readonly setId: string;
+  readonly kind: SetResolution['kind'];
+  readonly expectedCount: number | null;
+  readonly matchedCount: number;
+  readonly missingIds: readonly string[];
+  readonly sampleNames: readonly string[];
+  readonly referencingPinIds: readonly string[];
+  readonly status: PinSetHealthStatus;
+}
+
+/** Per-pin award & claim rollup across active users. */
+export interface PinAwardCountRow {
+  readonly pinId: string;
+  readonly unlockedCount: number;
+  readonly claimedCount: number;
+}
+
+/** Aggregate award & claim rollup across the Series 1 roster. */
+export interface PinAwardSummary {
+  readonly byPin: readonly PinAwardCountRow[];
+  readonly totalUnlocked: number;
+  readonly totalClaimed: number;
+  readonly usersWithUnlockedPins: number;
+}
+
+const VALID_SERIES1_PIN_IDS: ReadonlySet<string> = new Set(PINS.map((p) => p.id));
+
+function collectSetReferences(c: PinCriteria): { setId: string; required: number | 'all' }[] {
+  if (c.kind === 'set') return [{ setId: c.setId, required: c.required }];
+  if (c.kind === 'compound') return c.all.flatMap(collectSetReferences);
+  return [];
+}
+
+/** Format a human-readable summary of a Pin's unlock criteria for admin views. */
+export function formatCriteriaSummary(c: PinCriteria): string {
+  switch (c.kind) {
+    case 'count':
+      return `${c.metric} >= ${c.threshold}`;
+    case 'firstInPark':
+      return `First in ${c.park}`;
+    case 'firstInLand':
+      return `First in ${c.land}`;
+    case 'landComplete':
+      return `All attractions in ${c.lands.join(', ')}`;
+    case 'allLandsVisited':
+      return 'Visit all starter lands';
+    case 'parkComplete':
+      return `100% of ${c.park} (${c.scope})`;
+    case 'parksAttractionsComplete':
+      return 'All 4 theme-park attractions';
+    case 'catalogComplete':
+      return `Full catalog (${c.scope})`;
+    case 'set':
+      return `Set "${c.setId}" (${c.required === 'all' ? 'all' : String(c.required)})`;
+    case 'singleDay': {
+      const f = c.feat;
+      switch (f.type) {
+        case 'multiPark':
+          return `${f.parks} parks in 1 day`;
+        case 'rideMarathon':
+          return `${f.rides} rides in 1 day`;
+        case 'grandSlam':
+          return 'All 4 parks + 15 rides in 1 day';
+        case 'diningAllParks':
+          return 'Dine in all 4 parks in 1 day';
+        case 'aroundTheWorld':
+          return 'All 11 WS countries in 1 day';
+        default:
+          return 'Single-day feat';
+      }
+    }
+    case 'compound':
+      return c.all.map(formatCriteriaSummary).join(' AND ');
+    default:
+      return 'Custom criteria';
+  }
+}
+
+/**
+ * Evaluate how every named set in `PIN_SETS` resolves against the current
+ * active catalog (`EvalExperience[]`). Flags empty facet/category sets and
+ * curated `ids` sets whose upstream ids are missing from active experiences.
+ */
+export function evaluatePinSetHealth(
+  catalog: readonly EvalExperience[],
+  nameByUpstreamId?: ReadonlyMap<string, string | null>,
+): PinSetHealthRow[] {
+  const refsBySet = new Map<string, Set<string>>();
+  const maxRequiredBySet = new Map<string, number>();
+
+  for (const pin of PINS) {
+    for (const ref of collectSetReferences(pin.criteria)) {
+      let pinSet = refsBySet.get(ref.setId);
+      if (!pinSet) {
+        pinSet = new Set<string>();
+        refsBySet.set(ref.setId, pinSet);
+      }
+      pinSet.add(pin.id);
+      if (typeof ref.required === 'number') {
+        const prev = maxRequiredBySet.get(ref.setId) ?? 0;
+        if (ref.required > prev) maxRequiredBySet.set(ref.setId, ref.required);
+      }
+    }
+  }
+
+  return Object.entries(PIN_SETS).map(([setId, res]) => {
+    const matched = resolveSet(setId, catalog);
+    const matchedCount = matched.length;
+    const matchedIdSet = new Set(matched.map((e) => e.upstreamId));
+    const expectedCount = res.kind === 'ids' ? res.ids.length : null;
+    const missingIds = res.kind === 'ids' ? res.ids.filter((id) => !matchedIdSet.has(id)) : [];
+
+    const sampleNames: string[] = [];
+    if (nameByUpstreamId) {
+      for (const e of matched) {
+        const name = nameByUpstreamId.get(e.upstreamId);
+        if (typeof name === 'string' && name.length > 0 && !sampleNames.includes(name)) {
+          sampleNames.push(name);
+          if (sampleNames.length >= 5) break;
+        }
+      }
+    }
+
+    const referencingPinIds = [...(refsBySet.get(setId) ?? [])];
+    const maxRequired = maxRequiredBySet.get(setId);
+
+    let status: PinSetHealthStatus;
+    if (matchedCount === 0) {
+      status = 'empty';
+    } else if (missingIds.length > 0 || (maxRequired !== undefined && matchedCount < maxRequired)) {
+      status = 'partial';
+    } else {
+      status = 'ok';
+    }
+
+    return {
+      setId,
+      kind: res.kind,
+      expectedCount,
+      matchedCount,
+      missingIds,
+      sampleNames,
+      referencingPinIds,
+      status,
+    };
+  });
+}
+
+/**
+ * Aggregate per-pin unlock and claim counts across active users' `user_pins` rows.
+ * Only Series 1 pin ids in `PINS` are counted, and totals equal the exact sums
+ * across `byPin`.
+ */
+export function summarizePinAwards(
+  rows: readonly {
+    readonly pin_id: string;
+    readonly claimed_at: Date | string | null;
+    readonly user_id?: string | null;
+  }[],
+): PinAwardSummary {
+  const counts = new Map<string, { unlocked: number; claimed: number }>();
+  for (const pin of PINS) {
+    counts.set(pin.id, { unlocked: 0, claimed: 0 });
+  }
+  const users = new Set<string>();
+
+  for (const row of rows) {
+    if (!VALID_SERIES1_PIN_IDS.has(row.pin_id)) continue;
+    const entry = counts.get(row.pin_id);
+    if (!entry) continue;
+    entry.unlocked += 1;
+    if (row.claimed_at !== null && row.claimed_at !== undefined) {
+      entry.claimed += 1;
+    }
+    if (row.user_id) {
+      users.add(row.user_id);
+    }
+  }
+
+  const byPin: PinAwardCountRow[] = PINS.map((pin) => {
+    const c = counts.get(pin.id)!;
+    return {
+      pinId: pin.id,
+      unlockedCount: c.unlocked,
+      claimedCount: c.claimed,
+    };
+  });
+
+  const totalUnlocked = byPin.reduce((sum, r) => sum + r.unlockedCount, 0);
+  const totalClaimed = byPin.reduce((sum, r) => sum + r.claimedCount, 0);
+
+  return {
+    byPin,
+    totalUnlocked,
+    totalClaimed,
+    usersWithUnlockedPins: users.size,
+  };
 }

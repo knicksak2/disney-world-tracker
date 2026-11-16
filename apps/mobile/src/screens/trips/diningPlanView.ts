@@ -18,6 +18,7 @@ import {
   type DiningMealLineDTO,
   type DiningMealPeriod,
   type DiningOrderStyle,
+  type DiningPartyPersonDTO,
   type DiningPlanCode,
   type DiningPlanResultDTO,
   type DiningPlanStayResultDTO,
@@ -976,5 +977,35 @@ export function settingsChipLabel(settings: Pick<DiningPlanSettings, 'orderStyle
   const tip = settings.tipBps ?? defaultTipBps;
   const tipPct = `${(tip / 100).toFixed(tip % 100 === 0 ? 0 : 1)}%`;
   return `${ORDER_STYLE_LABEL[settings.orderStyle]} · ${tipPct} tip`;
+}
+
+/** Per-person cost summary for a scenario total across paying guests (ages 3+). */
+export function perPersonSummaryText(totalCents: number, party: readonly DiningPartyPersonDTO[]): string | null {
+  const paying = party.filter((p) => p.ageBracket !== 'under3');
+  if (paying.length <= 1) return null;
+  const perPersonCents = Math.round(totalCents / paying.length);
+  const hasKids = paying.some((p) => p.ageBracket === 'child');
+  return hasKids
+    ? `~${money(perPersonCents)}/person avg (${paying.length} ages 3+)`
+    : `~${money(perPersonCents)}/person (${paying.length} adults)`;
+}
+
+/** Exact per-adult / per-child cost rows from the engine when available, falling back to `perPersonSummaryText`. */
+export function ageGroupCostLines(
+  scenario: Pick<DiningScenarioResultDTO, 'totalCents' | 'ageGroupTotals'> | undefined,
+  party: readonly DiningPartyPersonDTO[],
+): ReadonlyArray<{ readonly label: string; readonly value: string }> {
+  if (scenario === undefined) return [];
+  const groups = scenario.ageGroupTotals;
+  if (groups !== undefined && groups.length > 0) {
+    const totalCount = groups.reduce((acc, g) => acc + g.count, 0);
+    if (totalCount <= 1) return [];
+    return groups.map((g) => ({
+      label: g.ageBracket === 'adult' ? `Per adult (×${g.count})` : `Per child 3–9 (×${g.count})`,
+      value: `~${money(g.eachCents)}`,
+    }));
+  }
+  const fallback = perPersonSummaryText(scenario.totalCents, party);
+  return fallback !== null ? [{ label: 'Estimated per person', value: fallback }] : [];
 }
 

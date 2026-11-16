@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_TABLE_PAGE_SIZE,
   escapeHtml,
   flagged,
   localTime,
   LOCAL_TIME_SCRIPT,
   renderPage,
   table,
+  TABLE_PAGINATION_SCRIPT,
   explainerBanner,
   progressBar,
 } from '../html.js';
@@ -144,11 +146,45 @@ describe('html — unit tests', () => {
       expect(html.indexOf('<script>')).toBeGreaterThan(html.indexOf('</main>'));
       expect(html.indexOf('</script>')).toBeLessThan(html.indexOf('</body>'));
       expect(html).toContain("Timestamps are shown in your browser's time zone");
+
+      const paginated = renderPage('T', '<div class="table-container" data-paginate="true"></div>');
+      expect((paginated.match(/<script>/g) ?? []).length).toBe(1);
+      expect(paginated).toContain(`<script>${LOCAL_TIME_SCRIPT}\n${TABLE_PAGINATION_SCRIPT}</script>`);
     });
 
-    it('LOCAL_TIME_SCRIPT cannot terminate its own script tag early and targets time[data-local-time]', () => {
+    it('LOCAL_TIME_SCRIPT and TABLE_PAGINATION_SCRIPT cannot terminate script tags early and parse cleanly', () => {
       expect(LOCAL_TIME_SCRIPT.toLowerCase()).not.toContain('</script');
       expect(LOCAL_TIME_SCRIPT).toContain("'time[data-local-time]'");
+      expect(TABLE_PAGINATION_SCRIPT.toLowerCase()).not.toContain('</script');
+      expect(TABLE_PAGINATION_SCRIPT).toContain('.table-container[data-paginate="true"]');
+      expect(() => new Function(TABLE_PAGINATION_SCRIPT)).not.toThrow();
+    });
+  });
+
+  describe('table pagination', () => {
+    const cols = [{ header: 'ID', cell: (r: { id: number }) => String(r.id) }];
+
+    it('does not add pagination wrapper when rows <= DEFAULT_TABLE_PAGE_SIZE', () => {
+      const rows = Array.from({ length: DEFAULT_TABLE_PAGE_SIZE }, (_, i) => ({ id: i + 1 }));
+      const out = table(rows, cols);
+      expect(out).not.toContain('data-paginate="true"');
+      expect(out).toContain('<div class="table-wrapper">');
+    });
+
+    it('adds pagination wrapper when rows exceed DEFAULT_TABLE_PAGE_SIZE while keeping all SSR rows', () => {
+      const rows = Array.from({ length: DEFAULT_TABLE_PAGE_SIZE + 5 }, (_, i) => ({ id: i + 1 }));
+      const out = table(rows, cols);
+      expect(out).toContain(`<div class="table-container" data-paginate="true" data-page-size="${DEFAULT_TABLE_PAGE_SIZE}">`);
+      expect(out).toContain(`<td>${DEFAULT_TABLE_PAGE_SIZE + 5}</td>`);
+    });
+
+    it('supports custom pageSize and paginate: false override', () => {
+      const rows = Array.from({ length: 15 }, (_, i) => ({ id: i + 1 }));
+      const custom = table(rows, cols, { pageSize: 10 });
+      expect(custom).toContain('data-paginate="true" data-page-size="10"');
+
+      const disabled = table(rows, cols, { pageSize: 10, paginate: false });
+      expect(disabled).not.toContain('data-paginate="true"');
     });
   });
 

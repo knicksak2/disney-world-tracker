@@ -1,4 +1,6 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -366,5 +368,38 @@ describe('HiddenMickeysScreen (Tasks 10.3 & 10.10, Requirements 2.1, 2.2, 13.1, 
     await waitFor(() => {
       expect(screen.queryByTestId('inline-hint-box-m2')).toBeNull();
     });
+  });
+
+  it('header clears the status bar / camera cutout so Go back and Add are tappable', async () => {
+    const topInset = 48;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+    });
+    render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: topInset, bottom: 0, left: 0, right: 0 },
+        }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="HiddenMickeys" component={HiddenMickeysScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </QueryClientProvider>
+      </SafeAreaProvider>,
+    );
+
+    const header = StyleSheet.flatten((await screen.findByTestId('hidden-mickeys-header')).props.style);
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    expect(screen.getByLabelText('Go back')).toBeTruthy();
+    expect(screen.getByLabelText('Submit a Hidden Mickey')).toBeTruthy();
+
+    screen.unmount();
+    renderScreen();
+    const noInset = StyleSheet.flatten((await screen.findByTestId('hidden-mickeys-header')).props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

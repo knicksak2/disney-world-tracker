@@ -962,6 +962,7 @@ export type {
   DiningMealLineDTO,
   CreditCount,
   DiningCreditSummaryDTO,
+  DiningAgeGroupCostDTO,
   DiningPerPersonAmounts,
   DiningScenarioResultDTO,
   DiningPlanStayResultDTO,
@@ -1183,6 +1184,25 @@ export type {
   SeedMickeyEntry,
   AliasFileEntry,
 } from './schemas/index.js';
+
+// In-app feedback (.kiro/specs/in-app-feedback)
+export {
+  FEEDBACK_KINDS,
+  FEEDBACK_STATUSES,
+  FEEDBACK_PLATFORMS,
+  FEEDBACK_MESSAGE_MAX,
+  FEEDBACK_DEVICE_FIELD_MAX,
+  feedbackDeviceSchema,
+  feedbackSubmitInputSchema,
+} from './feedback.js';
+export type {
+  FeedbackKind,
+  FeedbackStatus,
+  FeedbackPlatform,
+  FeedbackDevice,
+  FeedbackSubmitInput,
+  FeedbackSubmitResponse,
+} from './feedback.js';
 
 
 

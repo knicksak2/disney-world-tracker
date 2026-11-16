@@ -19,90 +19,26 @@
  * - round 5: recordSetError preserves as_of, updateSet clears last_error to NULL, readBlockedUntil right after block
  */
 
-import { randomUUID } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { createTicketPricesRepo, type StorableTicketPriceRow, type TicketPricesRepo } from '../repo.js';
-
-const { Pool } = pg;
-
-const BASE_DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
-
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({
-    connectionString: BASE_DATABASE_URL,
-    connectionTimeoutMillis: 2_000,
-    max: 1,
-  });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {});
-  }
-}
 
 const DB_AVAILABLE = await probeDatabase();
 
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
-
-function migrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, '..', '..', '..', '..', 'migrations');
-}
-
-async function applyAllMigrations(pool: any): Promise<void> {
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((name) => /^\d{4,}_.+\.sql$/i.test(name))
-    .sort((a, b) => a.localeCompare(b));
-
-  const client = await pool.connect();
-  try {
-    for (const name of files) {
-      await client.query(readFileSync(join(dir, name), 'utf8'));
-    }
-  } finally {
-    client.release();
-  }
-}
-
 describe.skipIf(!DB_AVAILABLE)('TicketPricesRepo (real PostgreSQL)', () => {
-  let adminPool: any;
+  let liveDb: LiveTestDb;
   let testPool: any;
-  let testDbName: string;
   let repo: TicketPricesRepo;
 
   beforeAll(async () => {
-    testDbName = `dwt_ticket_repo_${randomUUID().replace(/-/g, '')}`;
-    adminPool = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-    await adminPool.query(`CREATE DATABASE ${testDbName}`);
-
-    testPool = new Pool({
-      connectionString: withDatabaseName(BASE_DATABASE_URL, testDbName),
-      max: 10,
-    });
-    await applyAllMigrations(testPool);
+    liveDb = await createLiveTestDb('dwt_ticket_repo', { maxConnections: 10 });
+    testPool = liveDb.pool;
     repo = createTicketPricesRepo(testPool);
   }, 120_000);
 
   afterAll(async () => {
-    await testPool?.end().catch(() => {});
-    if (adminPool) {
-      await adminPool.query(`DROP DATABASE IF EXISTS ${testDbName} WITH (FORCE)`).catch(() => {});
-      await adminPool.end().catch(() => {});
-    }
+    await liveDb?.cleanup();
   });
 
   beforeEach(async () => {

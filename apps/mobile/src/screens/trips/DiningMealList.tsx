@@ -1,10 +1,10 @@
 // Feature: dining-plan-calculator — visual credit meters & Top 5 best-value credit meals for the Credits tab
 // (Requirements 14.3–14.5, 15.6, 21.2, 22.1, 27.7). Reuses `DiningMealList` exports cleanly.
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { DiningPlanResultDTO, DiningScenarioCode, DiningScenarioResultDTO } from '@dwt/shared';
+import type { DiningPartyPersonDTO, DiningPlanResultDTO, DiningScenarioCode, DiningScenarioResultDTO } from '@dwt/shared';
 
 import { theme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -54,20 +54,31 @@ function MeterCard({ label, issued, used, unused, barColor, trackColor, accentCo
 export function DiningCreditSummary({
   scenario,
   result,
+  party = [],
   onSelectScenario,
   onViewCreditMealsOnCalendar,
 }: {
   readonly scenario: DiningScenarioResultDTO | null | undefined;
   readonly result?: DiningPlanResultDTO;
+  readonly party?: readonly DiningPartyPersonDTO[];
   readonly onSelectScenario?: (code: DiningScenarioCode) => void;
   readonly onViewCreditMealsOnCalendar?: () => void;
 }): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
   const pal = usePalette(DINING_PALETTE);
+  const [perPersonMode, setPerPersonMode] = useState(false);
   if (scenario === null || scenario === undefined || scenario.credits === null) return null;
 
   const c = scenario.credits;
+  const payingCount = party.filter((p) => p.ageBracket !== 'under3').length;
+  const canTogglePerPerson = payingCount > 1;
+  const activePerPerson = canTogglePerPerson && perPersonMode;
+  const scale = (n: number) => {
+    if (!activePerPerson) return n;
+    const v = n / payingCount;
+    return Number.isInteger(v) ? v : Number(v.toFixed(1));
+  };
   const snackTip =
     c.snack.issued > 0
       ? `Use about ${c.snacksPerDayToUseAll} snack ${c.snacksPerDayToUseAll === 1 ? 'credit' : 'credits'} a day to use them all`
@@ -104,21 +115,48 @@ export function DiningCreditSummary({
           <Text style={styles.title} accessibilityRole="header">
             {creditsHeading}
           </Text>
-          <View style={[styles.pillBadge, { backgroundColor: pal.cashBg, borderColor: pal.cashBorder }]}>
-            <Text style={[styles.pillText, { color: pal.cashFg }]}>Party total</Text>
-          </View>
+          {canTogglePerPerson ? (
+            <View style={[styles.scopeToggle, { borderColor: t.color.border, backgroundColor: t.color.surfaceAlt }]}>
+              <Pressable
+                onPress={() => setPerPersonMode(false)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !activePerPerson }}
+                testID="dining-credits-scope-party"
+                style={[styles.scopeBtn, !activePerPerson && { backgroundColor: pal.cashBg, borderColor: pal.cashBorder }]}
+              >
+                <Text style={[styles.scopeBtnText, { color: !activePerPerson ? pal.cashFg : t.color.textSecondary }]}>Party total</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setPerPersonMode(true)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activePerPerson }}
+                testID="dining-credits-scope-person"
+                style={[styles.scopeBtn, activePerPerson && { backgroundColor: pal.cashBg, borderColor: pal.cashBorder }]}
+              >
+                <Text style={[styles.scopeBtnText, { color: activePerPerson ? pal.cashFg : t.color.textSecondary }]}>Per person</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={[styles.pillBadge, { backgroundColor: pal.cashBg, borderColor: pal.cashBorder }]}>
+              <Text style={[styles.pillText, { color: pal.cashFg }]}>Party total</Text>
+            </View>
+          )}
         </View>
-        <Text style={styles.reason}>Credits are per person and cannot be shared.</Text>
+        <Text style={styles.reason}>
+          {activePerPerson
+            ? `Showing credits per person (${payingCount} ages 3+). Credits cannot be shared.`
+            : 'Credits are per person and cannot be shared.'}
+        </Text>
 
         <View style={styles.meterGrid}>
           {c.ts.issued > 0 ? (
-            <MeterCard label="Table-Service" issued={c.ts.issued} used={c.ts.used} unused={c.ts.unused} barColor={pal.tsBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
+            <MeterCard label="Table-Service" issued={scale(c.ts.issued)} used={scale(c.ts.used)} unused={scale(c.ts.unused)} barColor={pal.tsBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
           ) : null}
           {c.qs.issued > 0 ? (
-            <MeterCard label="Quick-Service" issued={c.qs.issued} used={c.qs.used} unused={c.qs.unused} barColor={pal.qsBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
+            <MeterCard label="Quick-Service" issued={scale(c.qs.issued)} used={scale(c.qs.used)} unused={scale(c.qs.unused)} barColor={pal.qsBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
           ) : null}
           {c.snack.issued > 0 ? (
-            <MeterCard label="Snacks" issued={c.snack.issued} used={c.snack.used} unused={c.snack.unused} barColor={pal.snackBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
+            <MeterCard label="Snacks" issued={scale(c.snack.issued)} used={scale(c.snack.used)} unused={scale(c.snack.unused)} barColor={pal.snackBar} trackColor={pal.trackBg} accentColor={pal.savesFg} />
           ) : null}
         </View>
 
@@ -173,6 +211,9 @@ const useStyles = makeStyles((t) => ({
   title: { fontSize: 13.5, lineHeight: 18, fontWeight: '800', color: t.color.textPrimary, flex: 1 },
   pillBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radius.pill, borderWidth: 1 },
   pillText: { fontSize: 11, lineHeight: 14, fontWeight: '700' },
+  scopeToggle: { flexDirection: 'row', borderRadius: theme.radius.pill, borderWidth: 1, padding: 2, gap: 2 },
+  scopeBtn: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: 'transparent' },
+  scopeBtnText: { fontSize: 10.5, lineHeight: 13, fontWeight: '700' },
   reason: { fontSize: 11.5, lineHeight: 15, color: t.color.textSecondary, marginBottom: theme.spacing.xs + 2 },
   meterGrid: { flexDirection: 'row', gap: 6, marginBottom: theme.spacing.xs + 2 },
   meterCard: {

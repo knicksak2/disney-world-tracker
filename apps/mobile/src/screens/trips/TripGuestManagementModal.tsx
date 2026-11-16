@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { TripGuestDTO, TripMemberDTO } from '@dwt/shared';
+import type { AgeBracket, TripGuestDTO, TripMemberDTO } from '@dwt/shared';
 
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -38,7 +38,14 @@ import {
   tripExpenseKeys,
 } from './tripExpenseApi';
 import { ApiError } from '../../api/client';
+import { putTravelerProfile } from './budgetApi';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
+
+const GUEST_AGE_OPTIONS: ReadonlyArray<{ readonly value: AgeBracket; readonly label: string }> = [
+  { value: 'adult', label: 'Adult (10+)' },
+  { value: 'child', label: 'Child (3–9)' },
+  { value: 'under3', label: 'Infant (0–2)' },
+];
 
 interface Props {
   readonly visible: boolean;
@@ -64,6 +71,7 @@ export function TripGuestManagementModal({
   const queryClient = useQueryClient();
   const [newGuestName, setNewGuestName] = useState('');
   const [addSponsorId, setAddSponsorId] = useState<string>(callerId);
+  const [addAgeBracket, setAddAgeBracket] = useState<AgeBracket>('adult');
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [editSponsorId, setEditSponsorId] = useState<string | null>(null);
@@ -76,23 +84,37 @@ export function TripGuestManagementModal({
 
   useEffect(() => {
     setAddSponsorId(callerId);
+    setAddAgeBracket('adult');
   }, [callerId, visible]);
 
   const memberNameMap = new Map(members.map((m) => [m.userId, m.displayName]));
 
+  const invalidateTripGuestConsumers = () => {
+    queryClient.invalidateQueries({ queryKey: tripExpenseKeys.guests(tripId) });
+    queryClient.invalidateQueries({ queryKey: ['trips', 'diningPlan', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['trips', 'budget', tripId] });
+    queryClient.invalidateQueries({ queryKey: ['trips', 'stays', tripId] });
+  };
+
   const addMutation = useMutation({
-    mutationFn: ({ name, sponsorMemberId }: { name: string; sponsorMemberId: string }) =>
-      addTripGuest(tripId, { name, sponsorMemberId }),
+    mutationFn: async ({ name, sponsorMemberId, ageBracket }: { name: string; sponsorMemberId: string; ageBracket: AgeBracket }) => {
+      const created = await addTripGuest(tripId, { name, sponsorMemberId });
+      if (ageBracket !== 'adult') {
+        await putTravelerProfile(tripId, { guestId: created.id, ageBracket }).catch(() => undefined);
+      }
+      return created;
+    },
     onSuccess: (createdGuest) => {
       setNewGuestName('');
       setAddSponsorId(callerId);
+      setAddAgeBracket('adult');
       setErrorMessage(null);
       setGuestList((prev) => [...prev, createdGuest]);
       queryClient.setQueryData<readonly TripGuestDTO[]>(
         tripExpenseKeys.guests(tripId),
         (old = []) => [...old, createdGuest],
       );
-      queryClient.invalidateQueries({ queryKey: tripExpenseKeys.guests(tripId) });
+      invalidateTripGuestConsumers();
     },
     onError: (err: unknown) => {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to add guest');
@@ -125,7 +147,7 @@ export function TripGuestManagementModal({
         tripExpenseKeys.guests(tripId),
         (old = []) => old.map((g) => (g.id === updatedGuest.id ? updatedGuest : g)),
       );
-      queryClient.invalidateQueries({ queryKey: tripExpenseKeys.guests(tripId) });
+      invalidateTripGuestConsumers();
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.list(tripId) });
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.balances(tripId) });
     },
@@ -143,7 +165,7 @@ export function TripGuestManagementModal({
         tripExpenseKeys.guests(tripId),
         (old = []) => old.filter((g) => g.id !== guestId),
       );
-      queryClient.invalidateQueries({ queryKey: tripExpenseKeys.guests(tripId) });
+      invalidateTripGuestConsumers();
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.list(tripId) });
       queryClient.invalidateQueries({ queryKey: tripExpenseKeys.balances(tripId) });
     },
@@ -168,7 +190,7 @@ export function TripGuestManagementModal({
   const handleAdd = () => {
     const trimmed = newGuestName.trim();
     if (!trimmed) return;
-    addMutation.mutate({ name: trimmed, sponsorMemberId: addSponsorId });
+    addMutation.mutate({ name: trimmed, sponsorMemberId: addSponsorId, ageBracket: addAgeBracket });
   };
 
   const handleStartRename = (guest: TripGuestDTO) => {
@@ -219,7 +241,7 @@ export function TripGuestManagementModal({
           </View>
 
           <Text style={styles.subtitle}>
-            Guests represent party members (such as kids or partners) without a Disney World Tracker account. Their expenses are sponsored by a trip member.
+            Guests represent party members (such as kids or partners) without a Disney World Tracker account. They carry through to Stays, Dining Plan, Budget, and Expenses.
           </Text>
 
           {errorMessage ? (
@@ -247,6 +269,28 @@ export function TripGuestManagementModal({
                 loading={addMutation.isPending}
                 testID="add-guest-button"
               />
+            </View>
+
+            <View style={styles.sponsorSelectContainer}>
+              <Text style={styles.sponsorSelectLabel}>Age group (for Dining Plan & Budget):</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
+                {GUEST_AGE_OPTIONS.map((opt) => {
+                  const isSelected = opt.value === addAgeBracket;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.sponsorChip, isSelected && styles.sponsorChipSelected]}
+                      onPress={() => setAddAgeBracket(opt.value)}
+                      accessibilityRole="button"
+                      testID={`add-guest-age-${opt.value}`}
+                    >
+                      <Text style={[styles.sponsorChipText, isSelected && styles.sponsorChipTextSelected]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {members.length > 0 ? (
@@ -316,7 +360,29 @@ export function TripGuestManagementModal({
                             }}
                           />
                         </View>
-                        {members.length > 0 ? (
+                        <View style={styles.sponsorSelectContainer}>
+              <Text style={styles.sponsorSelectLabel}>Age group (for Dining Plan & Budget):</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
+                {GUEST_AGE_OPTIONS.map((opt) => {
+                  const isSelected = opt.value === addAgeBracket;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.sponsorChip, isSelected && styles.sponsorChipSelected]}
+                      onPress={() => setAddAgeBracket(opt.value)}
+                      accessibilityRole="button"
+                      testID={`add-guest-age-${opt.value}`}
+                    >
+                      <Text style={[styles.sponsorChipText, isSelected && styles.sponsorChipTextSelected]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {members.length > 0 ? (
                           <View style={styles.editSponsorContainer}>
                             <Text style={styles.sponsorSelectLabel}>Tied to (Sponsored by):</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">

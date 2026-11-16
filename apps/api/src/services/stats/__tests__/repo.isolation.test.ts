@@ -36,17 +36,12 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DbPool } from '../../../db/pool.js';
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { createStatsRepo, type StatsSnapshot } from '../repo.js';
-
-const { Pool } = pg;
 
 // ---------------------------------------------------------------------------
 // Live-DB discovery
@@ -57,64 +52,7 @@ const { Pool } = pg;
 // whole suite is skipped with a clear reason rather than failing — this test
 // genuinely requires MVCC that pg-mem cannot provide.
 
-const BASE_DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
-
-/** Quick reachability probe with a short timeout so DB-less CI skips fast. */
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({
-    connectionString: BASE_DATABASE_URL,
-    connectionTimeoutMillis: 2_000,
-    max: 1,
-  });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {
-      /* ignore */
-    });
-  }
-}
-
 const DB_AVAILABLE = await probeDatabase();
-
-/** Swap the database name in a Postgres connection URL. */
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
-
-/** Absolute path to the migrations directory relative to this test file. */
-function migrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  // __tests__ → stats → services → src → apps/api
-  return resolve(here, '..', '..', '..', '..', 'migrations');
-}
-
-/** Apply every `NNNN_*.sql` migration, in lexicographic order, verbatim. */
-async function applyAllMigrations(pool: DbPool): Promise<void> {
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((name) => /^\d{4,}_.+\.sql$/i.test(name))
-    .sort((a, b) => a.localeCompare(b));
-
-  const client = await pool.connect();
-  try {
-    for (const name of files) {
-      const sql = readFileSync(join(dir, name), 'utf8');
-      // Each migration file manages its own transaction (0001 wraps itself in
-      // BEGIN/COMMIT); run the file's SQL verbatim on a real Postgres, which —
-      // unlike pg-mem — supports the GIN trigram indexes and extensions.
-      await client.query(sql);
-    }
-  } finally {
-    client.release();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Seed helpers
@@ -217,39 +155,16 @@ function instrumentPool(
 describe.skipIf(!DB_AVAILABLE)(
   'Stats repo snapshot isolation — live Postgres (R8.1, R8.3)',
   () => {
-    let adminPool: DbPool;
+    let liveDb: LiveTestDb;
     let testPool: DbPool;
-    let testDbName: string;
 
     beforeAll(async () => {
-      // Create a throwaway database in the same cluster so the developer's
-      // catalog is never touched, then apply the full migration chain to it.
-      testDbName = `dwt_stats_iso_${randomUUID().replace(/-/g, '')}`;
-      adminPool = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-      await adminPool.query(`CREATE DATABASE ${testDbName}`);
-
-      testPool = new Pool({
-        connectionString: withDatabaseName(BASE_DATABASE_URL, testDbName),
-        max: 5,
-      });
-      await applyAllMigrations(testPool);
+      liveDb = await createLiveTestDb('dwt_stats_iso', { maxConnections: 5 });
+      testPool = liveDb.pool as unknown as DbPool;
     }, 60_000);
 
     afterAll(async () => {
-      await testPool?.end().catch(() => {
-        /* ignore */
-      });
-      if (adminPool) {
-        // FORCE disconnects any lingering sessions so the DROP succeeds.
-        await adminPool
-          .query(`DROP DATABASE IF EXISTS ${testDbName} WITH (FORCE)`)
-          .catch(() => {
-            /* ignore */
-          });
-        await adminPool.end().catch(() => {
-          /* ignore */
-        });
-      }
+      await liveDb?.cleanup();
     });
 
     // Each test seeds a fresh Target_User + catalog so runs are independent.

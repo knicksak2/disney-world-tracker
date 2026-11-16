@@ -9,8 +9,8 @@ Verification is mandatory, but the *amount* scales to blast radius. Two things a
 **Tiers — pick by what you touched, and don't over-run:**
 
 - **While actively iterating on a file (the inner loop):** run only the single test file you're editing — `npx jest <file>` (mobile) or `npx vitest run <path>` (api/shared) — and `npm run typecheck` when you've touched types or contracts. This is what you run after each edit; it takes seconds. **Do NOT run a whole workspace suite, and never the full `npm run verify`, after every edit** — that is the single biggest time sink and it is unnecessary while you're still iterating on one file.
-- **Once you think an area is done:** run the matching scoped script `npm run verify:api` / `verify:mobile` / `verify:shared` (full typecheck + that one workspace's tests) to catch anything you missed in the file-level loop. Once, not repeatedly.
-- **As the final step before declaring the whole change done, before changing a shared or cross-cutting contract, or before a commit you intend to deploy:** run the **full** gate **once**:
+- **Once a single-workspace area is done (and before declaring a single-workspace change done):** run the matching scoped script `npm run verify:api` or `npm run verify:mobile` (full root typecheck across every workspace + that one workspace's full test suite). When your change is strictly inside `apps/api` or `apps/mobile` and does not touch `packages/shared`, this scoped gate is sufficient as the final verification step.
+- **When a change touches `packages/shared`, spans multiple workspaces, or precedes a commit/deploy:** run the **full** gate **once** as the final step:
 
   ```
   npm run verify
@@ -26,7 +26,7 @@ Verification is mandatory, but the *amount* scales to blast radius. Two things a
 
 Non-negotiable rules whenever you report done:
 
-1. **Actually run the right tier.** Run the verification appropriate to the change as the last step before reporting — the full `npm run verify` for a completed task/checkpoint/spec. If you did not run it, you must say "I did not run verification" — never imply or state that it passed.
+1. **Actually run the right tier.** Run the verification appropriate to the change's blast radius as the last step before reporting — `npm run verify:api` / `verify:mobile` for a single-workspace change, or the full `npm run verify` when touching `packages/shared`, spanning workspaces, or preceding a commit/deploy. If you did not run it, you must say "I did not run verification" — never imply or state that it passed.
 2. **Paste the literal tail of the output**, including the final `Tests: … passed`/`Test Files … passed` lines for each workspace **and** the shell exit code. A summary like "everything looks good" or "checks pass cleanly" is not acceptable evidence and, if the command actually failed, is a fabricated result — the single worst outcome here.
 3. **Green means every workspace green.** A pass in one workspace while another fails to typecheck or test is a **red** run. `apps/mobile` typecheck is included in the root typecheck; do not skip it.
 4. **You broke it, you own it.** The baseline is green before you start. Any typecheck error or failing test after your change is yours — including a test in another feature that your change regressed (e.g. a DTO field addition that breaks another suite's fixture, or a repo write that breaks another test's schema harness). Fix it; do not dismiss it as "pre-existing" unless it is genuinely red on a clean checkout and you say so explicitly.

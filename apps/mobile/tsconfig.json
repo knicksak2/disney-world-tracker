@@ -8,6 +8,8 @@
     "types": ["react", "node", "jest"],
     "noEmit": true,
     "allowJs": false,
+    "incremental": true,
+    "tsBuildInfoFile": "tsconfig.typecheck.tsbuildinfo",
     "paths": {
       "@dwt/shared": ["../../packages/shared/src/index.ts"],
       "@dwt/shared/*": ["../../packages/shared/src/*"]

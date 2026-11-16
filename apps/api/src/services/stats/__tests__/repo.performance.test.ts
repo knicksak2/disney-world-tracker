@@ -31,19 +31,14 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 
-import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { DbPool } from '../../../db/pool.js';
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { createStatsRepo, type StatsSnapshot } from '../repo.js';
 import { assembleResponse } from '../routes.js';
-
-const { Pool } = pg;
 
 // ---------------------------------------------------------------------------
 // Data volumes near the R11 bounds
@@ -83,61 +78,7 @@ const BOUND_WITH_PERCENTILE_MS = 3_000;
 // Live-DB discovery (mirrors repo.isolation.test.ts)
 // ---------------------------------------------------------------------------
 
-const BASE_DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
-
-/** Quick reachability probe with a short timeout so DB-less CI skips fast. */
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({
-    connectionString: BASE_DATABASE_URL,
-    connectionTimeoutMillis: 2_000,
-    max: 1,
-  });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {
-      /* ignore */
-    });
-  }
-}
-
 const DB_AVAILABLE = await probeDatabase();
-
-/** Swap the database name in a Postgres connection URL. */
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
-
-/** Absolute path to the migrations directory relative to this test file. */
-function migrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  // __tests__ → stats → services → src → apps/api
-  return resolve(here, '..', '..', '..', '..', 'migrations');
-}
-
-/** Apply every `NNNN_*.sql` migration, in lexicographic order, verbatim. */
-async function applyAllMigrations(pool: DbPool): Promise<void> {
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((name) => /^\d{4,}_.+\.sql$/i.test(name))
-    .sort((a, b) => a.localeCompare(b));
-
-  const client = await pool.connect();
-  try {
-    for (const name of files) {
-      const sql = readFileSync(join(dir, name), 'utf8');
-      await client.query(sql);
-    }
-  } finally {
-    client.release();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Bulk seed helpers — every insert is a single set-based statement so setup
@@ -317,23 +258,13 @@ function totalCompleted(snapshot: StatsSnapshot): number {
 describe.skipIf(!DB_AVAILABLE)(
   'Stats repo response performance near the R11 bounds — live Postgres',
   () => {
-    let adminPool: DbPool;
+    let liveDb: LiveTestDb;
     let testPool: DbPool;
-    let testDbName: string;
     let targetUserId: string;
 
     beforeAll(async () => {
-      // Throwaway database in the same cluster so the developer's catalog is
-      // never touched; full migration chain applied to it.
-      testDbName = `dwt_stats_perf_${randomUUID().replace(/-/g, '')}`;
-      adminPool = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-      await adminPool.query(`CREATE DATABASE ${testDbName}`);
-
-      testPool = new Pool({
-        connectionString: withDatabaseName(BASE_DATABASE_URL, testDbName),
-        max: 5,
-      });
-      await applyAllMigrations(testPool);
+      liveDb = await createLiveTestDb('dwt_stats_perf', { maxConnections: 5 });
+      testPool = liveDb.pool as unknown as DbPool;
 
       // Ensure a clean baseline before bulk seeding the exact benchmark dataset
       await testPool.query('TRUNCATE experiences CASCADE');
@@ -356,19 +287,7 @@ describe.skipIf(!DB_AVAILABLE)(
     }, 300_000);
 
     afterAll(async () => {
-      await testPool?.end().catch(() => {
-        /* ignore */
-      });
-      if (adminPool) {
-        await adminPool
-          .query(`DROP DATABASE IF EXISTS ${testDbName} WITH (FORCE)`)
-          .catch(() => {
-            /* ignore */
-          });
-        await adminPool.end().catch(() => {
-          /* ignore */
-        });
-      }
+      await liveDb?.cleanup();
     });
 
     it('returns within 2s without the Percentile_Rank (R11.1)', async () => {

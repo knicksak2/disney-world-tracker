@@ -44,12 +44,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
 import type {
+  TripGuestDTO,
   TripMemberDTO,
   TripPendingInviteDTO,
   TripRole,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
+import { TripGuestManagementModal } from './TripGuestManagementModal';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme, type AppTheme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -156,11 +159,19 @@ export default function TripMembersScreen({
       apiRequest<TripMembersResponse>('GET', `/trips/${tripId}/members`),
   });
 
+  const guestsQuery = useQuery<readonly TripGuestDTO[], ApiError>({
+    queryKey: tripExpenseKeys.guests(tripId),
+    queryFn: () => fetchTripGuests(tripId),
+  });
+
   const [inviteVisible, setInviteVisible] = useState(false);
+  const [guestsVisible, setGuestsVisible] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const members = membersQuery.data ?? [];
+  const guests = guestsQuery.data ?? [];
+  const memberNameMap = useMemo(() => new Map(members.map((m) => [m.userId, m.displayName])), [members]);
   const ownMember = members.find((m) => m.userId === ownUserId) ?? null;
   const isOrganizer = ownMember?.role === 'organizer';
 
@@ -465,6 +476,42 @@ export default function TripMembersScreen({
           );
         })}
 
+        {/* Guests without an app account (propagate to Stays, Dining Plan, Budget, and Expenses). */}
+        <View style={styles.invitesSection} testID="trip-members-guests">
+          <View style={styles.guestsHeaderRow}>
+            <Text style={styles.sectionLabel}>Guests (no account)</Text>
+            <SecondaryButton
+              label={guests.length > 0 ? 'Manage guests' : 'Add guest'}
+              icon="person-add-outline"
+              onPress={() => setGuestsVisible(true)}
+              testID="trip-members-manage-guests"
+            />
+          </View>
+          {guests.length === 0 ? (
+            <Card style={styles.memberCard}>
+              <Text style={styles.guestHint}>
+                Add kids or partners without an app account so they count in Stays, Dining Plan, Budget, and Expenses.
+              </Text>
+            </Card>
+          ) : (
+            guests.map((guest) => (
+              <Card key={guest.id} style={styles.memberCard} testID={`trip-guest-${guest.id}`}>
+                <View style={styles.memberRow}>
+                  <MemberAvatar displayName={guest.name} />
+                  <View style={styles.memberIdentity}>
+                    <Text style={styles.memberName} numberOfLines={1}>
+                      {guest.name}
+                    </Text>
+                    <Text style={styles.guestHint} numberOfLines={1}>
+                      {`Guest · Sponsored by ${memberNameMap.get(guest.sponsorMemberId) ?? 'Member'}`}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            ))
+          )}
+        </View>
+
         {/* Outstanding invites, each with a Cancel control (R6.8). */}
         {isOrganizer && pendingInvites.length > 0 ? (
           <View style={styles.invitesSection} testID="trip-members-pending-invites">
@@ -511,6 +558,18 @@ export default function TripMembersScreen({
           />
         ) : null}
       </ScrollView>
+
+      {ownUserId !== null ? (
+        <TripGuestManagementModal
+          visible={guestsVisible}
+          tripId={tripId}
+          guests={guests}
+          members={members}
+          callerId={ownUserId}
+          isOrganizer={isOrganizer}
+          onClose={() => setGuestsVisible(false)}
+        />
+      ) : null}
 
       {isOrganizer ? (
         <InviteModal
@@ -849,6 +908,16 @@ const useStyles = makeStyles((t) => ({
     color: t.color.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  guestsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  guestHint: {
+    ...theme.typography.meta,
+    color: t.color.textSecondary,
   },
   avatar: {
     width: 44,

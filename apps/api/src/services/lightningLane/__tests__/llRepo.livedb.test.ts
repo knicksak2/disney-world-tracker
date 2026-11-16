@@ -16,90 +16,31 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import pg from 'pg';
 import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { DbPool } from '../../../db/pool.js';
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { IntelligenceRepo } from '../../intelligence/IntelligenceRepo.js';
 import type { ScheduleSignalRow, LlSinglePriceRow } from '../../intelligence/IntelligenceRepo.js';
 
-const { Pool } = pg;
-
-const BASE_DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
-
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({
-    connectionString: BASE_DATABASE_URL,
-    connectionTimeoutMillis: 2_000,
-    max: 1,
-  });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {});
-  }
-}
-
 const DB_AVAILABLE = await probeDatabase();
-
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
-
-function migrationsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, '..', '..', '..', '..', 'migrations');
-}
-
-async function applyAllMigrations(pool: DbPool): Promise<void> {
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((name) => /^\d{4,}_.+\.sql$/i.test(name))
-    .sort((a, b) => a.localeCompare(b));
-
-  const client = await pool.connect();
-  try {
-    for (const name of files) {
-      await client.query(readFileSync(join(dir, name), 'utf8'));
-    }
-  } finally {
-    client.release();
-  }
-}
 
 describe.skipIf(!DB_AVAILABLE)(
   'IntelligenceRepo — Lightning Lane persistence (live Postgres)',
   () => {
-    let adminPool: DbPool;
+    let liveDb: LiveTestDb;
     let testPool: DbPool;
-    let testDbName: string;
     let repo: IntelligenceRepo;
 
     beforeAll(async () => {
-      testDbName = `dwt_ll_test_${randomUUID().replace(/-/g, '')}`;
-      adminPool = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-      await adminPool.query(`CREATE DATABASE ${testDbName}`);
-
-      testPool = new Pool({
-        connectionString: withDatabaseName(BASE_DATABASE_URL, testDbName),
-        max: 5,
-      });
-      await applyAllMigrations(testPool);
+      liveDb = await createLiveTestDb('dwt_ll_test', { maxConnections: 5 });
+      testPool = liveDb.pool as unknown as DbPool;
       repo = new IntelligenceRepo(testPool as any);
     }, 120_000);
 
     afterAll(async () => {
-      await testPool?.end().catch(() => {});
-      if (adminPool) {
-        await adminPool.query(`DROP DATABASE IF EXISTS ${testDbName} WITH (FORCE)`).catch(() => {});
-        await adminPool.end().catch(() => {});
-      }
+      await liveDb?.cleanup();
     });
 
     describe('upsertParkScheduleSignals', () => {

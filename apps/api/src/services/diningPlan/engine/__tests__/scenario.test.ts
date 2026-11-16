@@ -199,7 +199,7 @@ describe('evaluateScenario: rules and edge cases', () => {
   });
 
   it('returns an unavailable plan as zeros with its reason', () => {
-    const all = evaluateAll(stayInput({ checkIn: '2026-12-30', checkOut: '2027-01-02', entries: WORKED_ENTRIES }));
+    const all = evaluateAll(stayInput({ checkIn: '2026-12-30', checkOut: '2027-01-02', entries: WORKED_ENTRIES, settings: { kidsEatFree: true } }));
     expect(all.deluxe).toMatchObject({ available: false, unavailableReason: 'no_price_for_dates', totalCents: 0, credits: null, meals: [], displayName: 'Deluxe Table-Service Dining Plan' });
     expect(all.table_service).toMatchObject({ available: true, promoLabel: 'Kids Eat Free 2026', displayName: 'Disney Dining Plan / Table-Service Dining Plan' });
     const offSite = evaluateAll(stayInput({ settings: { stayType: 'not_disney_resort' } }));
@@ -209,7 +209,7 @@ describe('evaluateScenario: rules and edge cases', () => {
 
   it('applies Kids Eat Free only for a package stay with kidsEatFree on', () => {
     const june = { persons: [A1, C1], checkIn: '2026-06-01', checkOut: '2026-06-03' };
-    expect(evaluateAll(stayInput(june)).table_service).toMatchObject({ planCostCents: 2 * 9859, promoLabel: 'Kids Eat Free 2026' });
+    expect(evaluateAll(stayInput({ ...june, settings: { kidsEatFree: true } })).table_service).toMatchObject({ planCostCents: 2 * 9859, promoLabel: 'Kids Eat Free 2026' });
     expect(evaluateAll(stayInput({ ...june, settings: { stayType: 'dvc_or_passholder_resort' } })).table_service).toMatchObject({ planCostCents: 2 * (9859 + 3194), promoLabel: null });
     expect(evaluateAll(stayInput({ ...june, settings: { kidsEatFree: false } })).table_service).toMatchObject({ planCostCents: 2 * (9859 + 3194), promoLabel: null });
   });

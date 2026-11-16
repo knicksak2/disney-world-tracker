@@ -278,12 +278,16 @@ export interface MenuEstimatePerPerson {
   readonly perPersonCents: number;
   readonly basis: 'entrees' | 'items';
   readonly sampleCount: number;
+  readonly childPerPersonCents?: number;
+  readonly childSampleCount?: number;
 }
 
 const ENTREE_GROUP_REGEX =
   /entree|entr\u00e9e|main|platter|sandwich|burger|pasta|steak|seafood|specialt|bowl|taco|pizza|flatbread|rib|chicken|feast/i;
 const NON_ENTREE_GROUP_REGEX =
   /kid|child|side|beverage|drink|alcohol|cocktail|wine|beer|dessert|snack|appetizer|starter|enhanc|accompaniment|soup|salad|bakery/i;
+const KIDS_NON_MEAL_GROUP_REGEX =
+  /side|beverage|drink|alcohol|cocktail|wine|beer|dessert|snack|appetizer|starter|enhanc|accompaniment|soup|salad|bakery/i;
 
 function resolveItemRepresentativeCents(item: MenuItemDTO): number | null {
   if (typeof item.priceCents === 'number' && Number.isSafeInteger(item.priceCents) && item.priceCents > 0) {
@@ -318,6 +322,8 @@ export function computeMenuEstimatePerPerson(
 
   const entreePrices: number[] = [];
   const allNonAlcoholPrices: number[] = [];
+  const kidsMealPrices: number[] = [];
+  const allKidsPrices: number[] = [];
 
   for (const menu of menus) {
     for (const group of menu.groups ?? []) {
@@ -329,6 +335,8 @@ export function computeMenuEstimatePerPerson(
         continue;
       }
 
+      const isKidsGroup = KIDS_GROUP_CLASS_REGEX.test(combinedGroupText);
+      const isKidsMealGroup = isKidsGroup && !KIDS_NON_MEAL_GROUP_REGEX.test(combinedGroupText);
       const isEntreeGroup =
         ENTREE_GROUP_REGEX.test(combinedGroupText) && !NON_ENTREE_GROUP_REGEX.test(combinedGroupText);
 
@@ -339,10 +347,27 @@ export function computeMenuEstimatePerPerson(
           if (isEntreeGroup) {
             entreePrices.push(cents);
           }
+          if (isKidsGroup) {
+            allKidsPrices.push(cents);
+            if (isKidsMealGroup) {
+              kidsMealPrices.push(cents);
+            }
+          }
         }
       }
     }
   }
+
+  const resolvedKidsPrices = kidsMealPrices.length >= 1 ? kidsMealPrices : allKidsPrices;
+  const childFields =
+    resolvedKidsPrices.length >= 1
+      ? {
+          childPerPersonCents: Math.round(
+            resolvedKidsPrices.reduce((a, b) => a + b, 0) / resolvedKidsPrices.length
+          ),
+          childSampleCount: resolvedKidsPrices.length,
+        }
+      : {};
 
   if (entreePrices.length >= 2) {
     const total = entreePrices.reduce((a, b) => a + b, 0);
@@ -350,6 +375,7 @@ export function computeMenuEstimatePerPerson(
       perPersonCents: Math.round(total / entreePrices.length),
       basis: 'entrees',
       sampleCount: entreePrices.length,
+      ...childFields,
     };
   }
 
@@ -359,6 +385,7 @@ export function computeMenuEstimatePerPerson(
       perPersonCents: Math.round(total / allNonAlcoholPrices.length),
       basis: 'items',
       sampleCount: allNonAlcoholPrices.length,
+      ...childFields,
     };
   }
 

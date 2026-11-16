@@ -343,4 +343,43 @@ describe('TripDiningPlanScreen: one stay', () => {
     expect(within(row0).getByText('Within margin')).toBeTruthy();
     expect(within(row1).queryByText('Within margin')).toBeNull();
   });
+
+  it('toggles Credits meters between Party total and Per person', async () => {
+    const base = multiPlan();
+    serve({
+      ...base,
+      party: [
+        { key: 'm:1', label: 'A', ageBracket: 'adult', passType: 'none' },
+        { key: 'm:2', label: 'B', ageBracket: 'adult', passType: 'none' },
+        { key: 'm:3', label: 'C', ageBracket: 'adult', passType: 'none' },
+        { key: 'g:1', label: 'Timmy', ageBracket: 'child', passType: 'none' },
+      ],
+      result: {
+        ...base.result,
+        recommended: 'table_service',
+        scenarios: [
+          scenario({ code: 'none' }),
+          scenario({
+            code: 'table_service',
+            displayName: 'Table-Service Dining Plan',
+            credits: {
+              ts: { issued: 28, used: 28, unused: 0 },
+              qs: { issued: 28, used: 20, unused: 8 },
+              snack: { issued: 28, used: 28, unused: 0 },
+              snacksPerDayToUseAll: 4,
+              mugsCovered: 4,
+            },
+          }),
+        ],
+      },
+    });
+    renderScreen();
+    await screen.findByTestId('dining-plan-screen');
+
+    fireEvent.press(screen.getByTestId('dining-tab-credits'));
+    expect(await screen.findByText('20 / 28')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('dining-credits-scope-person'));
+    expect(await screen.findByText('5 / 7')).toBeTruthy();
+    expect(screen.getByText('2 left over')).toBeTruthy();
+  });
 });

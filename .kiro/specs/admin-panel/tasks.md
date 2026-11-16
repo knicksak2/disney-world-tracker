@@ -366,6 +366,17 @@ small, independently testable wave: a repo method, a route, and its tests.
     - Specified and tested in `.kiro/specs/trip-budget/tasks.md` task 10.1 (`admin/ticketPriceRoutes.ts`, `ADMIN_SECTIONS` entry, route tests; admin-panel Property 11 = trip-budget Property 38; the page now also shows the operator gate text, the recorded decision, the table size and the diagnose `startDateSent`). It depends on trip-budget tasks 8.3 (refresh service and diagnose) and 8.4 (composition that constructs the `AdminTicketPricesPort` passed to `adminRoutes`); trip-budget schedules 10.1 in a wave after 8.4. Update any existing test that counts `ADMIN_SECTIONS`.
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8_
 
+- [x] 25. Pins & Achievements console and Visual Catalogue (R12.4, R21)
+  - [x] 25.1 Pin evaluator health/summary helpers and `AdminRepo.getPinSystemSummary`
+    - Export `ExperienceRow` and `toEvalExperience` from `apps/api/src/services/pins/repo.ts`; add `PinSetHealthStatus`, `PinSetHealthRow`, `PinAwardCountRow`, `PinAwardSummary`, `formatCriteriaSummary`, `evaluatePinSetHealth`, and `summarizePinAwards` to `apps/api/src/services/pins/evaluator.ts`; add `PinSystemSummary` and `getPinSystemSummary()` to `apps/api/src/services/admin/repo.ts`.
+    - _Requirements: 21.1_
+  - [x] 25.2 Admin pin console routes, visual catalogue serving, navigation, and per-user progress upgrade
+    - Create `apps/api/src/services/admin/pinRoutes.ts` (`GET /admin/pins`, `POST /admin/pins/reconcile`, `GET /admin/pins/catalog` + read-only companion JS routes with security headers); register in `apps/api/src/services/admin/routes.ts` alongside `ADMIN_SECTIONS` entry and `pinCatalogDir` option; add quick-jump link in `apps/api/src/services/admin/html.ts`; add `Description`, `Progress`, and `/admin/pins` link to `GET /admin/users/:userId/pins`.
+    - _Requirements: 12.4, 21.1, 21.2, 21.3, 21.4_
+  - [x] 25.3 Property 12, `pg-mem` integration, and admin pin route tests
+    - Add `apps/api/src/services/admin/__tests__/pinRoutes.test.ts` covering Property 12 (`fast-check` >= 100 runs), `pg-mem` `getPinSystemSummary` integration, and `server.inject` checks for auth, CSRF same-origin, HTML rendering, catalog + JS serving, and missing-dir 404; extend `apps/api/src/services/admin/__tests__/routes.test.ts` for upgraded `/admin/users/:userId/pins` columns and `/admin` nav link.
+    - _Requirements: 12.4, 21.1, 21.2, 21.3, 21.4_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property/unit/integration test tasks) and can be skipped
@@ -413,7 +424,8 @@ small, independently testable wave: a repo method, a route, and its tests.
     { "id": 10, "tasks": ["23.1"] },
     { "id": 11, "tasks": ["23.2", "23.3"] },
     { "id": 12, "tasks": ["23.4"] },
-    { "id": 13, "tasks": ["24.1"] }
+    { "id": 13, "tasks": ["24.1"] },
+    { "id": 14, "tasks": ["25.1", "25.2", "25.3"] }
   ]
 }
 ```

@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Linking, StyleSheet } from 'react-native';
+import { Linking, Platform, StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +10,7 @@ import { setTestScheme, resetTestScheme } from '../../test/themeTestUtils';
 import { PhotoStatusChip } from '../PhotoStatusChip';
 import { PhotoReportSheet } from '../PhotoReportSheet';
 import { PhotoViewer } from '../PhotoViewer';
+import { PhotoGallerySheet } from '../PhotoGallerySheet';
 import { PhotoPickerSheet } from '../PhotoPickerSheet';
 import * as clientModule from '../../api/client';
 import * as imagePrepModule from '../imagePrep';
@@ -308,6 +310,75 @@ describe('Photo components (Task 13.4)', () => {
 
       expect(onDeleted).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalled();
+    });
+
+    it('topBar and bottomBar clear safe-area insets so Close and bottom actions are tappable', () => {
+      const topInset = 48;
+      const bottomInset = 34;
+      const onClose = jest.fn();
+      const photo = {
+        id: 'photo-safe-1',
+        url: 'https://cdn.example/photo.jpg',
+        uploader: null,
+        mine: false,
+      };
+
+      const { getByTestId, unmount } = render(
+        <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: bottomInset, left: 0, right: 0 }}>
+          <PhotoViewer visible photo={photo} onClose={onClose} />
+        </SafeAreaInsetsContext.Provider>,
+        { wrapper: createWrapper() }
+      );
+
+      const topBar = StyleSheet.flatten(getByTestId('photo-viewer-top-bar').props.style);
+      const bottomBar = StyleSheet.flatten(getByTestId('photo-viewer-bottom-bar').props.style);
+      expect(topBar.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+      expect(bottomBar.paddingBottom).toBeGreaterThanOrEqual(bottomInset + 1);
+
+      fireEvent.press(getByTestId('photo-viewer-close'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      unmount();
+      const noInsetRender = render(
+        <PhotoViewer visible photo={photo} onClose={jest.fn()} />,
+        { wrapper: createWrapper() }
+      );
+      const noInsetTop = StyleSheet.flatten(noInsetRender.getByTestId('photo-viewer-top-bar').props.style);
+      const noInsetBottom = StyleSheet.flatten(noInsetRender.getByTestId('photo-viewer-bottom-bar').props.style);
+      expect(topBar.paddingTop - noInsetTop.paddingTop).toBe(topInset);
+      expect(bottomBar.paddingBottom - noInsetBottom.paddingBottom).toBe(bottomInset);
+    });
+  });
+
+  describe('PhotoGallerySheet', () => {
+    it('header clears top safe-area inset on Android so Close is tappable', () => {
+      const originalOS = Platform.OS;
+      Platform.OS = 'android';
+      try {
+        const topInset = 48;
+        const onClose = jest.fn();
+        const { getByTestId, unmount } = render(
+          <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: 0, left: 0, right: 0 }}>
+            <PhotoGallerySheet visible title="Dish Photos" onClose={onClose} pages={[]} />
+          </SafeAreaInsetsContext.Provider>,
+          { wrapper: createWrapper() }
+        );
+
+        const header = StyleSheet.flatten(getByTestId('photo-gallery-sheet-header').props.style);
+        expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+        fireEvent.press(getByTestId('photo-gallery-sheet-close'));
+        expect(onClose).toHaveBeenCalledTimes(1);
+
+        unmount();
+        const noInsetRender = render(
+          <PhotoGallerySheet visible title="Dish Photos" onClose={jest.fn()} pages={[]} />,
+          { wrapper: createWrapper() }
+        );
+        const noInsetHeader = StyleSheet.flatten(noInsetRender.getByTestId('photo-gallery-sheet-header').props.style);
+        expect(header.paddingTop - noInsetHeader.paddingTop).toBe(topInset);
+      } finally {
+        Platform.OS = originalOS;
+      }
     });
   });
 

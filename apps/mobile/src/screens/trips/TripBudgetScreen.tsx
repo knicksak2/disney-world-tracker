@@ -115,6 +115,60 @@ function formatAsOfDisplay(isoDate: string | null | undefined): string {
   });
 }
 
+/**
+ * Derives a human-readable item/traveler count summary from persisted budget line allocations
+ * (e.g., "2 tickets (1 adult, 1 child)", "4 passes", "4 diners"). Returns null when no
+ * meaningful quantity can be inferred (e.g., lodging nights or unallocated manual lines).
+ */
+export function formatLineQuantitySummary(line: BudgetLineDTO): string | null {
+  const activeAllocs = line.allocations.filter((a) => (a.effectiveCents ?? a.storedCents) > 0);
+  if (activeAllocs.length === 0) return null;
+
+  if (line.category === 'tickets') {
+    const ticketAllocs = activeAllocs.filter((a) => a.priceRef?.kind === 'ticket');
+    if (ticketAllocs.length > 0) {
+      const adults = ticketAllocs.filter(
+        (a) => a.priceRef?.kind === 'ticket' && a.priceRef.ageGroup === 'adult'
+      ).length;
+      const children = ticketAllocs.filter(
+        (a) => a.priceRef?.kind === 'ticket' && a.priceRef.ageGroup === 'child'
+      ).length;
+      const base = `${ticketAllocs.length} ${ticketAllocs.length === 1 ? 'ticket' : 'tickets'}`;
+      if (adults > 0 && children > 0) {
+        return `${base} (${adults} adult, ${children} child)`;
+      }
+      return base;
+    }
+    return `${activeAllocs.length} ${activeAllocs.length === 1 ? 'traveler' : 'travelers'}`;
+  }
+
+  if (line.category === 'lightning_lane') {
+    const llAllocs = activeAllocs.filter((a) => a.priceRef?.kind === 'll');
+    if (llAllocs.length > 0) {
+      return `${llAllocs.length} ${llAllocs.length === 1 ? 'pass' : 'passes'}`;
+    }
+    return null;
+  }
+
+  if (line.category === 'dining') {
+    const tierAllocs = activeAllocs.filter((a) => a.priceRef?.kind === 'menu' && a.priceRef.tier);
+    if (tierAllocs.length > 0) {
+      const children = tierAllocs.filter(
+        (a) => a.priceRef?.kind === 'menu' && a.priceRef.tier && /child|kid/i.test(a.priceRef.tier.name)
+      ).length;
+      const adults = tierAllocs.length - children;
+      const base = `${tierAllocs.length} ${tierAllocs.length === 1 ? 'diner' : 'diners'}`;
+      if (adults > 0 && children > 0) {
+        return `${base} (${adults} adult, ${children} child)`;
+      }
+      return base;
+    }
+    return `${activeAllocs.length} ${activeAllocs.length === 1 ? 'diner' : 'diners'}`;
+  }
+
+  return null;
+}
+
 export interface TripBudgetScreenProps {
   readonly route?: { params: { tripId: string } };
   readonly navigation?: { canGoBack?: () => boolean; goBack?: () => void } | unknown;
@@ -565,7 +619,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
               style={[styles.actionBtnPrimary, { flex: 1.2 }]}
             >
               <Ionicons name="sparkles" size={16} color={styles.actionBtnPrimaryText.color} />
-              <Text style={styles.actionBtnPrimaryText}>+ Add Line Item</Text>
+              <Text style={styles.actionBtnPrimaryText}>Add Budget Item</Text>
             </Pressable>
 
             <Pressable
@@ -576,7 +630,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
             >
               <Ionicons name="people" size={16} color={palette.categoryIconColor} />
               <Text style={styles.actionBtnSecondaryText}>
-                👥 Crew ( {Math.max(1, membersList.length + guestsList.length)} )
+                Crew ({Math.max(1, membersList.length + guestsList.length)})
               </Text>
             </Pressable>
           </View>
@@ -791,10 +845,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                     icon: 'receipt-outline' as const,
                   };
                   const friendlyDate = formatFriendlyDate(line.plannedDate);
-                  const sharePct =
-                    totalBudgetCents > 0
-                      ? Math.round((line.totalCents / totalBudgetCents) * 100)
-                      : 0;
+                  const quantitySummary = formatLineQuantitySummary(line);
 
                   return (
                     <Pressable
@@ -802,7 +853,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                       onPress={() => handleEditLine(line)}
                       style={styles.lineCard}
                     >
-                      <View style={styles.lineHeaderRow}>
+                      <View style={styles.lineHeaderRow} testID={`line-header-${line.id}`}>
                         <View style={styles.lineLeftGroup}>
                           <View style={styles.categoryIconWrap}>
                             <Ionicons
@@ -812,12 +863,12 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                             />
                           </View>
                           <View style={styles.lineTitleWrap}>
-                            <Text style={styles.lineTitle} numberOfLines={2}>
-                              {line.description}
-                            </Text>
-                            <Text style={styles.lineMeta}>
-                              {friendlyDate ? friendlyDate : 'Whole Trip'}
-                              {line.park ? ` · ${line.park}` : ''} · Sub {formatCents(line.subtotalCents)}
+                            <Text
+                              style={styles.lineTitle}
+                              numberOfLines={2}
+                              textBreakStrategy="simple"
+                            >
+                              {line.description.trim()}
                             </Text>
                           </View>
                         </View>
@@ -825,7 +876,6 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                         <View style={styles.lineTotalWrap}>
                           <View style={styles.lineTotalTextCol}>
                             <Text style={styles.lineTotal}>{formatCents(line.totalCents)}</Text>
-                            <Text style={styles.lineSharePct}>{sharePct}%</Text>
                           </View>
                           <Pressable
                             accessibilityRole="button"
@@ -838,6 +888,15 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
                           </Pressable>
                         </View>
                       </View>
+
+                      <Text style={styles.lineMeta} testID={`line-meta-${line.id}`}>
+                        {friendlyDate ? friendlyDate : 'Whole Trip'}
+                        {line.park ? ` · ${line.park}` : ''}
+                        {quantitySummary ? ` · ${quantitySummary}` : ''}
+                        {line.taxCents === 0 && line.tipCents === 0
+                          ? ` · Sub ${formatCents(line.subtotalCents)}`
+                          : ''}
+                      </Text>
 
                       <View style={styles.lineFooterRow}>
                         <PriceBadge
@@ -1009,6 +1068,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
           settings={budget?.settings ?? null}
           members={membersList.length > 0 ? membersList : undefined}
           guests={guestsList.length > 0 ? guestsList : undefined}
+          callerId={callerUserId}
           onCancel={() => {
             setLineModalVisible(false);
             setEditingLine(null);
@@ -1142,6 +1202,7 @@ const useStyles = makeStyles((t) =>
     actionBtnPrimary: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: 6,
       paddingVertical: 9,
       paddingHorizontal: 14,
@@ -1156,6 +1217,7 @@ const useStyles = makeStyles((t) =>
     actionBtnSecondary: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: 6,
       paddingVertical: 9,
       paddingHorizontal: 12,
@@ -1462,13 +1524,13 @@ const useStyles = makeStyles((t) =>
     lineHeaderRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: 10,
+      alignItems: 'center',
+      gap: 8,
     },
     lineLeftGroup: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 10,
+      alignItems: 'center',
+      gap: 8,
       flex: 1,
       minWidth: 0,
     },
@@ -1480,12 +1542,12 @@ const useStyles = makeStyles((t) =>
       fontSize: 15,
       fontWeight: '700',
       color: t.color.textPrimary,
-      flexShrink: 1,
+      includeFontPadding: false,
     },
     lineMeta: {
       fontSize: 12,
       color: t.color.textSecondary,
-      marginTop: 3,
+      marginTop: 6,
     },
     lineTotal: {
       fontSize: 16,
@@ -1494,13 +1556,6 @@ const useStyles = makeStyles((t) =>
     },
     lineTotalTextCol: {
       alignItems: 'flex-end',
-      marginRight: 4,
-    },
-    lineSharePct: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: t.color.textSecondary,
-      marginTop: 2,
     },
     lineTotalWrap: {
       flexDirection: 'row',

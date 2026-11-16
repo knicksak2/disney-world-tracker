@@ -1,4 +1,6 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -140,5 +142,38 @@ describe('MySubmissionsScreen (Task 10.5, Requirements 9.1, 9.2, 15.5)', () => {
 
     expect(await screen.findByText('No Submissions Yet')).toBeTruthy();
     expect(screen.getByText(/Have you found a Hidden Mickey in the parks/)).toBeTruthy();
+  });
+
+  it('header clears the status bar / camera cutout so Go back is tappable', async () => {
+    mockApiRequest.mockImplementation(async () => [] as never);
+    const topInset = 48;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: topInset, bottom: 0, left: 0, right: 0 },
+        }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="MySubmissions" component={MySubmissionsScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </QueryClientProvider>
+      </SafeAreaProvider>,
+    );
+
+    const header = StyleSheet.flatten((await screen.findByTestId('my-submissions-header')).props.style);
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    expect(screen.getByLabelText('Go back')).toBeTruthy();
+
+    screen.unmount();
+    renderScreen();
+    const noInset = StyleSheet.flatten((await screen.findByTestId('my-submissions-header')).props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

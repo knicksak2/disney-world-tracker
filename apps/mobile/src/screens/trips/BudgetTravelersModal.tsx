@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../api/client';
 import {
@@ -27,7 +28,7 @@ import {
 
 import { DatePickerField } from '../../components/DatePickerField';
 import { makeStyles } from '../../theme/makeStyles';
-import { usePalette } from '../../theme/useAppTheme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { BUDGET_TRAVELERS_MODAL } from './BudgetTravelersModal.palette';
 import {
   usePutTravelerProfile,
@@ -88,6 +89,9 @@ export function BudgetTravelersModal({
 }: BudgetTravelersModalProps) {
   const styles = useStyles();
   const palette = usePalette(BUDGET_TRAVELERS_MODAL);
+  const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.md + (insets?.top ?? 0);
   const queryClient = useQueryClient();
 
   const putMutation = usePutTravelerProfile(tripId);
@@ -206,7 +210,7 @@ export function BudgetTravelersModal({
     <Modal visible={visible} animationType="slide" transparent={false} testID={testID}>
       <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View testID={`${testID}-header`} style={[styles.header, { paddingTop: headerTopPadding }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"

@@ -134,9 +134,199 @@ export function progressBar(percent: number, variant: 'normal' | 'warning' | 'da
   `;
 }
 
+export const DEFAULT_TABLE_PAGE_SIZE = 25;
+
+/**
+ * Client-side progressive enhancement for `.table-container[data-paginate="true"]`.
+ * Adds instant row filtering, page-size selection (25 / 50 / 100 / All), and
+ * top/bottom prev/next pagination controls without altering server-rendered HTML
+ * or breaking no-JS fallback. Contains no interpolated data.
+ */
+export const TABLE_PAGINATION_SCRIPT = `(function () {
+  var containers = document.querySelectorAll('.table-container[data-paginate="true"]');
+  for (var i = 0; i < containers.length; i++) {
+    initTable(containers[i]);
+  }
+  function initTable(container) {
+    var wrapper = container.querySelector('.table-wrapper');
+    var tbody = container.querySelector('tbody');
+    if (!wrapper || !tbody) return;
+    var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    if (allRows.length === 0) return;
+    var colCount = container.querySelectorAll('thead th').length || 1;
+    var defaultSize = parseInt(container.getAttribute('data-page-size') || '25', 10) || 25;
+    var pageSize = defaultSize;
+    var currentPage = 1;
+    var query = '';
+    var rowTexts = [];
+    for (var r = 0; r < allRows.length; r++) {
+      rowTexts.push((allRows[r].textContent || '').toLowerCase());
+    }
+
+    var emptyRow = document.createElement('tr');
+    emptyRow.className = 'table-filter-empty';
+    emptyRow.style.display = 'none';
+    var emptyTd = document.createElement('td');
+    emptyTd.colSpan = colCount;
+    emptyTd.className = 'empty-cell';
+    emptyTd.textContent = 'No matching rows';
+    emptyRow.appendChild(emptyTd);
+    tbody.appendChild(emptyRow);
+
+    var toolbar = document.createElement('div');
+    toolbar.className = 'table-toolbar';
+
+    var leftGroup = document.createElement('div');
+    leftGroup.className = 'table-toolbar-group';
+    var filterInput = document.createElement('input');
+    filterInput.type = 'search';
+    filterInput.className = 'table-filter-input';
+    filterInput.placeholder = 'Filter rows...';
+    filterInput.setAttribute('aria-label', 'Filter table rows');
+    var statusTop = document.createElement('span');
+    statusTop.className = 'table-status text-muted text-sm';
+    leftGroup.appendChild(filterInput);
+    leftGroup.appendChild(statusTop);
+
+    var rightGroup = document.createElement('div');
+    rightGroup.className = 'table-toolbar-group';
+    var sizeLabel = document.createElement('label');
+    sizeLabel.className = 'text-muted text-sm';
+    sizeLabel.textContent = 'Rows: ';
+    var sizeSelect = document.createElement('select');
+    sizeSelect.className = 'table-page-size';
+    sizeSelect.setAttribute('aria-label', 'Rows per page');
+    var sizes = [25, 50, 100];
+    if (sizes.indexOf(defaultSize) === -1) {
+      sizes.push(defaultSize);
+      sizes.sort(function (a, b) { return a - b; });
+    }
+    for (var s = 0; s < sizes.length; s++) {
+      var opt = document.createElement('option');
+      opt.value = String(sizes[s]);
+      opt.textContent = String(sizes[s]);
+      if (sizes[s] === defaultSize) opt.selected = true;
+      sizeSelect.appendChild(opt);
+    }
+    var allOpt = document.createElement('option');
+    allOpt.value = '0';
+    allOpt.textContent = 'All (' + allRows.length + ')';
+    sizeSelect.appendChild(allOpt);
+    sizeLabel.appendChild(sizeSelect);
+    rightGroup.appendChild(sizeLabel);
+
+    function makePager() {
+      var wrap = document.createElement('div');
+      wrap.className = 'table-pager-controls';
+      var prev = document.createElement('button');
+      prev.type = 'button';
+      prev.className = 'btn btn-secondary btn-sm';
+      prev.textContent = '\u2190 Prev';
+      var label = document.createElement('span');
+      label.className = 'table-page-label text-muted text-sm';
+      var next = document.createElement('button');
+      next.type = 'button';
+      next.className = 'btn btn-secondary btn-sm';
+      next.textContent = 'Next \u2192';
+      prev.addEventListener('click', function () {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          render();
+        }
+      });
+      next.addEventListener('click', function () {
+        currentPage += 1;
+        render();
+      });
+      wrap.appendChild(prev);
+      wrap.appendChild(label);
+      wrap.appendChild(next);
+      return { wrap: wrap, prev: prev, label: label, next: next };
+    }
+
+    var topPager = makePager();
+    rightGroup.appendChild(topPager.wrap);
+    toolbar.appendChild(leftGroup);
+    toolbar.appendChild(rightGroup);
+
+    var bottomBar = document.createElement('div');
+    bottomBar.className = 'table-pager';
+    var statusBottom = document.createElement('span');
+    statusBottom.className = 'table-status text-muted text-sm';
+    var bottomPager = makePager();
+    bottomBar.appendChild(statusBottom);
+    bottomBar.appendChild(bottomPager.wrap);
+
+    container.insertBefore(toolbar, wrapper);
+    container.appendChild(bottomBar);
+
+    filterInput.addEventListener('input', function () {
+      query = filterInput.value.trim().toLowerCase();
+      currentPage = 1;
+      render();
+    });
+
+    sizeSelect.addEventListener('change', function () {
+      pageSize = parseInt(sizeSelect.value, 10) || 0;
+      currentPage = 1;
+      render();
+    });
+
+    function render() {
+      var filtered = [];
+      for (var j = 0; j < allRows.length; j++) {
+        allRows[j].style.display = 'none';
+        if (!query || rowTexts[j].indexOf(query) !== -1) {
+          filtered.push(allRows[j]);
+        }
+      }
+      var total = filtered.length;
+      var effectiveSize = pageSize === 0 ? Math.max(1, total) : pageSize;
+      var totalPages = Math.max(1, Math.ceil(total / effectiveSize));
+      if (currentPage < 1) currentPage = 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      var start = total === 0 ? 0 : (currentPage - 1) * effectiveSize;
+      var end = pageSize === 0 ? total : Math.min(start + effectiveSize, total);
+      for (var k = start; k < end; k++) {
+        filtered[k].style.display = '';
+      }
+      emptyRow.style.display = total === 0 ? '' : 'none';
+
+      var statusText = total === 0
+        ? 'Showing 0 of ' + allRows.length + ' rows'
+        : query
+          ? 'Showing ' + (start + 1) + '\u2013' + end + ' of ' + total + ' matching (' + allRows.length + ' total)'
+          : 'Showing ' + (start + 1) + '\u2013' + end + ' of ' + total;
+      statusTop.textContent = statusText;
+      statusBottom.textContent = statusText;
+
+      var pageText = 'Page ' + currentPage + ' / ' + totalPages;
+      topPager.label.textContent = pageText;
+      bottomPager.label.textContent = pageText;
+      topPager.prev.disabled = currentPage <= 1;
+      bottomPager.prev.disabled = currentPage <= 1;
+      topPager.next.disabled = currentPage >= totalPages;
+      bottomPager.next.disabled = currentPage >= totalPages;
+    }
+
+    render();
+  }
+})();`;
+
 export interface TableColumn<T> {
   readonly header: string;
   readonly cell: (row: T) => string;
+}
+
+export interface TableOptions {
+  /**
+   * Enable client-side pagination and quick-filter controls when `rows.length > pageSize`.
+   * Defaults to `true`.
+   */
+  readonly paginate?: boolean;
+  /** Initial rows per page (defaults to `DEFAULT_TABLE_PAGE_SIZE`, 25). */
+  readonly pageSize?: number;
 }
 
 /**
@@ -145,6 +335,7 @@ export interface TableColumn<T> {
 export function table<T>(
   rows: readonly T[],
   columns: readonly TableColumn<T>[],
+  options?: TableOptions,
 ): string {
   const headerHtml = columns
     .map((col) => `<th>${escapeHtml(col.header)}</th>`)
@@ -160,7 +351,7 @@ export function table<T>(
           )
           .join('\n');
 
-  return `<div class="table-wrapper"><table class="admin-table">
+  const wrapperHtml = `<div class="table-wrapper"><table class="admin-table">
   <thead>
     <tr>${headerHtml}</tr>
   </thead>
@@ -168,6 +359,17 @@ export function table<T>(
     ${bodyHtml}
   </tbody>
 </table></div>`;
+
+  const pageSize = Math.max(1, options?.pageSize ?? DEFAULT_TABLE_PAGE_SIZE);
+  const shouldPaginate = (options?.paginate ?? true) && rows.length > pageSize;
+
+  if (!shouldPaginate) {
+    return wrapperHtml;
+  }
+
+  return `<div class="table-container" data-paginate="true" data-page-size="${pageSize}">
+${wrapperHtml}
+</div>`;
 }
 
 /**
@@ -176,6 +378,10 @@ export function table<T>(
 export function renderPage(title: string, bodyHtml: string, currentPath?: string): string {
   const activePath = currentPath ?? '';
   const isDashboard = activePath === '/admin' || title === 'Admin Overview' || title === 'Admin Panel';
+
+  const pageScript = bodyHtml.includes('data-paginate="true"')
+    ? `${LOCAL_TIME_SCRIPT}\n${TABLE_PAGINATION_SCRIPT}`
+    : LOCAL_TIME_SCRIPT;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -660,6 +866,58 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
       color: var(--text-muted);
       font-style: italic;
       padding: 2rem !important;
+    }
+
+    .table-container {
+      margin: 1rem 0;
+    }
+
+    .table-container .table-wrapper {
+      margin: 0.5rem 0;
+    }
+
+    .table-toolbar,
+    .table-pager {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .table-toolbar-group,
+    .table-pager-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .table-filter-input,
+    .table-page-size {
+      background: var(--card-elevated);
+      border: 1px solid var(--border-light);
+      color: var(--text);
+      border-radius: 0.375rem;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.8rem;
+      font-family: var(--font-sans);
+    }
+
+    .table-filter-input {
+      min-width: 210px;
+    }
+
+    .table-filter-input:focus,
+    .table-page-size:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
     }
 
     /* Badges */
@@ -1259,6 +1517,7 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
             <a href="/admin/notifications" class="dropdown-item ${activePath === '/admin/notifications' ? 'active' : ''}">🔔 Push Delivery Visibility</a>
             <a href="/admin/config" class="dropdown-item ${activePath === '/admin/config' ? 'active' : ''}">⚙️ System Configuration</a>
             <div class="dropdown-group-title">User Operations</div>
+            <a href="/admin/pins" class="dropdown-item ${activePath.startsWith('/admin/pins') ? 'active' : ''}">🏅 Pins & Achievements</a>
             <a href="/admin/mickeys" class="dropdown-item ${activePath.startsWith('/admin/mickeys') ? 'active' : ''}">🐭 Hidden Mickeys</a>
             <a href="/admin/users" class="dropdown-item ${activePath === '/admin/users' ? 'active' : ''}">👤 User & Support Lookup</a>
             <a href="/admin/accounts/lockouts" class="dropdown-item ${activePath === '/admin/accounts/lockouts' ? 'active' : ''}">🔒 Account Lockouts</a>
@@ -1285,7 +1544,7 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
     </main>
     <p class="text-muted text-xs admin-footnote">Timestamps are shown in your browser's time zone. Hover for the UTC instant.</p>
   </div>
-  <script>${LOCAL_TIME_SCRIPT}</script>
+  <script>${pageScript}</script>
 </body>
 </html>`;
 }

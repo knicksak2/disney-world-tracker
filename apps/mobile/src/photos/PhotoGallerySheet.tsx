@@ -8,8 +8,10 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import type { FoodPhotoDTO, RestaurantFoodPhotoDTO } from '@dwt/shared';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -58,6 +60,9 @@ export function PhotoGallerySheet<T extends FoodPhotoDTO | RestaurantFoodPhotoDT
 }: PhotoGallerySheetProps<T>): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  // On Android, presentationStyle="pageSheet" is ignored and renders edge-to-edge.
+  const headerPaddingTop = t.spacing.sm + (Platform.OS === 'android' ? (insets?.top ?? 0) : 0);
 
   const [activeViewerPhoto, setActiveViewerPhoto] = useState<T | null>(null);
 
@@ -105,7 +110,7 @@ export function PhotoGallerySheet<T extends FoodPhotoDTO | RestaurantFoodPhotoDT
     >
       <View style={styles.container} testID={testID}>
         {/* Header bar */}
-        <View style={styles.header}>
+        <View testID={`${testID}-header`} style={[styles.header, { paddingTop: headerPaddingTop }]}>
           <View style={styles.headerTitles}>
             <Text style={styles.title} numberOfLines={1}>
               {title}

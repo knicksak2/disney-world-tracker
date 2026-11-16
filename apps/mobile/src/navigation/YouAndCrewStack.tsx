@@ -15,6 +15,7 @@ import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import YouAndCrewScreen from '../screens/youAndCrew/YouAndCrewScreen';
 import BlockedUsersScreen from '../screens/youAndCrew/BlockedUsersScreen';
 import DeleteAccountScreen from '../screens/youAndCrew/DeleteAccountScreen';
+import FeedbackScreen from '../screens/feedback/FeedbackScreen';
 
 export type { FriendProfileParams };
 
@@ -38,6 +39,8 @@ export type YouAndCrewStackParamList = {
   BlockedUsers: undefined;
   /** Self-service account deletion: review, re-authenticate, confirm (account-deletion R1). */
   DeleteAccount: undefined;
+  /** Report a problem or send feedback (in-app-feedback R1.1). */
+  Feedback: undefined;
 };
 
 const Stack = createNativeStackNavigator<YouAndCrewStackParamList>();
@@ -99,6 +102,11 @@ export default function YouAndCrewStack(): JSX.Element {
         name="BlockedUsers"
         component={BlockedUsersScreen}
         options={{ title: 'Blocked Users' }}
+      />
+      <Stack.Screen
+        name="Feedback"
+        component={FeedbackScreen}
+        options={{ title: 'Send feedback' }}
       />
       <Stack.Screen
         name="DeleteAccount"

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   BUDGET_DEFAULT_DINING_TIP_BPS,
@@ -28,6 +28,7 @@ import {
   listCalendarDates,
   normalizeTierName,
   splitCentsEvenly,
+  type AgeBracket,
   type BudgetCategory,
   type BudgetLineDTO,
   type BudgetLineInput,
@@ -94,6 +95,7 @@ export interface BudgetDraftProp {
 export interface BudgetLineFormModalProps {
   readonly visible: boolean;
   readonly tripId: string;
+  readonly callerId?: string | null | undefined;
   readonly tripStart?: string | null | undefined;
   readonly tripEnd?: string | null | undefined;
   readonly members?: readonly TravelerOption[] | undefined;
@@ -360,6 +362,7 @@ function computeDefaultNights(tripStart?: string | null, tripEnd?: string | null
 export function BudgetLineFormModal({
   visible,
   tripId,
+  callerId,
   tripStart,
   tripEnd,
   members = [{ id: 'user-self', name: 'You' }],
@@ -376,6 +379,7 @@ export function BudgetLineFormModal({
   const styles = useStyles();
   const palette = usePalette(BUDGET_LINE_FORM_MODAL);
   const t = useAppTheme();
+  const queryClient = useQueryClient();
   // The full-screen Modal draws edge-to-edge, so the header must clear the
   // status bar / camera cutout itself or the Close button sits under it and
   // can't be tapped. Read the context directly (as `GradientHeader` does) so
@@ -410,11 +414,27 @@ export function BudgetLineFormModal({
   const [diningMode, setDiningMode] = useState<'disney' | 'off_property'>('disney');
 
   // Lodging mode & Nightly Calculator
-  const [lodgingMode, setLodgingMode] = useState<'disney' | 'off_site'>('disney');
-  const [nightlyRateText, setNightlyRateText] = useState<string>('');
-  const [lodgingNights, setLodgingNights] = useState<number>(() =>
-    computeDefaultNights(tripStart, tripEnd)
-  );
+  const initialLodgingNights = computeDefaultNights(tripStart, tripEnd);
+  const [lodgingMode, setLodgingMode] = useState<'disney' | 'off_site'>(() => {
+    if (
+      initialLine?.category === 'lodging' &&
+      initialLine.description.trim() === 'Off-Site Lodging'
+    ) {
+      return 'off_site';
+    }
+    return 'disney';
+  });
+  const [nightlyRateText, setNightlyRateText] = useState<string>(() => {
+    if (
+      initialLine?.category === 'lodging' &&
+      initialLine.subtotalCents > 0 &&
+      initialLodgingNights > 0
+    ) {
+      return (initialLine.subtotalCents / initialLodgingNights / 100).toFixed(2);
+    }
+    return '';
+  });
+  const [lodgingNights, setLodgingNights] = useState<number>(() => initialLodgingNights);
 
   // Venue selection states
   const [experienceId, setExperienceId] = useState<string | null>(() => {
@@ -424,14 +444,53 @@ export function BudgetLineFormModal({
   const [showExpPicker, setShowExpPicker] = useState<boolean>(false);
 
   const [resortId, setResortId] = useState<string | null>(null);
-  const [resortName, setResortName] = useState<string | null>(null);
+  const [resortName, setResortName] = useState<string | null>(() => {
+    if (initialLine?.category === 'lodging') {
+      const desc = initialLine.description.trim();
+      if (
+        desc &&
+        desc !== 'Disney Resort Stay' &&
+        desc !== 'Off-Site Lodging' &&
+        desc !== 'New Item'
+      ) {
+        return desc;
+      }
+    }
+    return null;
+  });
   const [showResortPicker, setShowResortPicker] = useState<boolean>(false);
 
+  // Resolve resortId from /resorts when editing a named Disney resort line
+  const resortsLookupQuery = useQuery<{ resorts: readonly ResortItem[] }>({
+    queryKey: ['resorts', 'active'],
+    queryFn: () => apiRequest<{ resorts: readonly ResortItem[] }>('GET', '/resorts'),
+    enabled: Boolean(category === 'lodging' && lodgingMode === 'disney' && resortName && !resortId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (
+      category === 'lodging' &&
+      lodgingMode === 'disney' &&
+      resortName &&
+      !resortId &&
+      resortsLookupQuery.data?.resorts
+    ) {
+      const target = resortName.trim().toLowerCase();
+      const matched = resortsLookupQuery.data.resorts.find(
+        (r) => r.name.trim().toLowerCase() === target
+      );
+      if (matched) {
+        setResortId(matched.id);
+      }
+    }
+  }, [category, lodgingMode, resortName, resortId, resortsLookupQuery.data?.resorts]);
+
   // Fetch experience details and menus if experienceId is set
-  const expQuery = useQuery<{ experience?: ExperienceDTO; menus?: readonly MenuDTO[] }>({
+  const expQuery = useQuery<ExperienceDTO & { menus?: readonly MenuDTO[] }>({
     queryKey: ['catalog', 'experience', experienceId],
     queryFn: () =>
-      apiRequest<{ experience?: ExperienceDTO; menus?: readonly MenuDTO[] }>(
+      apiRequest<ExperienceDTO & { menus?: readonly MenuDTO[] }>(
         'GET',
         `/catalog/${experienceId}`
       ),
@@ -455,6 +514,38 @@ export function BudgetLineFormModal({
     () => extractMenuPriceOffers(availableMenus),
     [availableMenus]
   );
+
+  const availableOfferMenuTypes = useMemo(() => {
+    const seen: string[] = [];
+    for (const o of menuOffers) {
+      if (o.menuType && !seen.includes(o.menuType)) {
+        seen.push(o.menuType);
+      }
+    }
+    return seen;
+  }, [menuOffers]);
+
+  const hasMultipleMenuTypes = availableOfferMenuTypes.length > 1;
+  const [selectedBuffetMenuType, setSelectedBuffetMenuType] = useState<string | null>(null);
+  const activeBuffetMenuType = useMemo(() => {
+    if (!hasMultipleMenuTypes) return null;
+    if (selectedBuffetMenuType && availableOfferMenuTypes.includes(selectedBuffetMenuType)) {
+      return selectedBuffetMenuType;
+    }
+    return availableOfferMenuTypes[0] ?? null;
+  }, [hasMultipleMenuTypes, selectedBuffetMenuType, availableOfferMenuTypes]);
+
+  const getOfferKey = useCallback(
+    (offer: MenuPriceOffer, index: number) =>
+      `${offer.menuType || 'default'}::${offer.label}::${offer.priceCents}::${index}`,
+    []
+  );
+
+  const visibleMenuOffers = useMemo(() => {
+    const indexed = menuOffers.map((offer, index) => ({ offer, index }));
+    if (!activeBuffetMenuType) return indexed;
+    return indexed.filter(({ offer }) => offer.menuType === activeBuffetMenuType);
+  }, [menuOffers, activeBuffetMenuType]);
 
   const tripDays = useMemo(() => {
     if (!tripStart) return [];
@@ -500,6 +591,10 @@ export function BudgetLineFormModal({
   const [selectedLlTierCents, setSelectedLlTierCents] = useState<number | null>(null);
   const [llQuoteStatusMessage, setLlQuoteStatusMessage] = useState<string | null>(null);
   const [ticketQuoteStatusMessage, setTicketQuoteStatusMessage] = useState<string | null>(null);
+  const [quotedTicketRates, setQuotedTicketRates] = useState<{
+    adultCents: number | null;
+    childCents: number | null;
+  } | null>(null);
 
   // Category: Tickets quote inputs (supports both single Age Group chips and multi-ticket Adult + Child steppers)
   const [ticketAgeGroup, setTicketAgeGroup] = useState<'adult' | 'child'>('adult');
@@ -535,36 +630,90 @@ export function BudgetLineFormModal({
   const [buffetAdults, setBuffetAdults] = useState<number>(1);
   const [buffetKids, setBuffetKids] = useState<number>(0);
 
+  const isBuffetServiceStyle = useMemo(
+    () =>
+      availableMenus.some(
+        (m) =>
+          Boolean(m.serviceStyle) &&
+          /buffet|prix[\s-]?fixe|fixed[\s-]?price|family[\s-]?style|character/i.test(m.serviceStyle!)
+      ),
+    [availableMenus]
+  );
+  const isQuickServiceStyle = useMemo(
+    () =>
+      availableMenus.some(
+        (m) => Boolean(m.serviceStyle) && /quick|counter|fast/i.test(m.serviceStyle!)
+      ),
+    [availableMenus]
+  );
+  const hasLoadedMenus = availableMenus.length > 0;
+  const isFixedPriceOrBuffet = menuOffers.length > 0 || isBuffetServiceStyle;
+  const showBuffetTab = !hasLoadedMenus || isFixedPriceOrBuffet;
+  const showMenuAverageTab =
+    !hasLoadedMenus || !isFixedPriceOrBuffet || menuEstimate?.basis === 'entrees';
+  const isBuffetModeActive =
+    showBuffetTab &&
+    (quickDiningMode === 'buffet' || quickDiningMode === 'none' || !showMenuAverageTab);
+  const isMenuAverageModeActive =
+    showMenuAverageTab &&
+    (quickDiningMode === 'table_service' || quickDiningMode === 'quick_service' || !showBuffetTab);
+
   // Local party guests added in-modal
   const [localGuests, setLocalGuests] = useState<
-    Array<{ id: string; name: string; isGuest: boolean; ageBracket?: 'adult' | 'child' }>
+    Array<{ id: string; name: string; isGuest: boolean; ageBracket: AgeBracket }>
   >([]);
   const [showAddGuestInput, setShowAddGuestInput] = useState<boolean>(false);
   const [newGuestName, setNewGuestName] = useState<string>('');
 
   // Allocations state
   const allTravelers = useMemo(() => {
-    const list: Array<{ id: string; name: string; isGuest: boolean; ageBracket?: 'adult' | 'child' }> = [];
+    const profileAgeMap = new Map<string, AgeBracket>();
+    for (const p of travelers) {
+      const key = p.memberId ?? p.guestId;
+      if (key) profileAgeMap.set(key, p.ageBracket);
+    }
+
+    const resolveBracket = (id: string, name: string): AgeBracket => {
+      const profileBracket = profileAgeMap.get(id);
+      if (profileBracket) return profileBracket;
+      const lower = name.toLowerCase();
+      if (lower.includes('kid') || lower.includes('child')) return 'child';
+      return 'adult';
+    };
+
+    const list: Array<{ id: string; name: string; isGuest: boolean; ageBracket: AgeBracket }> = [];
     for (const m of members) {
       const raw = m as unknown as Record<string, unknown>;
       const id = String(m.id ?? raw.userId ?? raw.user_id ?? `member-${list.length}`);
       const name = String(m.name ?? raw.displayName ?? raw.display_name ?? raw.label ?? 'Member');
-      list.push({ id, name, isGuest: false, ageBracket: 'adult' });
+      list.push({ id, name, isGuest: false, ageBracket: resolveBracket(id, name) });
     }
     for (const g of guests) {
       const raw = g as unknown as Record<string, unknown>;
       const id = String(g.id ?? raw.guestId ?? raw.guest_id ?? `guest-${list.length}`);
       const name = String(g.name ?? raw.displayName ?? raw.display_name ?? raw.label ?? 'Guest');
-      const isKid = name.toLowerCase().includes('kid') || name.toLowerCase().includes('child');
-      list.push({ id, name, isGuest: true, ageBracket: isKid ? 'child' : 'adult' });
+      list.push({ id, name, isGuest: true, ageBracket: resolveBracket(id, name) });
     }
     for (const lg of localGuests) {
       if (!list.some((existing) => existing.id === lg.id)) {
-        list.push(lg);
+        const profileBracket = profileAgeMap.get(lg.id);
+        list.push(profileBracket ? { ...lg, ageBracket: profileBracket } : lg);
       }
     }
     return list;
-  }, [members, guests, localGuests]);
+  }, [members, guests, localGuests, travelers]);
+
+  const cachedMeId =
+    queryClient.getQueryData<{ user?: { id?: string } }>(['me'])?.user?.id ?? null;
+  const effectiveCallerId = callerId ?? cachedMeId;
+  const selfTraveler = useMemo(() => {
+    if (effectiveCallerId) {
+      const matched = allTravelers.find((tr) => !tr.isGuest && tr.id === effectiveCallerId);
+      if (matched) return matched;
+    }
+    return allTravelers[0] ?? null;
+  }, [allTravelers, effectiveCallerId]);
+  const selfId = selfTraveler?.id ?? null;
 
   const [selectedTravelerIds, setSelectedTravelerIds] = useState<string[]>(() => {
     if (initialLine?.allocations && initialLine.allocations.length > 0) {
@@ -593,99 +742,419 @@ export function BudgetLineFormModal({
         if (key) map[key] = a.amountCents ?? 0;
       }
     } else if (allTravelers.length > 0) {
-      map[allTravelers[0]!.id] = 0;
+      map[selfId ?? allTravelers[0]!.id] = 0;
     }
     return map;
   });
 
+  const isTravelerUnder3 = useCallback(
+    (traveler: { id: string; name: string; ageBracket?: AgeBracket }) => {
+      const profile = travelers.find((p) => (p.memberId ?? p.guestId) === traveler.id);
+      return (profile?.ageBracket ?? traveler.ageBracket) === 'under3';
+    },
+    [travelers]
+  );
+
+  const isTravelerChild = useCallback(
+    (traveler: { id: string; name: string; ageBracket?: AgeBracket }) => {
+      const profile = travelers.find((p) => (p.memberId ?? p.guestId) === traveler.id);
+      const effectiveBracket = profile?.ageBracket ?? traveler.ageBracket;
+      if (effectiveBracket === 'under3') return false;
+      return (
+        effectiveBracket === 'child' ||
+        traveler.name.toLowerCase().includes('kid') ||
+        traveler.name.toLowerCase().includes('child')
+      );
+    },
+    [travelers]
+  );
+
+  const assignTypedSlotsToTravelers = useCallback(
+    (
+      slots: ReadonlyArray<{ priceCents: number; priceRef?: PriceRef; isChild: boolean }>,
+      candidateTravelers: typeof allTravelers = allTravelers
+    ): {
+      amounts: Record<string, number>;
+      refs: Record<string, PriceRef>;
+      assignedIds: string[];
+    } => {
+      const amounts: Record<string, number> = {};
+      allTravelers.forEach((tr) => {
+        amounts[tr.id] = 0;
+      });
+      const refs: Record<string, PriceRef> = {};
+      const assignedSet = new Set<string>();
+
+      const adultTravelers = candidateTravelers.filter(
+        (tr) => !isTravelerUnder3(tr) && !isTravelerChild(tr)
+      );
+      const childTravelers = candidateTravelers.filter(
+        (tr) => !isTravelerUnder3(tr) && isTravelerChild(tr)
+      );
+      const nonUnder3Travelers = candidateTravelers.filter((tr) => !isTravelerUnder3(tr));
+
+      const adultSlots = slots.filter((s) => !s.isChild);
+      const childSlots = slots.filter((s) => s.isChild);
+      const overflowSlots: Array<{ priceCents: number; priceRef?: PriceRef; isChild: boolean }> = [];
+
+      let adultIdx = 0;
+      for (const slot of adultSlots) {
+        while (adultIdx < adultTravelers.length && assignedSet.has(adultTravelers[adultIdx]!.id)) {
+          adultIdx++;
+        }
+        if (adultIdx < adultTravelers.length) {
+          const target = adultTravelers[adultIdx]!;
+          assignedSet.add(target.id);
+          amounts[target.id] = slot.priceCents;
+          if (slot.priceRef) refs[target.id] = slot.priceRef;
+          adultIdx++;
+        } else {
+          overflowSlots.push(slot);
+        }
+      }
+
+      let childIdx = 0;
+      for (const slot of childSlots) {
+        while (childIdx < childTravelers.length && assignedSet.has(childTravelers[childIdx]!.id)) {
+          childIdx++;
+        }
+        if (childIdx < childTravelers.length) {
+          const target = childTravelers[childIdx]!;
+          assignedSet.add(target.id);
+          amounts[target.id] = slot.priceCents;
+          if (slot.priceRef) refs[target.id] = slot.priceRef;
+          childIdx++;
+        } else {
+          overflowSlots.push(slot);
+        }
+      }
+
+      for (const slot of overflowSlots) {
+        const nextNonUnder3 = nonUnder3Travelers.find((tr) => !assignedSet.has(tr.id));
+        const fallback = nextNonUnder3 ?? candidateTravelers.find((tr) => !assignedSet.has(tr.id));
+        if (!fallback) break;
+        assignedSet.add(fallback.id);
+        amounts[fallback.id] = slot.priceCents;
+        if (slot.priceRef) refs[fallback.id] = slot.priceRef;
+      }
+
+      const assignedIds = candidateTravelers
+        .filter((tr) => assignedSet.has(tr.id))
+        .map((tr) => tr.id);
+
+      return { amounts, refs, assignedIds };
+    },
+    [allTravelers, isTravelerChild, isTravelerUnder3]
+  );
+
+  const allocateProportionalByAge = useCallback(
+    (
+      totalCents: number,
+      targetIds: readonly string[],
+      adultWeight: number,
+      childWeight: number
+    ) => {
+      const activeIds =
+        targetIds.length > 0
+          ? targetIds
+          : allTravelers.length > 0
+            ? [selfId ?? allTravelers[0]!.id]
+            : [];
+      if (activeIds.length === 0) return;
+
+      const nextMap: Record<string, number> = {};
+      allTravelers.forEach((tr) => {
+        nextMap[tr.id] = 0;
+      });
+
+      const safeTotal = Math.max(0, Math.round(totalCents));
+      if (safeTotal === 0) {
+        setAllocationAmounts(nextMap);
+        return;
+      }
+
+      const activeList = activeIds
+        .map((id) => allTravelers.find((tr) => tr.id === id))
+        .filter((tr): tr is (typeof allTravelers)[number] => Boolean(tr));
+
+      const weightedEntries = activeList.map((tr) => {
+        if (isTravelerUnder3(tr)) return { id: tr.id, weight: 0 };
+        if (isTravelerChild(tr)) return { id: tr.id, weight: Math.max(0, childWeight) };
+        return { id: tr.id, weight: Math.max(0, adultWeight) };
+      });
+
+      const totalWeight = weightedEntries.reduce((sum, e) => sum + e.weight, 0);
+      if (totalWeight <= 0) {
+        const shares = splitCentsEvenly(safeTotal, activeIds.length);
+        activeIds.forEach((id, idx) => {
+          nextMap[id] = shares[idx] ?? 0;
+        });
+        setAllocationAmounts(nextMap);
+        return;
+      }
+
+      const floored = weightedEntries.map((e, idx) => {
+        const exact = (safeTotal * e.weight) / totalWeight;
+        const floorVal = Math.floor(exact);
+        return {
+          id: e.id,
+          floorVal,
+          rem: exact - floorVal,
+          weight: e.weight,
+          idx,
+        };
+      });
+
+      const remaining = safeTotal - floored.reduce((sum, f) => sum + f.floorVal, 0);
+      const byRem = [...floored]
+        .filter((f) => f.weight > 0)
+        .sort((a, b) => b.rem - a.rem || a.idx - b.idx);
+
+      for (let i = 0; i < remaining && byRem.length > 0; i++) {
+        byRem[i % byRem.length]!.floorVal += 1;
+      }
+
+      for (const f of floored) {
+        nextMap[f.id] = f.floorVal;
+      }
+      setAllocationAmounts(nextMap);
+    },
+    [allTravelers, isTravelerChild, isTravelerUnder3, selfId]
+  );
+
+  const getActiveAgeWeights = useCallback((): {
+    adultWeight: number;
+    childWeight: number;
+  } | null => {
+    if (category === 'tickets') {
+      if (quotedTicketRates?.adultCents && quotedTicketRates?.childCents) {
+        return {
+          adultWeight: quotedTicketRates.adultCents,
+          childWeight: quotedTicketRates.childCents,
+        };
+      }
+      return { adultWeight: 1.0, childWeight: 0.96315789 };
+    }
+
+    if (category === 'dining') {
+      const relevantOffers = activeBuffetMenuType
+        ? menuOffers.filter((o) => o.menuType === activeBuffetMenuType)
+        : menuOffers;
+      const adultOffer = relevantOffers.find(
+        (o) =>
+          o.audience === 'adult' ||
+          o.label.toLowerCase().includes('adult') ||
+          (!o.label.toLowerCase().includes('child') && !o.label.toLowerCase().includes('kid'))
+      );
+      const childOffer = relevantOffers.find(
+        (o) =>
+          o.audience === 'child' ||
+          o.label.toLowerCase().includes('child') ||
+          o.label.toLowerCase().includes('kid')
+      );
+      if (adultOffer && childOffer) {
+        return { adultWeight: adultOffer.priceCents, childWeight: childOffer.priceCents };
+      }
+      if (menuEstimate?.childPerPersonCents != null) {
+        return {
+          adultWeight: menuEstimate.perPersonCents,
+          childWeight: menuEstimate.childPerPersonCents,
+        };
+      }
+      if (quickDiningMode === 'buffet') {
+        return { adultWeight: 6500, childWeight: 4200 };
+      }
+    }
+
+    return null;
+  }, [
+    category,
+    quotedTicketRates,
+    activeBuffetMenuType,
+    menuOffers,
+    menuEstimate,
+    quickDiningMode,
+  ]);
+
+  const activeDiningTravelers = useMemo(() => {
+    const activeIds =
+      selectedTravelerIds.length > 0 ? selectedTravelerIds : allTravelers.map((t) => t.id);
+    return allTravelers.filter((t) => activeIds.includes(t.id));
+  }, [selectedTravelerIds, allTravelers]);
+
+  const activeAdultCount = useMemo(
+    () =>
+      activeDiningTravelers.filter((t) => !isTravelerUnder3(t) && !isTravelerChild(t)).length,
+    [activeDiningTravelers, isTravelerUnder3, isTravelerChild]
+  );
+
+  const activeChildCount = useMemo(
+    () => activeDiningTravelers.filter((t) => isTravelerChild(t)).length,
+    [activeDiningTravelers, isTravelerChild]
+  );
+
+  const menuEstimateTotalCents = useMemo(() => {
+    if (!menuEstimate) return 0;
+    const adultRate = menuEstimate.perPersonCents;
+    const childRate = menuEstimate.childPerPersonCents ?? menuEstimate.perPersonCents;
+    if (activeAdultCount + activeChildCount === 0) return adultRate;
+    return activeAdultCount * adultRate + activeChildCount * childRate;
+  }, [menuEstimate, activeAdultCount, activeChildCount]);
 
 
-  // Auto-prefill Prix-Fixe / Buffet tier quantities from party size when offers are available
+
+  // Auto-prefill Prix-Fixe / Buffet tier quantities from party size (new lines) or saved allocations (editing)
   useEffect(() => {
-    if (
-      category === 'dining' &&
-      diningMode === 'disney' &&
-      menuOffers.length > 0 &&
-      !initialLine?.subtotalCents
-    ) {
-      const key = `${experienceId ?? ''}:${menuOffers.map((o) => `${o.label}:${o.priceCents}`).join(',')}`;
+    if (category === 'dining' && diningMode === 'disney' && menuOffers.length > 0) {
+      const key = `${initialLine?.id ?? 'new'}:${experienceId ?? ''}:${menuOffers.map((o) => `${o.menuType ?? ''}:${o.label}:${o.priceCents}`).join(',')}`;
       if (key !== lastPrefilledOffersKeyRef.current) {
         lastPrefilledOffersKeyRef.current = key;
 
-        const partyKids = allTravelers.filter(
-          (t) =>
-            t.ageBracket === 'child' ||
-            t.name.toLowerCase().includes('kid') ||
-            t.name.toLowerCase().includes('child')
+        if (initialLine?.subtotalCents) {
+          const savedTiers = initialLine.allocations
+            .filter((a) => (a.effectiveCents ?? a.storedCents) > 0)
+            .map((a) => (a.priceRef?.kind === 'menu' ? a.priceRef.tier : undefined))
+            .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
+          if (savedTiers.length > 0) {
+            const menuTypeCounts = new Map<string, number>();
+            const indexedMatches: Array<{ idx: number; menuType?: string }> = [];
+
+            for (const tier of savedTiers) {
+              const tierName = normalizeTierName(tier.name);
+              const idx = menuOffers.findIndex(
+                (o) => normalizeTierName(o.label) === tierName && o.priceCents === tier.priceCents
+              );
+              if (idx >= 0) {
+                const mt = menuOffers[idx]!.menuType;
+                if (mt) {
+                  menuTypeCounts.set(mt, (menuTypeCounts.get(mt) ?? 0) + 1);
+                }
+                indexedMatches.push({ idx, menuType: mt });
+              }
+            }
+
+            let bestMenuType: string | null = null;
+            let bestCount = 0;
+            for (const [mt, count] of menuTypeCounts.entries()) {
+              if (count > bestCount) {
+                bestCount = count;
+                bestMenuType = mt;
+              }
+            }
+            if (bestMenuType) {
+              setSelectedBuffetMenuType(bestMenuType);
+            }
+
+            const hydratedQuantities: Record<string, number> = {};
+            for (const match of indexedMatches) {
+              if (!bestMenuType || match.menuType === bestMenuType) {
+                const offerKey = getOfferKey(menuOffers[match.idx]!, match.idx);
+                hydratedQuantities[offerKey] = (hydratedQuantities[offerKey] ?? 0) + 1;
+              }
+            }
+            if (Object.keys(hydratedQuantities).length > 0) {
+              setInlineBuffetQuantities(hydratedQuantities);
+            }
+          }
+          return;
+        }
+
+        const partyKids = allTravelers.filter((tr) => isTravelerChild(tr)).length;
+        const rawPartyAdults = allTravelers.filter(
+          (tr) => !isTravelerUnder3(tr) && !isTravelerChild(tr)
         ).length;
-        const partyAdults = Math.max(1, allTravelers.length - partyKids);
+        const partyAdults = partyKids > 0 ? rawPartyAdults : Math.max(1, rawPartyAdults);
 
         const nextQuantities: Record<string, number> = {};
-        const adultOffer = menuOffers.find(
+        const adultIdx = menuOffers.findIndex(
           (o) =>
             o.audience === 'adult' ||
             o.label.toLowerCase().includes('adult') ||
             !o.label.toLowerCase().includes('child')
         );
-        const childOffer = menuOffers.find(
+        const childIdx = menuOffers.findIndex(
           (o) =>
             o.audience === 'child' ||
             o.label.toLowerCase().includes('child') ||
             o.label.toLowerCase().includes('kid')
         );
 
-        if (adultOffer) {
-          nextQuantities[adultOffer.label] = partyAdults;
+        if (adultIdx >= 0 && partyAdults > 0) {
+          nextQuantities[getOfferKey(menuOffers[adultIdx]!, adultIdx)] = partyAdults;
         }
-        if (childOffer && partyKids > 0) {
-          nextQuantities[childOffer.label] = partyKids;
-        } else if (!adultOffer && menuOffers.length === 1) {
-          nextQuantities[menuOffers[0]!.label] = allTravelers.length;
+        if (childIdx >= 0 && partyKids > 0) {
+          nextQuantities[getOfferKey(menuOffers[childIdx]!, childIdx)] = partyKids;
+        } else if (adultIdx < 0 && menuOffers.length === 1) {
+          nextQuantities[getOfferKey(menuOffers[0]!, 0)] = Math.max(1, partyAdults + partyKids);
         }
 
         setInlineBuffetQuantities(nextQuantities);
 
-        const expandedSlots: Array<{ name: string; priceCents: number }> = [];
-        for (const o of menuOffers) {
-          const q = nextQuantities[o.label] ?? 0;
+        const expandedSlots: Array<{ name: string; priceCents: number; isChild: boolean }> = [];
+        menuOffers.forEach((o, idx) => {
+          const q = nextQuantities[getOfferKey(o, idx)] ?? 0;
+          const isChildOffer =
+            o.audience === 'child' ||
+            o.label.toLowerCase().includes('child') ||
+            o.label.toLowerCase().includes('kid');
           for (let i = 0; i < q; i++) {
             expandedSlots.push({
               name: normalizeTierName(o.label),
               priceCents: o.priceCents,
+              isChild: isChildOffer,
             });
           }
-        }
+        });
 
         const subtotalCents = expandedSlots.reduce((sum, s) => sum + s.priceCents, 0);
         if (subtotalCents > 0) {
           setManualPriceText((subtotalCents / 100).toFixed(2));
           setPriceSource('disney_menu');
           setPriceLabelKind('current');
-          if (expandedSlots.length <= allTravelers.length) {
+          const nonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+          const candidateTravelers =
+            nonUnder3.length >= expandedSlots.length ? nonUnder3 : allTravelers;
+          if (expandedSlots.length <= candidateTravelers.length) {
             const firstSlot = expandedSlots[0]!;
             setPriceRef({
               kind: 'menu',
               tier: { name: firstSlot.name, priceCents: firstSlot.priceCents },
             });
-            const nextAmounts: Record<string, number> = {};
-            const nextRefs: Record<string, PriceRef> = {};
-            expandedSlots.forEach((slot, idx) => {
-              const t = allTravelers[idx]!;
-              nextAmounts[t.id] = slot.priceCents;
-              nextRefs[t.id] = {
-                kind: 'menu',
-                tier: { name: slot.name, priceCents: slot.priceCents },
-              };
-            });
-            setPerTravelerPriceRefs(nextRefs);
-            setAllocationAmounts(nextAmounts);
+            const assigned = assignTypedSlotsToTravelers(
+              expandedSlots.map((slot) => ({
+                priceCents: slot.priceCents,
+                isChild: slot.isChild,
+                priceRef: {
+                  kind: 'menu',
+                  tier: { name: slot.name, priceCents: slot.priceCents },
+                } as PriceRef,
+              })),
+              candidateTravelers
+            );
+            setPerTravelerPriceRefs(assigned.refs);
+            setAllocationAmounts(assigned.amounts);
+            setSelectedTravelerIds(assigned.assignedIds);
           } else {
             distributeAcrossSelectedTravelers(subtotalCents);
           }
         }
       }
     }
-  }, [category, diningMode, menuOffers, experienceId, allTravelers, initialLine?.subtotalCents]);
+  }, [
+    category,
+    diningMode,
+    menuOffers,
+    experienceId,
+    allTravelers,
+    initialLine?.id,
+    initialLine?.subtotalCents,
+    initialLine?.allocations,
+    getOfferKey,
+    isTravelerChild,
+    isTravelerUnder3,
+    assignTypedSlotsToTravelers,
+  ]);
 
   // Helper to distribute a total across active selected travelers
   const distributeAcrossSelectedTravelers = (
@@ -712,18 +1181,33 @@ export function BudgetLineFormModal({
 
   // Pre-fill Adult + Child counts from Traveler Profiles
   const handlePrefillTicketsFromProfiles = () => {
-    const adults = travelers.filter(
-      (p) => p.ageBracket === 'adult' && p.passType === 'none'
-    ).length;
-    const children = travelers.filter(
-      (p) => p.ageBracket === 'child' && p.passType === 'none'
-    ).length;
+    const profileMap = new Map(
+      travelers.map((p) => [p.memberId ?? p.guestId ?? '', p] as const)
+    );
+    const adults =
+      members.length > 0 || guests.length > 0
+        ? allTravelers.filter((tr) => {
+            const profile = profileMap.get(tr.id);
+            if (profile && profile.passType !== 'none') return false;
+            return !isTravelerUnder3(tr) && !isTravelerChild(tr);
+          }).length
+        : travelers.filter((p) => p.ageBracket === 'adult' && p.passType === 'none').length;
+    const children =
+      members.length > 0 || guests.length > 0
+        ? allTravelers.filter((tr) => {
+            const profile = profileMap.get(tr.id);
+            if (profile && profile.passType !== 'none') return false;
+            return isTravelerChild(tr);
+          }).length
+        : travelers.filter((p) => p.ageBracket === 'child' && p.passType === 'none').length;
+
     if (adults > 0 || children > 0) {
       setTicketAdultCount(adults);
       setTicketChildCount(children);
       setTicketAgeGroup(adults > 0 ? 'adult' : 'child');
     } else {
-      setTicketAdultCount(Math.max(1, allTravelers.length));
+      const nonUnder3Count = allTravelers.filter((tr) => !isTravelerUnder3(tr)).length;
+      setTicketAdultCount(Math.max(1, nonUnder3Count));
       setTicketChildCount(0);
       setTicketAgeGroup('adult');
     }
@@ -777,6 +1261,10 @@ export function BudgetLineFormModal({
             childQuote.priceCents !== null &&
             childQuote.priceCents > 0
           ) {
+            setQuotedTicketRates({
+              adultCents: adultQuote.priceCents,
+              childCents: childQuote.priceCents,
+            });
             const totalCents =
               adultQty * adultQuote.priceCents + childQty * childQuote.priceCents;
             const totalCount = adultQty + childQty;
@@ -807,25 +1295,53 @@ export function BudgetLineFormModal({
               `${adultQty} Adult${adultQty > 1 ? 's' : ''} × ${formatDollars(adultQuote.priceCents)} + ${childQty} Child${childQty > 1 ? 'ren' : ''} × ${formatDollars(childQuote.priceCents)} = ${formatDollars(totalCents)}`
             );
 
-            if (allTravelers.length >= totalCount) {
+            const selectedNonUnder3 = allTravelers.filter(
+              (tr) => selectedTravelerIds.includes(tr.id) && !isTravelerUnder3(tr)
+            );
+            const allNonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+            const eligibleTicketTravelers =
+              selectedNonUnder3.length >= totalCount ? selectedNonUnder3 : allNonUnder3;
+
+            if (eligibleTicketTravelers.length >= totalCount) {
               setPriceSource('disney_ticket_calendar');
-              const nextAmounts: Record<string, number> = {};
-              const nextRefs: Record<string, PriceRef> = {};
-              for (let i = 0; i < totalCount; i++) {
-                const t = allTravelers[i]!;
-                const isAdultSlot = i < adultQty;
-                nextAmounts[t.id] = isAdultSlot
-                  ? adultQuote.priceCents
-                  : childQuote.priceCents;
-                nextRefs[t.id] = isAdultSlot ? adultRef : childRef;
+              const ticketSlots: Array<{ priceCents: number; priceRef: PriceRef; isChild: boolean }> =
+                [];
+              for (let i = 0; i < adultQty; i++) {
+                ticketSlots.push({
+                  priceCents: adultQuote.priceCents,
+                  priceRef: adultRef,
+                  isChild: false,
+                });
               }
-              setPerTravelerPriceRefs(nextRefs);
-              setAllocationAmounts(nextAmounts);
+              for (let i = 0; i < childQty; i++) {
+                ticketSlots.push({
+                  priceCents: childQuote.priceCents,
+                  priceRef: childRef,
+                  isChild: true,
+                });
+              }
+              const assigned = assignTypedSlotsToTravelers(ticketSlots, eligibleTicketTravelers);
+              setPerTravelerPriceRefs(assigned.refs);
+              setAllocationAmounts(assigned.amounts);
+              setSelectedTravelerIds(assigned.assignedIds);
             } else {
               // More tickets than trip traveler rows: preserve combined total as user_entered
               setPriceSource('user_entered');
               setPerTravelerPriceRefs({});
-              distributeAcrossSelectedTravelers(totalCents);
+              const payingIds = (
+                selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3
+              ).map((tr) => tr.id);
+              if (payingIds.length > 0) {
+                setSelectedTravelerIds(payingIds);
+                allocateProportionalByAge(
+                  totalCents,
+                  payingIds,
+                  adultQuote.priceCents,
+                  childQuote.priceCents
+                );
+              } else {
+                distributeAcrossSelectedTravelers(totalCents);
+              }
             }
           } else {
             setTicketQuoteStatusMessage('Ticket price unavailable for this date and option. Please enter your price below.');
@@ -860,6 +1376,11 @@ export function BudgetLineFormModal({
         setPriceQuote(q);
 
         if (q.priceCents !== null && q.priceCents > 0) {
+          setQuotedTicketRates(
+            requestedAge === 'child'
+              ? { adultCents: null, childCents: q.priceCents }
+              : { adultCents: q.priceCents, childCents: null }
+          );
           const singleRef: TicketPriceRef = {
             kind: 'ticket',
             discountGroup: ticketDiscountGroup,
@@ -882,31 +1403,64 @@ export function BudgetLineFormModal({
             setMultiQuoteBreakdown(null);
           }
 
+          const allNonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+          const selectedNonUnder3 = allNonUnder3.filter((tr) =>
+            selectedTravelerIds.includes(tr.id)
+          );
+
           if (requestedQty === 1) {
             setPriceSource('disney_ticket_calendar');
-            setPerTravelerPriceRefs({});
-            setAllocationAmounts((prev) => {
-              const hasAlloc = Object.values(prev).some((c) => c > 0);
-              if (!hasAlloc && allTravelers.length > 0) {
-                return { [allTravelers[0]!.id]: q.priceCents! };
-              }
-              return prev;
-            });
-          } else if (allTravelers.length >= requestedQty) {
-            setPriceSource('disney_ticket_calendar');
-            const nextAmounts: Record<string, number> = {};
-            const nextRefs: Record<string, PriceRef> = {};
-            for (let i = 0; i < requestedQty; i++) {
-              const t = allTravelers[i]!;
-              nextAmounts[t.id] = q.priceCents;
-              nextRefs[t.id] = singleRef;
+            const baseCandidates =
+              selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3;
+            if (baseCandidates.length > 0) {
+              const preferredCandidates =
+                requestedAge === 'adult' &&
+                selfTraveler &&
+                baseCandidates.some((tr) => tr.id === selfTraveler.id) &&
+                !isTravelerChild(selfTraveler)
+                  ? [selfTraveler, ...baseCandidates.filter((tr) => tr.id !== selfTraveler.id)]
+                  : baseCandidates;
+              const assigned = assignTypedSlotsToTravelers(
+                [
+                  {
+                    priceCents: q.priceCents,
+                    priceRef: singleRef,
+                    isChild: requestedAge === 'child',
+                  },
+                ],
+                preferredCandidates
+              );
+              setPerTravelerPriceRefs(assigned.refs);
+              setAllocationAmounts(assigned.amounts);
+              setSelectedTravelerIds(assigned.assignedIds);
+            } else {
+              setPerTravelerPriceRefs({});
             }
-            setPerTravelerPriceRefs(nextRefs);
-            setAllocationAmounts(nextAmounts);
+          } else if (allNonUnder3.length >= requestedQty) {
+            setPriceSource('disney_ticket_calendar');
+            const eligibleTicketTravelers =
+              selectedNonUnder3.length >= requestedQty ? selectedNonUnder3 : allNonUnder3;
+            const ticketSlots = Array.from({ length: requestedQty }, () => ({
+              priceCents: q.priceCents!,
+              priceRef: singleRef,
+              isChild: requestedAge === 'child',
+            }));
+            const assigned = assignTypedSlotsToTravelers(ticketSlots, eligibleTicketTravelers);
+            setPerTravelerPriceRefs(assigned.refs);
+            setAllocationAmounts(assigned.amounts);
+            setSelectedTravelerIds(assigned.assignedIds);
           } else {
             setPriceSource('user_entered');
             setPerTravelerPriceRefs({});
-            distributeAcrossSelectedTravelers(totalCents);
+            const payingIds = (
+              selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3
+            ).map((tr) => tr.id);
+            if (payingIds.length > 0) {
+              setSelectedTravelerIds(payingIds);
+              distributeAcrossSelectedTravelers(totalCents, payingIds);
+            } else {
+              distributeAcrossSelectedTravelers(totalCents);
+            }
           }
         } else {
           setTicketQuoteStatusMessage('Ticket price unavailable for this date and option. Please enter your price below.');
@@ -1091,16 +1645,13 @@ export function BudgetLineFormModal({
     const neededAdults = Math.max(0, ticketAdultCount);
     const neededKids = Math.max(0, ticketChildCount);
     const totalNeeded = neededAdults + neededKids;
-    if (totalNeeded <= allTravelers.length) return;
+    const nonUnder3Travelers = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+    if (totalNeeded <= nonUnder3Travelers.length) return;
 
     let currentAdults = 0;
     let currentKids = 0;
-    allTravelers.forEach((t) => {
-      const isChild =
-        t.ageBracket === 'child' ||
-        t.name.toLowerCase().includes('kid') ||
-        t.name.toLowerCase().includes('child');
-      if (isChild) currentKids++;
+    nonUnder3Travelers.forEach((tr) => {
+      if (isTravelerChild(tr)) currentKids++;
       else currentAdults++;
     });
 
@@ -1111,7 +1662,7 @@ export function BudgetLineFormModal({
       id: string;
       name: string;
       isGuest: boolean;
-      ageBracket: 'adult' | 'child';
+      ageBracket: AgeBracket;
     }> = [];
     for (let i = 1; i <= addAdultCount; i++) {
       const name =
@@ -1176,6 +1727,7 @@ export function BudgetLineFormModal({
     if (!initialLine) {
       setPriceQuote(null);
       setMultiQuoteBreakdown(null);
+      setQuotedTicketRates(null);
       setPriceSource('user_entered');
       setPriceLabelKind('your_price');
       setPriceRef(null);
@@ -1206,6 +1758,7 @@ export function BudgetLineFormModal({
     setPriceLabelKind('your_price');
     setPriceQuote(null);
     setMultiQuoteBreakdown(null);
+    setQuotedTicketRates(null);
     setPriceRef(null);
     setPerTravelerPriceRefs({});
     if (allTravelers.length === 1) {
@@ -1220,9 +1773,10 @@ export function BudgetLineFormModal({
     const activeIds =
       selectedTravelerIds.length > 0
         ? selectedTravelerIds
-        : allTravelers.map((t) => t.id);
-    const dinerCount = Math.max(1, activeIds.length);
-    const totalCents = menuEstimate.perPersonCents * dinerCount;
+        : allTravelers.map((tr) => tr.id);
+    const adultRate = menuEstimate.perPersonCents;
+    const childRate = menuEstimate.childPerPersonCents ?? adultRate;
+    const totalCents = menuEstimateTotalCents;
 
     setManualPriceText((totalCents / 100).toFixed(2));
     setPriceSource('user_entered');
@@ -1233,75 +1787,212 @@ export function BudgetLineFormModal({
     setInlineBuffetQuantities({});
 
     const nextMap: Record<string, number> = {};
-    allTravelers.forEach((t) => {
-      nextMap[t.id] = activeIds.includes(t.id) ? menuEstimate.perPersonCents : 0;
+    const payingIds: string[] = [];
+    allTravelers.forEach((tr) => {
+      if (!activeIds.includes(tr.id) || isTravelerUnder3(tr)) {
+        nextMap[tr.id] = 0;
+      } else {
+        nextMap[tr.id] = isTravelerChild(tr) ? childRate : adultRate;
+        payingIds.push(tr.id);
+      }
     });
+    if (payingIds.length > 0) {
+      setSelectedTravelerIds(payingIds);
+    }
     setAllocationAmounts(nextMap);
   };
 
+  const applyFallbackBuffetAllocations = (
+    adults: number,
+    kids: number,
+    totalCents: number
+  ) => {
+    const totalDiners = adults + kids;
+    if (totalDiners === 0 || totalCents <= 0) {
+      const zeroMap: Record<string, number> = {};
+      allTravelers.forEach((tr) => {
+        zeroMap[tr.id] = 0;
+      });
+      setAllocationAmounts(zeroMap);
+      return;
+    }
+
+    const selectedNonUnder3 = allTravelers.filter(
+      (tr) => selectedTravelerIds.includes(tr.id) && !isTravelerUnder3(tr)
+    );
+    const allNonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+    const candidateTravelers =
+      selectedNonUnder3.length >= totalDiners
+        ? selectedNonUnder3
+        : allNonUnder3.length >= totalDiners
+          ? allNonUnder3
+          : allTravelers;
+
+    if (candidateTravelers.length >= totalDiners) {
+      const slots: Array<{ priceCents: number; isChild: boolean }> = [];
+      for (let i = 0; i < adults; i++) slots.push({ priceCents: 6500, isChild: false });
+      for (let i = 0; i < kids; i++) slots.push({ priceCents: 4200, isChild: true });
+      const assigned = assignTypedSlotsToTravelers(slots, candidateTravelers);
+      setSelectedTravelerIds(assigned.assignedIds);
+      setAllocationAmounts(assigned.amounts);
+    } else {
+      const payingIds = (
+        selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3
+      ).map((tr) => tr.id);
+      const targetIds = payingIds.length > 0 ? payingIds : selectedTravelerIds;
+      setSelectedTravelerIds(targetIds);
+      allocateProportionalByAge(totalCents, targetIds, 6500, 4200);
+    }
+  };
+
+  const applyInlineBuffetQuantities = (next: Record<string, number>) => {
+    const expandedSlots: Array<{ name: string; priceCents: number; isChild: boolean }> = [];
+    menuOffers.forEach((o, idx) => {
+      const q = next[getOfferKey(o, idx)] ?? 0;
+      const isChildOffer =
+        o.audience === 'child' ||
+        o.label.toLowerCase().includes('child') ||
+        o.label.toLowerCase().includes('kid');
+      for (let i = 0; i < q; i++) {
+        expandedSlots.push({
+          name: normalizeTierName(o.label),
+          priceCents: o.priceCents,
+          isChild: isChildOffer,
+        });
+      }
+    });
+
+    const subtotalCents = expandedSlots.reduce((sum, s) => sum + s.priceCents, 0);
+    setManualPriceText((subtotalCents / 100).toFixed(2));
+
+    const selectedNonUnder3 = allTravelers.filter(
+      (tr) => selectedTravelerIds.includes(tr.id) && !isTravelerUnder3(tr)
+    );
+    const allNonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+    const candidateTravelers =
+      selectedNonUnder3.length >= expandedSlots.length
+        ? selectedNonUnder3
+        : allNonUnder3.length >= expandedSlots.length
+          ? allNonUnder3
+          : allTravelers;
+
+    if (expandedSlots.length === 0) {
+      setPriceSource('user_entered');
+      setPriceLabelKind('your_price');
+      setPriceRef(null);
+      setPerTravelerPriceRefs({});
+    } else if (expandedSlots.length <= candidateTravelers.length) {
+      setPriceSource('disney_menu');
+      setPriceLabelKind('current');
+      const firstSlot = expandedSlots[0]!;
+      setPriceRef({
+        kind: 'menu',
+        tier: { name: firstSlot.name, priceCents: firstSlot.priceCents },
+      });
+      const assigned = assignTypedSlotsToTravelers(
+        expandedSlots.map((slot) => ({
+          priceCents: slot.priceCents,
+          isChild: slot.isChild,
+          priceRef: {
+            kind: 'menu',
+            tier: { name: slot.name, priceCents: slot.priceCents },
+          } as PriceRef,
+        })),
+        candidateTravelers
+      );
+      setPerTravelerPriceRefs(assigned.refs);
+      setAllocationAmounts(assigned.amounts);
+      setSelectedTravelerIds(assigned.assignedIds);
+    } else {
+      // More buffet diners than traveler rows: keep combined total as user_entered
+      setPriceSource('user_entered');
+      setPriceLabelKind('current');
+      setPriceRef(null);
+      setPerTravelerPriceRefs({});
+      const ageWeights = getActiveAgeWeights();
+      const payingIds = (
+        selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3
+      ).map((tr) => tr.id);
+      const targetIds = payingIds.length > 0 ? payingIds : selectedTravelerIds;
+      if (ageWeights) {
+        setSelectedTravelerIds(targetIds);
+        allocateProportionalByAge(
+          subtotalCents,
+          targetIds,
+          ageWeights.adultWeight,
+          ageWeights.childWeight
+        );
+      } else {
+        distributeAcrossSelectedTravelers(subtotalCents, targetIds);
+      }
+    }
+  };
+
   // Inline Buffet / Prix-Fixe stepper handler (Requirement 9.12)
-  const handleStepInlineBuffet = (offer: MenuPriceOffer, delta: number) => {
+  const handleStepInlineBuffet = (offer: MenuPriceOffer, index: number, delta: number) => {
+    const key = getOfferKey(offer, index);
     setInlineBuffetQuantities((prev) => {
-      const current = prev[offer.label] ?? 0;
+      const current = prev[key] ?? 0;
       const nextQty = Math.max(0, current + delta);
       const next = { ...prev };
       if (nextQty === 0) {
-        delete next[offer.label];
+        delete next[key];
       } else {
-        next[offer.label] = nextQty;
+        next[key] = nextQty;
       }
-
-      // Compute combined buffet total across all active offers
-      const expandedSlots: Array<{ name: string; priceCents: number }> = [];
-      for (const o of menuOffers) {
-        const q = next[o.label] ?? 0;
-        for (let i = 0; i < q; i++) {
-          expandedSlots.push({
-            name: normalizeTierName(o.label),
-            priceCents: o.priceCents,
-          });
-        }
-      }
-
-      const subtotalCents = expandedSlots.reduce((sum, s) => sum + s.priceCents, 0);
-      setManualPriceText((subtotalCents / 100).toFixed(2));
-
-      if (expandedSlots.length === 0) {
-        setPriceSource('user_entered');
-        setPriceLabelKind('your_price');
-        setPriceRef(null);
-        setPerTravelerPriceRefs({});
-      } else if (expandedSlots.length <= allTravelers.length) {
-        setPriceSource('disney_menu');
-        setPriceLabelKind('current');
-        const firstSlot = expandedSlots[0]!;
-        setPriceRef({
-          kind: 'menu',
-          tier: { name: firstSlot.name, priceCents: firstSlot.priceCents },
-        });
-        const nextAmounts: Record<string, number> = {};
-        const nextRefs: Record<string, PriceRef> = {};
-        expandedSlots.forEach((slot, idx) => {
-          const t = allTravelers[idx]!;
-          nextAmounts[t.id] = slot.priceCents;
-          nextRefs[t.id] = {
-            kind: 'menu',
-            tier: { name: slot.name, priceCents: slot.priceCents },
-          };
-        });
-        setPerTravelerPriceRefs(nextRefs);
-        setAllocationAmounts(nextAmounts);
-      } else {
-        // More buffet diners than traveler rows: keep combined total as user_entered
-        setPriceSource('user_entered');
-        setPriceLabelKind('current');
-        setPriceRef(null);
-        setPerTravelerPriceRefs({});
-        distributeAcrossSelectedTravelers(subtotalCents);
-      }
-
+      applyInlineBuffetQuantities(next);
       return next;
     });
+  };
+
+  const handleSelectBuffetMenuType = (nextMenuType: string) => {
+    if (nextMenuType === activeBuffetMenuType) return;
+    let adultCount = 0;
+    let childCount = 0;
+    for (const { offer, index } of visibleMenuOffers) {
+      const qty = inlineBuffetQuantities[getOfferKey(offer, index)] ?? 0;
+      if (qty <= 0) continue;
+      const isChildOffer =
+        offer.audience === 'child' ||
+        offer.label.toLowerCase().includes('child') ||
+        offer.label.toLowerCase().includes('kid');
+      if (isChildOffer) {
+        childCount += qty;
+      } else {
+        adultCount += qty;
+      }
+    }
+
+    const targetOffers = menuOffers
+      .map((offer, index) => ({ offer, index }))
+      .filter(({ offer }) => offer.menuType === nextMenuType);
+    const targetAdult = targetOffers.find(
+      ({ offer }) =>
+        offer.audience === 'adult' ||
+        offer.label.toLowerCase().includes('adult') ||
+        (!offer.label.toLowerCase().includes('child') && !offer.label.toLowerCase().includes('kid'))
+    );
+    const targetChild = targetOffers.find(
+      ({ offer }) =>
+        offer.audience === 'child' ||
+        offer.label.toLowerCase().includes('child') ||
+        offer.label.toLowerCase().includes('kid')
+    );
+
+    const nextQuantities: Record<string, number> = {};
+    if (targetAdult && adultCount > 0) {
+      nextQuantities[getOfferKey(targetAdult.offer, targetAdult.index)] = adultCount;
+    }
+    if (targetChild && childCount > 0) {
+      nextQuantities[getOfferKey(targetChild.offer, targetChild.index)] = childCount;
+    } else if (!targetAdult && targetOffers.length === 1 && adultCount + childCount > 0) {
+      nextQuantities[getOfferKey(targetOffers[0]!.offer, targetOffers[0]!.index)] =
+        adultCount + childCount;
+    }
+
+    setSelectedBuffetMenuType(nextMenuType);
+    setInlineBuffetQuantities(nextQuantities);
+    applyInlineBuffetQuantities(nextQuantities);
   };
 
   // Lodging Nightly Rate × Nights calculator handler (Requirement 22.9)
@@ -1327,18 +2018,31 @@ export function BudgetLineFormModal({
 
     // Expand multi-tier selections if more than 1 total diner slot is chosen
     if (selection.tiers && selection.tiers.length > 0) {
-      const expandedSlots: Array<{ name: string; priceCents: number }> = [];
-      for (const t of selection.tiers) {
-        const qty = typeof t.quantity === 'number' ? Math.max(1, t.quantity) : 1;
+      const expandedSlots: Array<{ name: string; priceCents: number; isChild: boolean }> = [];
+      for (const tier of selection.tiers) {
+        const qty = typeof tier.quantity === 'number' ? Math.max(1, tier.quantity) : 1;
+        const isChildTier = /child|kid/i.test(tier.name);
         for (let i = 0; i < qty; i++) {
           expandedSlots.push({
-            name: normalizeTierName(t.name),
-            priceCents: t.priceCents,
+            name: normalizeTierName(tier.name),
+            priceCents: tier.priceCents,
+            isChild: isChildTier,
           });
         }
       }
       if (expandedSlots.length > 1) {
-        if (expandedSlots.length <= allTravelers.length) {
+        const selectedNonUnder3 = allTravelers.filter(
+          (tr) => selectedTravelerIds.includes(tr.id) && !isTravelerUnder3(tr)
+        );
+        const allNonUnder3 = allTravelers.filter((tr) => !isTravelerUnder3(tr));
+        const candidateTravelers =
+          selectedNonUnder3.length >= expandedSlots.length
+            ? selectedNonUnder3
+            : allNonUnder3.length >= expandedSlots.length
+              ? allNonUnder3
+              : allTravelers;
+
+        if (expandedSlots.length <= candidateTravelers.length) {
           setPriceSource('disney_menu');
           setPriceRef({
             kind: 'menu',
@@ -1347,23 +2051,41 @@ export function BudgetLineFormModal({
               priceCents: expandedSlots[0]!.priceCents,
             },
           });
-          const nextAmounts: Record<string, number> = {};
-          const nextRefs: Record<string, PriceRef> = {};
-          expandedSlots.forEach((slot, idx) => {
-            const t = allTravelers[idx]!;
-            nextAmounts[t.id] = slot.priceCents;
-            nextRefs[t.id] = {
-              kind: 'menu',
-              tier: { name: slot.name, priceCents: slot.priceCents },
-            };
-          });
-          setPerTravelerPriceRefs(nextRefs);
-          setAllocationAmounts(nextAmounts);
+          const assigned = assignTypedSlotsToTravelers(
+            expandedSlots.map((slot) => ({
+              priceCents: slot.priceCents,
+              isChild: slot.isChild,
+              priceRef: {
+                kind: 'menu',
+                tier: { name: slot.name, priceCents: slot.priceCents },
+              } as PriceRef,
+            })),
+            candidateTravelers
+          );
+          setPerTravelerPriceRefs(assigned.refs);
+          setAllocationAmounts(assigned.amounts);
+          setSelectedTravelerIds(assigned.assignedIds);
         } else {
           setPriceSource('user_entered');
           setPriceRef(null);
           setPerTravelerPriceRefs({});
-          distributeAcrossSelectedTravelers(subtotal);
+          const payingIds = (
+            selectedNonUnder3.length > 0 ? selectedNonUnder3 : allNonUnder3
+          ).map((tr) => tr.id);
+          const targetIds = payingIds.length > 0 ? payingIds : selectedTravelerIds;
+          const adultSlot = expandedSlots.find((s) => !s.isChild);
+          const childSlot = expandedSlots.find((s) => s.isChild);
+          if (adultSlot && childSlot) {
+            setSelectedTravelerIds(targetIds);
+            allocateProportionalByAge(
+              subtotal,
+              targetIds,
+              adultSlot.priceCents,
+              childSlot.priceCents
+            );
+          } else {
+            distributeAcrossSelectedTravelers(subtotal, targetIds);
+          }
         }
         return;
       }
@@ -1379,47 +2101,84 @@ export function BudgetLineFormModal({
   const handleSplitEveryone = () => {
     const totalCents = parseDollarInputToCents(manualPriceText) || 0;
     if (allTravelers.length === 0 || totalCents <= 0) return;
-    setSelectedTravelerIds(allTravelers.map((t) => t.id));
+    setSelectedTravelerIds(allTravelers.map((tr) => tr.id));
     const shares = splitCentsEvenly(totalCents, allTravelers.length);
     const nextMap: Record<string, number> = {};
-    allTravelers.forEach((t, idx) => {
-      nextMap[t.id] = shares[idx] ?? 0;
+    allTravelers.forEach((tr, idx) => {
+      nextMap[tr.id] = shares[idx] ?? 0;
     });
     setAllocationAmounts(nextMap);
-    // If splitting a menu line across multiple people, switch to user_entered so server doesn't reject per-person sum mismatch
-    if (priceSource === 'disney_menu' && allTravelers.length > 1 && Object.keys(perTravelerPriceRefs).length === 0) {
+    // Switching split mode across everyone invalidates per-person sourced refs when > 1 traveler
+    if (priceSource !== 'user_entered' && allTravelers.length > 1) {
       setPriceSource('user_entered');
+      setPriceLabelKind('your_price');
       setPriceRef(null);
+      setPerTravelerPriceRefs({});
     }
   };
 
-  // Exclude organizer/caller from split so other crew members share the cost
+  // Exclude caller ("Me") from split so other crew members share the cost
   const handleExcludeMe = () => {
     const totalCents = parseDollarInputToCents(manualPriceText) || 0;
     if (allTravelers.length <= 1) return;
-    const otherTravelers = allTravelers.slice(1);
-    const otherIds = otherTravelers.map((t) => t.id);
-    setSelectedTravelerIds(otherIds);
+    const otherTravelers = selfId
+      ? allTravelers.filter((tr) => tr.id !== selfId)
+      : allTravelers.slice(1);
+    if (otherTravelers.length === 0) return;
+
+    const otherIds = otherTravelers.map((tr) => tr.id);
+    if (priceSource !== 'user_entered') {
+      setPriceSource('user_entered');
+      setPriceLabelKind('your_price');
+      setPriceRef(null);
+      setPerTravelerPriceRefs({});
+    }
+
     if (totalCents > 0) {
-      distributeAcrossSelectedTravelers(totalCents, otherIds);
+      const ageWeights = getActiveAgeWeights();
+      const hasPayingChild = otherTravelers.some((tr) => isTravelerChild(tr));
+      const hasUnder3 = otherTravelers.some((tr) => isTravelerUnder3(tr));
+      if (ageWeights && (hasPayingChild || hasUnder3)) {
+        const payingIds = otherTravelers
+          .filter((tr) => !isTravelerUnder3(tr))
+          .map((tr) => tr.id);
+        const targetIds = payingIds.length > 0 ? payingIds : otherIds;
+        setSelectedTravelerIds(targetIds);
+        allocateProportionalByAge(
+          totalCents,
+          targetIds,
+          ageWeights.adultWeight,
+          ageWeights.childWeight
+        );
+      } else {
+        setSelectedTravelerIds(otherIds);
+        distributeAcrossSelectedTravelers(totalCents, otherIds);
+      }
     } else {
+      setSelectedTravelerIds(otherIds);
       const nextMap: Record<string, number> = {};
-      allTravelers.forEach((t) => {
-        nextMap[t.id] = 0;
+      allTravelers.forEach((tr) => {
+        nextMap[tr.id] = 0;
       });
       setAllocationAmounts(nextMap);
     }
   };
 
-  // Only organizer/user pays (100% to me, others $0)
+  // Only caller ("Me") pays (100% to me, others $0)
   const handleOnlyMe = () => {
     const totalCents = parseDollarInputToCents(manualPriceText) || 0;
     if (allTravelers.length === 0) return;
-    const myId = allTravelers[0]!.id;
+    const myId = selfId ?? allTravelers[0]!.id;
     setSelectedTravelerIds([myId]);
+    if (priceSource !== 'user_entered') {
+      setPriceSource('user_entered');
+      setPriceLabelKind('your_price');
+      setPriceRef(null);
+      setPerTravelerPriceRefs({});
+    }
     const nextMap: Record<string, number> = {};
-    allTravelers.forEach((t) => {
-      nextMap[t.id] = t.id === myId ? totalCents : 0;
+    allTravelers.forEach((tr) => {
+      nextMap[tr.id] = tr.id === myId ? totalCents : 0;
     });
     setAllocationAmounts(nextMap);
   };
@@ -1429,137 +2188,156 @@ export function BudgetLineFormModal({
     const totalCents = parseDollarInputToCents(manualPriceText) || 0;
     if (allTravelers.length === 0 || totalCents <= 0) return;
 
-    const profileMap = new Map<string, string>();
-    travelers.forEach((p) => {
-      const key = p.memberId ?? p.guestId;
-      if (key) profileMap.set(key, p.ageBracket);
-    });
+    const activeTravelers =
+      selectedTravelerIds.length > 0
+        ? allTravelers.filter((tr) => selectedTravelerIds.includes(tr.id))
+        : allTravelers;
+    const targetTravelers = activeTravelers.length > 0 ? activeTravelers : allTravelers;
 
-    const adultIds: string[] = [];
-    const childIds: string[] = [];
-    allTravelers.forEach((t) => {
-      const explicitBracket = t.ageBracket;
-      const profileBracket = profileMap.get(t.id);
-      const isKidByName =
-        t.name.toLowerCase().includes('kid') || t.name.toLowerCase().includes('child');
-      if (explicitBracket === 'child' || profileBracket === 'child' || isKidByName) {
-        childIds.push(t.id);
-      } else {
-        adultIds.push(t.id);
-      }
-    });
+    const activeAdults = targetTravelers.filter(
+      (tr) => !isTravelerUnder3(tr) && !isTravelerChild(tr)
+    );
+    const activeChildren = targetTravelers.filter((tr) => isTravelerChild(tr));
+    const payingTravelers = targetTravelers.filter((tr) => !isTravelerUnder3(tr));
 
     if (category === 'tickets') {
-      const totalTickets = ticketAdultCount + ticketChildCount;
+      const useRosterCounts =
+        ticketChildCount === 0 && ticketAdultCount === 1 && activeChildren.length > 0;
+      const effectiveAdultCount = useRosterCounts ? activeAdults.length : ticketAdultCount;
+      const effectiveChildCount = useRosterCounts ? activeChildren.length : ticketChildCount;
+      const totalTickets = effectiveAdultCount + effectiveChildCount;
+
       if (totalTickets > 0) {
-        const childRatio = 0.96315789;
+        const hasBothQuoted = Boolean(
+          quotedTicketRates?.adultCents && quotedTicketRates?.childCents
+        );
+        const adultWeight = hasBothQuoted ? quotedTicketRates!.adultCents! : 1.0;
+        const childWeight = hasBothQuoted ? quotedTicketRates!.childCents! : 0.96315789;
+        const effectivePaying = payingTravelers.length > 0 ? payingTravelers : targetTravelers;
+
+        if (totalTickets > effectivePaying.length) {
+          const payingIds = effectivePaying.map((tr) => tr.id);
+          setSelectedTravelerIds(payingIds);
+          allocateProportionalByAge(totalCents, payingIds, adultWeight, childWeight);
+          if (priceSource !== 'user_entered') {
+            setPriceSource('user_entered');
+            setPriceLabelKind('your_price');
+            setPriceRef(null);
+            setPerTravelerPriceRefs({});
+          }
+          return;
+        }
+
         let perAdultCents = 0;
         let perChildCents = 0;
 
-        if (ticketAdultCount > 0 && ticketChildCount > 0) {
-          const weight = ticketAdultCount * 1.0 + ticketChildCount * childRatio;
+        if (effectiveAdultCount > 0 && effectiveChildCount > 0) {
+          const weight = effectiveAdultCount * adultWeight + effectiveChildCount * childWeight;
           const unit = totalCents / weight;
-          perAdultCents = Math.round(unit);
-          perChildCents = Math.round(unit * childRatio);
-        } else if (ticketAdultCount > 0) {
-          perAdultCents = Math.round(totalCents / ticketAdultCount);
-        } else if (ticketChildCount > 0) {
-          perChildCents = Math.round(totalCents / ticketChildCount);
+          perAdultCents = Math.round(unit * adultWeight);
+          perChildCents = Math.round(unit * childWeight);
+        } else if (effectiveAdultCount > 0) {
+          perAdultCents = Math.round(totalCents / effectiveAdultCount);
+        } else if (effectiveChildCount > 0) {
+          perChildCents = Math.round(totalCents / effectiveChildCount);
         }
 
-        const nextMap: Record<string, number> = {};
-        allTravelers.forEach((t) => {
-          nextMap[t.id] = 0;
-        });
-
-        let remainingAdults = ticketAdultCount;
-        let remainingKids = ticketChildCount;
-        const activeIds: string[] = [];
-
-        // 1. Assign adult tickets to adult travelers
-        for (const t of allTravelers) {
-          const isKid =
-            t.ageBracket === 'child' ||
-            profileMap.get(t.id) === 'child' ||
-            t.name.toLowerCase().includes('kid') ||
-            t.name.toLowerCase().includes('child');
-          if (!isKid && remainingAdults > 0) {
-            nextMap[t.id] = perAdultCents;
-            activeIds.push(t.id);
-            remainingAdults--;
-          }
+        const slots: Array<{ priceCents: number; isChild: boolean }> = [];
+        for (let i = 0; i < effectiveAdultCount; i++) {
+          slots.push({ priceCents: perAdultCents, isChild: false });
+        }
+        for (let i = 0; i < effectiveChildCount; i++) {
+          slots.push({ priceCents: perChildCents, isChild: true });
         }
 
-        // 2. Assign child tickets to child travelers
-        for (const t of allTravelers) {
-          const isKid =
-            t.ageBracket === 'child' ||
-            profileMap.get(t.id) === 'child' ||
-            t.name.toLowerCase().includes('kid') ||
-            t.name.toLowerCase().includes('child');
-          if (isKid && remainingKids > 0) {
-            nextMap[t.id] = perChildCents;
-            activeIds.push(t.id);
-            remainingKids--;
-          }
-        }
-
-        // 3. Overflow adult tickets to any remaining traveler
-        if (remainingAdults > 0) {
-          for (const t of allTravelers) {
-            if (nextMap[t.id] === 0 && remainingAdults > 0) {
-              nextMap[t.id] = perAdultCents;
-              activeIds.push(t.id);
-              remainingAdults--;
-            }
-          }
-        }
-
-        // 4. Overflow child tickets to any remaining traveler
-        if (remainingKids > 0) {
-          for (const t of allTravelers) {
-            if (nextMap[t.id] === 0 && remainingKids > 0) {
-              nextMap[t.id] = perChildCents;
-              activeIds.push(t.id);
-              remainingKids--;
-            }
-          }
-        }
-
-        // Reconcile rounding to match totalCents exactly
-        const sumAlloc = Object.values(nextMap).reduce((a, b) => a + b, 0);
+        const assigned = assignTypedSlotsToTravelers(slots, effectivePaying);
+        const sumAlloc = Object.values(assigned.amounts).reduce((a, b) => a + b, 0);
         const diff = totalCents - sumAlloc;
-        if (diff !== 0 && activeIds.length > 0) {
-          nextMap[activeIds[0]!] = Math.max(0, (nextMap[activeIds[0]!] ?? 0) + diff);
+        if (diff !== 0 && assigned.assignedIds.length > 0) {
+          const firstId = assigned.assignedIds[0]!;
+          assigned.amounts[firstId] = Math.max(0, (assigned.amounts[firstId] ?? 0) + diff);
         }
 
-        setSelectedTravelerIds(activeIds.length > 0 ? activeIds : allTravelers.map((t) => t.id));
-        setAllocationAmounts(nextMap);
+        const nextSelectedIds =
+          assigned.assignedIds.length > 0
+            ? assigned.assignedIds
+            : effectivePaying.map((tr) => tr.id);
+        setSelectedTravelerIds(nextSelectedIds);
+        setAllocationAmounts(assigned.amounts);
+
+        if (priceSource === 'disney_ticket_calendar') {
+          const quotedExactMatch =
+            nextSelectedIds.length > 0 &&
+            nextSelectedIds.every((id) => {
+              const ref = perTravelerPriceRefs[id] ?? priceRef;
+              if (!ref || ref.kind !== 'ticket') return false;
+              const expectedRate =
+                ref.ageGroup === 'child'
+                  ? quotedTicketRates?.childCents
+                  : quotedTicketRates?.adultCents;
+              return expectedRate !== null && expectedRate !== undefined
+                ? assigned.amounts[id] === expectedRate
+                : true;
+            });
+          if (!quotedExactMatch) {
+            setPriceSource('user_entered');
+            setPriceLabelKind('your_price');
+            setPriceRef(null);
+            setPerTravelerPriceRefs({});
+          }
+        }
         return;
       }
     }
 
-    if (
-      category === 'dining' &&
-      quickDiningMode === 'buffet' &&
-      buffetAdults > 0 &&
-      buffetKids > 0
-    ) {
-      const adultRate = 6500;
-      const childRate = 4200;
-      const nextMap: Record<string, number> = {};
-      allTravelers.forEach((t) => {
-        nextMap[t.id] = 0;
-      });
-      adultIds.forEach((id) => {
-        nextMap[id] = adultRate;
-      });
-      childIds.forEach((id) => {
-        nextMap[id] = childRate;
-      });
-      setSelectedTravelerIds(allTravelers.map((t) => t.id));
-      setAllocationAmounts(nextMap);
-      return;
+    if (category === 'dining') {
+      const relevantOffers = activeBuffetMenuType
+        ? menuOffers.filter((o) => o.menuType === activeBuffetMenuType)
+        : menuOffers;
+      const adultOffer = relevantOffers.find(
+        (o) =>
+          o.audience === 'adult' ||
+          o.label.toLowerCase().includes('adult') ||
+          (!o.label.toLowerCase().includes('child') && !o.label.toLowerCase().includes('kid'))
+      );
+      const childOffer = relevantOffers.find(
+        (o) =>
+          o.audience === 'child' ||
+          o.label.toLowerCase().includes('child') ||
+          o.label.toLowerCase().includes('kid')
+      );
+
+      let adultWeight = 6500;
+      let childWeight = 4200;
+      if (adultOffer && childOffer) {
+        adultWeight = adultOffer.priceCents;
+        childWeight = childOffer.priceCents;
+      } else if (menuEstimate?.childPerPersonCents != null) {
+        adultWeight = menuEstimate.perPersonCents;
+        childWeight = menuEstimate.childPerPersonCents;
+      }
+
+      if (activeChildren.length > 0 || targetTravelers.some((tr) => isTravelerUnder3(tr))) {
+        const payingIds = (payingTravelers.length > 0 ? payingTravelers : targetTravelers).map(
+          (tr) => tr.id
+        );
+        setSelectedTravelerIds(payingIds);
+        allocateProportionalByAge(totalCents, payingIds, adultWeight, childWeight);
+        if (priceSource !== 'user_entered') {
+          const matchesPerTravelerRefs =
+            priceSource === 'disney_menu' &&
+            payingIds.length > 0 &&
+            payingIds.every((id) => perTravelerPriceRefs[id]?.kind === 'menu') &&
+            activeAdults.length * adultWeight + activeChildren.length * childWeight === totalCents;
+          if (!matchesPerTravelerRefs) {
+            setPriceSource('user_entered');
+            setPriceLabelKind('your_price');
+            setPriceRef(null);
+            setPerTravelerPriceRefs({});
+          }
+        }
+        return;
+      }
     }
 
     distributeAcrossSelectedTravelers(totalCents, selectedTravelerIds);
@@ -1573,9 +2351,28 @@ export function BudgetLineFormModal({
       : [...selectedTravelerIds, travelerId];
     if (nextSelected.length === 0) return;
     setSelectedTravelerIds(nextSelected);
+    if (priceSource !== 'user_entered') {
+      setPriceSource('user_entered');
+      setPriceLabelKind('your_price');
+      setPriceRef(null);
+      setPerTravelerPriceRefs({});
+    }
     const totalCents = parseDollarInputToCents(manualPriceText) || 0;
     if (totalCents > 0) {
-      distributeAcrossSelectedTravelers(totalCents, nextSelected);
+      const nextTravelers = allTravelers.filter((tr) => nextSelected.includes(tr.id));
+      const ageWeights = getActiveAgeWeights();
+      const hasChild = nextTravelers.some((tr) => isTravelerChild(tr));
+      const hasUnder3 = nextTravelers.some((tr) => isTravelerUnder3(tr));
+      if (ageWeights && (hasChild || hasUnder3)) {
+        allocateProportionalByAge(
+          totalCents,
+          nextSelected,
+          ageWeights.adultWeight,
+          ageWeights.childWeight
+        );
+      } else {
+        distributeAcrossSelectedTravelers(totalCents, nextSelected);
+      }
     }
   };
 
@@ -1602,7 +2399,7 @@ export function BudgetLineFormModal({
       return `LL ${LL_PASS_TYPE_LABELS[llPassType]} · ${llPark}${suffix}`;
     }
     if (category === 'dining') {
-      const restName = experienceName || expQuery.data?.experience?.name;
+      const restName = experienceName || expQuery.data?.name;
       if (restName) return restName;
       return diningMode === 'off_property' ? 'Off-Property Dining' : 'Disney Dining';
     }
@@ -1656,7 +2453,7 @@ export function BudgetLineFormModal({
     if (enteredAllocations.length > 0) {
       finalAllocations = enteredAllocations;
     } else {
-      const primary = allTravelers[0];
+      const primary = selfTraveler ?? allTravelers[0];
       if (primary) {
         const specificRef = perTravelerPriceRefs[primary.id] ?? itemPriceRef;
         finalAllocations = [
@@ -2148,11 +2945,11 @@ export function BudgetLineFormModal({
                   {/* SEARCH DISNEY RESTAURANT */}
                   <View style={styles.fieldRow}>
                     <Text style={styles.fieldLabel}>SEARCH DISNEY RESTAURANT</Text>
-                    {experienceName || (experienceId && expQuery.data?.experience?.name) ? (
+                    {experienceName || (experienceId && expQuery.data?.name) ? (
                       <View style={styles.linkedVenueBox}>
                         <View style={styles.linkedVenueInfo}>
                           <Text style={styles.linkedVenueName}>
-                            {experienceName || expQuery.data?.experience?.name}
+                            {experienceName || expQuery.data?.name}
                           </Text>
                           <Text style={styles.linkedVenueSubtitle}>
                             {park ? `${park} · Linked Restaurant` : 'Linked Restaurant'}
@@ -2185,86 +2982,84 @@ export function BudgetLineFormModal({
                   <View style={styles.fieldRow}>
                     <Text style={styles.fieldLabel}>ESTIMATION METHOD</Text>
                     <View style={styles.estimationTabsRow}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Buffet / Character"
-                        accessibilityState={{ selected: quickDiningMode === 'buffet' || quickDiningMode === 'none' }}
-                        onPress={() => {
-                          setQuickDiningMode('buffet');
-                          const total = buffetAdults * 6500 + buffetKids * 4200;
-                          setManualPriceText((total / 100).toFixed(2));
-                          distributeAcrossSelectedTravelers(total);
-                        }}
-                        style={[
-                          styles.estTabBtn,
-                          (quickDiningMode === 'buffet' || quickDiningMode === 'none') && styles.estTabBtnActive,
-                          {
-                            backgroundColor:
-                              quickDiningMode === 'buffet' || quickDiningMode === 'none'
+                      {showBuffetTab && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Buffet / Character"
+                          accessibilityState={{ selected: isBuffetModeActive }}
+                          onPress={() => {
+                            setQuickDiningMode('buffet');
+                            const total = buffetAdults * 6500 + buffetKids * 4200;
+                            setManualPriceText((total / 100).toFixed(2));
+                            applyFallbackBuffetAllocations(buffetAdults, buffetKids, total);
+                          }}
+                          style={[
+                            styles.estTabBtn,
+                            isBuffetModeActive && styles.estTabBtnActive,
+                            {
+                              backgroundColor: isBuffetModeActive
                                 ? palette.chipActiveBg
                                 : palette.chipInactiveBg,
-                            borderColor:
-                              quickDiningMode === 'buffet' || quickDiningMode === 'none'
+                              borderColor: isBuffetModeActive
                                 ? palette.chipActiveBg
                                 : palette.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.estTabText,
-                            {
-                              color:
-                                quickDiningMode === 'buffet' || quickDiningMode === 'none'
-                                  ? palette.chipActiveText
-                                  : palette.chipInactiveText,
                             },
                           ]}
                         >
-                          Buffet / Fixed
-                        </Text>
-                      </Pressable>
+                          <Text
+                            style={[
+                              styles.estTabText,
+                              {
+                                color: isBuffetModeActive
+                                  ? palette.chipActiveText
+                                  : palette.chipInactiveText,
+                              },
+                            ]}
+                          >
+                            Buffet / Fixed
+                          </Text>
+                        </Pressable>
+                      )}
 
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Table-Service ~$45/person"
-                        accessibilityState={{ selected: quickDiningMode === 'table_service' }}
-                        onPress={() => {
-                          setQuickDiningMode('table_service');
-                          const rate = 4500;
-                          const total = rate * activeDinerCount;
-                          setManualPriceText((total / 100).toFixed(2));
-                          distributeAcrossSelectedTravelers(total);
-                        }}
-                        style={[
-                          styles.estTabBtn,
-                          quickDiningMode === 'table_service' && styles.estTabBtnActive,
-                          {
-                            backgroundColor:
-                              quickDiningMode === 'table_service'
+                      {showMenuAverageTab && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Table-Service ~$45/person"
+                          accessibilityState={{ selected: isMenuAverageModeActive }}
+                          onPress={() => {
+                            setQuickDiningMode('table_service');
+                            const rate = 4500;
+                            const total = rate * activeDinerCount;
+                            setManualPriceText((total / 100).toFixed(2));
+                            distributeAcrossSelectedTravelers(total);
+                          }}
+                          style={[
+                            styles.estTabBtn,
+                            isMenuAverageModeActive && styles.estTabBtnActive,
+                            {
+                              backgroundColor: isMenuAverageModeActive
                                 ? palette.chipActiveBg
                                 : palette.chipInactiveBg,
-                            borderColor:
-                              quickDiningMode === 'table_service'
+                              borderColor: isMenuAverageModeActive
                                 ? palette.chipActiveBg
                                 : palette.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.estTabText,
-                            {
-                              color:
-                                quickDiningMode === 'table_service'
-                                  ? palette.chipActiveText
-                                  : palette.chipInactiveText,
                             },
                           ]}
                         >
-                          Menu Average
-                        </Text>
-                      </Pressable>
+                          <Text
+                            style={[
+                              styles.estTabText,
+                              {
+                                color: isMenuAverageModeActive
+                                  ? palette.chipActiveText
+                                  : palette.chipInactiveText,
+                              },
+                            ]}
+                          >
+                            Menu Average
+                          </Text>
+                        </Pressable>
+                      )}
 
                       <Pressable
                         accessibilityRole="button"
@@ -2291,50 +3086,93 @@ export function BudgetLineFormModal({
                   </View>
 
                   {/* Buffet / Prix-Fixe Steppers Container */}
-                  {(quickDiningMode === 'buffet' || quickDiningMode === 'none') && (
+                  {isBuffetModeActive && (
                     <View style={styles.buffetSteppersContainer}>
                       {menuOffers.length > 0 ? (
-                        <View style={styles.buffetSteppersRow}>
-                          {menuOffers.map((offer) => {
-                            const qty = inlineBuffetQuantities[offer.label] ?? 0;
-                            return (
-                              <View
-                                key={offer.label}
-                                style={[
-                                  styles.buffetStepperCard,
-                                  { backgroundColor: palette.subtleBg, borderColor: palette.border },
-                                ]}
-                              >
-                                <View style={styles.buffetStepperInfo}>
-                                  <Text style={styles.buffetStepperTitle}>
-                                    {qty} {offer.label}
-                                  </Text>
-                                  <Text style={[styles.buffetStepperRate, { color: palette.hintText }]}>
-                                    {formatDollars(offer.priceCents)}/ea
-                                  </Text>
-                                </View>
-                                <View style={styles.stepperInline}>
+                        <>
+                          {hasMultipleMenuTypes && (
+                            <View style={styles.mealPeriodRow}>
+                              {availableOfferMenuTypes.map((mt) => {
+                                const isSelected = mt === activeBuffetMenuType;
+                                return (
                                   <Pressable
+                                    key={mt}
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Decrease buffet ${offer.label}`}
-                                    onPress={() => handleStepInlineBuffet(offer, -1)}
-                                    style={styles.stepBtnSmall}
+                                    accessibilityLabel={`Meal period ${mt}`}
+                                    accessibilityState={{ selected: isSelected }}
+                                    onPress={() => handleSelectBuffetMenuType(mt)}
+                                    style={[
+                                      styles.chip,
+                                      {
+                                        backgroundColor: isSelected
+                                          ? palette.chipActiveBg
+                                          : palette.chipInactiveBg,
+                                        borderColor: isSelected
+                                          ? palette.chipActiveBg
+                                          : palette.border,
+                                      },
+                                    ]}
                                   >
-                                    <Ionicons name="remove" size={15} color={palette.stepperBtnText} />
+                                    <Text
+                                      style={[
+                                        styles.chipText,
+                                        {
+                                          color: isSelected
+                                            ? palette.chipActiveText
+                                            : palette.chipInactiveText,
+                                        },
+                                      ]}
+                                    >
+                                      {mt}
+                                    </Text>
                                   </Pressable>
-                                  <Pressable
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Increase buffet ${offer.label}`}
-                                    onPress={() => handleStepInlineBuffet(offer, 1)}
-                                    style={styles.stepBtnSmall}
-                                  >
-                                    <Ionicons name="add" size={15} color={palette.stepperBtnText} />
-                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          )}
+                          <View style={styles.buffetSteppersRow}>
+                            {visibleMenuOffers.map(({ offer, index }) => {
+                              const offerKey = getOfferKey(offer, index);
+                              const qty = inlineBuffetQuantities[offerKey] ?? 0;
+                              return (
+                                <View
+                                  key={offerKey}
+                                  style={[
+                                    styles.buffetStepperCard,
+                                    { backgroundColor: palette.subtleBg, borderColor: palette.border },
+                                  ]}
+                                >
+                                  <View style={styles.buffetStepperInfo}>
+                                    <Text style={styles.buffetStepperTitle}>
+                                      {qty} {offer.label}
+                                    </Text>
+                                    <Text style={[styles.buffetStepperRate, { color: palette.hintText }]}>
+                                      {formatDollars(offer.priceCents)}/ea
+                                    </Text>
+                                  </View>
+                                  <View style={styles.stepperInline}>
+                                    <Pressable
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Decrease buffet ${offer.label}`}
+                                      onPress={() => handleStepInlineBuffet(offer, index, -1)}
+                                      style={styles.stepBtnSmall}
+                                    >
+                                      <Ionicons name="remove" size={15} color={palette.stepperBtnText} />
+                                    </Pressable>
+                                    <Pressable
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Increase buffet ${offer.label}`}
+                                      onPress={() => handleStepInlineBuffet(offer, index, 1)}
+                                      style={styles.stepBtnSmall}
+                                    >
+                                      <Ionicons name="add" size={15} color={palette.stepperBtnText} />
+                                    </Pressable>
+                                  </View>
                                 </View>
-                              </View>
-                            );
-                          })}
-                        </View>
+                              );
+                            })}
+                          </View>
+                        </>
                       ) : (
                         <View style={styles.buffetSteppersRow}>
                           {/* Adults */}
@@ -2349,10 +3187,11 @@ export function BudgetLineFormModal({
                                 accessibilityLabel="Decrease buffet adults"
                                 onPress={() => {
                                   const next = Math.max(0, buffetAdults - 1);
+                                  setQuickDiningMode('buffet');
                                   setBuffetAdults(next);
                                   const total = next * 6500 + buffetKids * 4200;
                                   setManualPriceText((total / 100).toFixed(2));
-                                  distributeAcrossSelectedTravelers(total);
+                                  applyFallbackBuffetAllocations(next, buffetKids, total);
                                 }}
                                 style={styles.stepBtnSmall}
                               >
@@ -2363,10 +3202,11 @@ export function BudgetLineFormModal({
                                 accessibilityLabel="Increase buffet adults"
                                 onPress={() => {
                                   const next = buffetAdults + 1;
+                                  setQuickDiningMode('buffet');
                                   setBuffetAdults(next);
                                   const total = next * 6500 + buffetKids * 4200;
                                   setManualPriceText((total / 100).toFixed(2));
-                                  distributeAcrossSelectedTravelers(total);
+                                  applyFallbackBuffetAllocations(next, buffetKids, total);
                                 }}
                                 style={styles.stepBtnSmall}
                               >
@@ -2387,10 +3227,11 @@ export function BudgetLineFormModal({
                                 accessibilityLabel="Decrease buffet kids"
                                 onPress={() => {
                                   const next = Math.max(0, buffetKids - 1);
+                                  setQuickDiningMode('buffet');
                                   setBuffetKids(next);
                                   const total = buffetAdults * 6500 + next * 4200;
                                   setManualPriceText((total / 100).toFixed(2));
-                                  distributeAcrossSelectedTravelers(total);
+                                  applyFallbackBuffetAllocations(buffetAdults, next, total);
                                 }}
                                 style={styles.stepBtnSmall}
                               >
@@ -2401,10 +3242,11 @@ export function BudgetLineFormModal({
                                 accessibilityLabel="Increase buffet kids"
                                 onPress={() => {
                                   const next = buffetKids + 1;
+                                  setQuickDiningMode('buffet');
                                   setBuffetKids(next);
                                   const total = buffetAdults * 6500 + next * 4200;
                                   setManualPriceText((total / 100).toFixed(2));
-                                  distributeAcrossSelectedTravelers(total);
+                                  applyFallbackBuffetAllocations(buffetAdults, next, total);
                                 }}
                                 style={styles.stepBtnSmall}
                               >
@@ -2417,8 +3259,8 @@ export function BudgetLineFormModal({
                     </View>
                   )}
 
-                  {/* Menu Average options row when in table service mode */}
-                  {(quickDiningMode === 'table_service' || quickDiningMode === 'quick_service') && (
+                  {/* Menu Average options row when in generic or quick-service mode */}
+                  {isMenuAverageModeActive && (!experienceId || isQuickServiceStyle) && (
                     <View style={styles.menuAvgOptionsRow}>
                       <Pressable
                         accessibilityRole="button"
@@ -2448,7 +3290,8 @@ export function BudgetLineFormModal({
 
                   {/* 1-Tap Menu Average per Person (Requirement 9.11) */}
                   {menuEstimate &&
-                    (quickDiningMode === 'table_service' ||
+                    showMenuAverageTab &&
+                    (isMenuAverageModeActive ||
                       menuEstimate.basis === 'entrees' ||
                       menuOffers.length === 0) && (
                       <Pressable
@@ -2466,13 +3309,18 @@ export function BudgetLineFormModal({
                         <Ionicons name="sparkles" size={16} color={palette.chipActiveBg} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.menuEstimateTitle}>
-                            Use Menu Average (~{formatDollars(menuEstimate.perPersonCents)}/person)
+                            {menuEstimate.childPerPersonCents != null
+                              ? `Use Menu Average (~${formatDollars(menuEstimate.perPersonCents)} adult · ~${formatDollars(menuEstimate.childPerPersonCents)} kid)`
+                              : `Use Menu Average (~${formatDollars(menuEstimate.perPersonCents)}/person)`}
                           </Text>
                           <Text style={[styles.menuEstimateSub, { color: palette.hintText }]}>
                             Based on {menuEstimate.sampleCount}{' '}
-                            {menuEstimate.basis === 'entrees' ? 'entrées' : 'menu items'} ·{' '}
-                            {activeDinerCount} {activeDinerCount === 1 ? 'diner' : 'diners'} ={' '}
-                            {formatDollars(menuEstimate.perPersonCents * activeDinerCount)}
+                            {menuEstimate.basis === 'entrees' ? 'entrées' : 'menu items'}
+                            {menuEstimate.childSampleCount ? ` & ${menuEstimate.childSampleCount} kids'` : ''} ·{' '}
+                            {menuEstimate.childPerPersonCents != null && activeChildCount > 0
+                              ? `${activeAdultCount} ${activeAdultCount === 1 ? 'adult' : 'adults'} + ${activeChildCount} ${activeChildCount === 1 ? 'kid' : 'kids'}`
+                              : `${activeDinerCount} ${activeDinerCount === 1 ? 'diner' : 'diners'}`}{' '}
+                            = {formatDollars(menuEstimateTotalCents)}
                           </Text>
                         </View>
                         <Text style={[styles.menuEstimateApply, { color: palette.stepperBtnText }]}>
@@ -3473,7 +4321,8 @@ export function BudgetLineFormModal({
 
             {/* Sync party to ticket counts helper */}
             {category === 'tickets' &&
-              ticketAdultCount + ticketChildCount > allTravelers.length && (
+              ticketAdultCount + ticketChildCount >
+                allTravelers.filter((tr) => !isTravelerUnder3(tr)).length && (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Sync party to ticket quantities"
@@ -3497,11 +4346,13 @@ export function BudgetLineFormModal({
                 const currentCents = allocationAmounts[traveler.id] ?? 0;
                 const totalCents = parseDollarInputToCents(manualPriceText) || 0;
                 const pct = totalCents > 0 ? Math.round((currentCents / totalCents) * 100) : 0;
-                const isChild =
-                  traveler.ageBracket === 'child' ||
-                  traveler.name.toLowerCase().includes('kid') ||
-                  traveler.name.toLowerCase().includes('child');
-                const ageLabel = isChild ? 'Child (3–9)' : 'Adult (10+)';
+                const isUnder3 = isTravelerUnder3(traveler);
+                const isChild = !isUnder3 && isTravelerChild(traveler);
+                const ageLabel = isUnder3
+                  ? 'Under 3 (Free)'
+                  : isChild
+                    ? 'Child (3–9)'
+                    : 'Adult (10+)';
 
                 return (
                   <Pressable
@@ -3537,7 +4388,7 @@ export function BudgetLineFormModal({
                         >
                           {traveler.name}
                         </Text>
-                        {idx === 0 && (
+                        {traveler.id === selfId && !traveler.isGuest && (
                           <View style={styles.youBadge}>
                             <Text style={styles.youBadgeText}>You</Text>
                           </View>
@@ -3916,12 +4767,21 @@ const useStyles = makeStyles((t) => ({
   buffetSteppersContainer: {
     marginTop: 8,
   },
+  mealPeriodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
   buffetSteppersRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   buffetStepperCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '47%',
+    minWidth: 140,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

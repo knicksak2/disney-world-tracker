@@ -412,6 +412,12 @@ const envSchema = z.object({
   MICKEYS_CONFIDENCE_HALF_LIFE_DAYS: permissivePhotoNumber(90),
   MICKEYS_CONFIDENCE_CONFIRMED_MIN: permissivePhotoNumber(0.65),
   MICKEYS_CONFIDENCE_UNCERTAIN_MIN: permissivePhotoNumber(0.4),
+  // ---------------------------------------------------------------------------
+  // In-app feedback (in-app-feedback spec). Invalid values fall back to the defaults in loadConfig.
+  // ---------------------------------------------------------------------------
+  FEEDBACK_PER_HOUR: permissivePhotoNumber(5),
+  FEEDBACK_PER_DAY: permissivePhotoNumber(20),
+  FEEDBACK_RETENTION_DAYS: permissivePhotoNumber(90),
 })
   .superRefine((data, ctx) => {
     if (data.TRIP_BOOKING_CRON_SECRET) {
@@ -859,7 +865,24 @@ export interface AppConfig {
     readonly syncIntervalMs: number;
   };
   readonly mickeys?: MickeysConfig;
+  readonly feedback?: FeedbackConfig;
 }
+
+/** In-app feedback limits (in-app-feedback spec, Configuration & Constants). */
+export interface FeedbackConfig {
+  /** Max submissions per user in the trailing hour (`FEEDBACK_PER_HOUR`). */
+  readonly perHour: number;
+  /** Max submissions per user in the trailing 24 hours (`FEEDBACK_PER_DAY`). */
+  readonly perDay: number;
+  /** Resolved submissions older than this many days are pruned (`FEEDBACK_RETENTION_DAYS`, 1..3650). */
+  readonly retentionDays: number;
+}
+
+export const DEFAULT_FEEDBACK_CONFIG: FeedbackConfig = {
+  perHour: 5,
+  perDay: 20,
+  retentionDays: 90,
+};
 
 export interface MickeysConfig {
   readonly enabled: boolean;
@@ -1017,7 +1040,9 @@ export class ConfigError extends Error {
 // Accepting an injected `env` keeps `loadConfig` pure and trivially testable
 // without monkey-patching `process.env`.
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { mickeys: MickeysConfig } {
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): AppConfig & { mickeys: MickeysConfig; feedback: FeedbackConfig } {
   const parsed = envSchema.safeParse(env);
 
   if (!parsed.success) {
@@ -1237,6 +1262,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig & { 
         data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN <= 1
           ? data.MICKEYS_CONFIDENCE_UNCERTAIN_MIN
           : 0.4,
+    },
+    feedback: {
+      perHour:
+        Number.isInteger(data.FEEDBACK_PER_HOUR) && data.FEEDBACK_PER_HOUR > 0
+          ? data.FEEDBACK_PER_HOUR
+          : DEFAULT_FEEDBACK_CONFIG.perHour,
+      perDay:
+        Number.isInteger(data.FEEDBACK_PER_DAY) && data.FEEDBACK_PER_DAY > 0
+          ? data.FEEDBACK_PER_DAY
+          : DEFAULT_FEEDBACK_CONFIG.perDay,
+      retentionDays:
+        Number.isInteger(data.FEEDBACK_RETENTION_DAYS) &&
+        data.FEEDBACK_RETENTION_DAYS >= 1 &&
+        data.FEEDBACK_RETENTION_DAYS <= 3650
+          ? data.FEEDBACK_RETENTION_DAYS
+          : DEFAULT_FEEDBACK_CONFIG.retentionDays,
     },
   };
 }

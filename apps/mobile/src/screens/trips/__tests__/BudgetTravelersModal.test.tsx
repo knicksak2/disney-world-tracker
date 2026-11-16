@@ -1,4 +1,6 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TravelerProfileDTO } from '@dwt/shared';
@@ -259,5 +261,37 @@ describe('BudgetTravelersModal (Task 18.3, Requirements 4.2, 4.4, 4.5, 18.5, 22.
         })
       );
     });
+  });
+
+  it('header clears the status bar / camera cutout so Close is tappable', () => {
+    const topInset = 48;
+    const onClose = jest.fn();
+    renderWithClient(
+      <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: 0, left: 0, right: 0 }}>
+        <BudgetTravelersModal
+          visible={true}
+          tripId={tripId}
+          travelers={mockTravelers}
+          onClose={onClose}
+        />
+      </SafeAreaInsetsContext.Provider>
+    );
+
+    const header = StyleSheet.flatten(screen.getByTestId('budget-travelers-modal-header').props.style);
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    fireEvent.press(screen.getByLabelText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    screen.unmount();
+    renderWithClient(
+      <BudgetTravelersModal
+        visible={true}
+        tripId={tripId}
+        travelers={mockTravelers}
+        onClose={jest.fn()}
+      />
+    );
+    const noInset = StyleSheet.flatten(screen.getByTestId('budget-travelers-modal-header').props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

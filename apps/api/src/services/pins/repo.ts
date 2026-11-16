@@ -185,7 +185,7 @@ interface RawFacet {
 }
 
 /** One experience row read for the catalog / per-day projections. */
-interface ExperienceRow {
+export interface ExperienceRow {
   readonly upstream_id: string | null;
   readonly category: string;
   readonly park: string | null;
@@ -304,7 +304,7 @@ function groupDays(rows: readonly DayExperienceRow[]): DaySnapshot[] {
 }
 
 /** Map an experience row to the flat `EvalExperience` the evaluator reads. */
-function toEvalExperience(row: ExperienceRow): EvalExperience {
+export function toEvalExperience(row: ExperienceRow): EvalExperience {
   return {
     upstreamId: row.upstream_id as string,
     category: row.category as EvalExperience['category'],

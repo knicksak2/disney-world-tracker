@@ -14,6 +14,7 @@ import {
   type DiningMealPeriod,
   type DiningPlanStayResultDTO,
   type DiningScenarioCode,
+  type TripGuestDTO,
   type TripMemberDTO,
 } from '@dwt/shared';
 
@@ -36,6 +37,8 @@ import {
 } from './DiningResultParts';
 import { DiningSettingsForm } from './DiningSettingsSheet';
 import { DiningSlotSheet } from './DiningSlotSheet';
+import { TripGuestManagementModal } from './TripGuestManagementModal';
+import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
 import { Notice } from './diningPlanControls';
 import {
   type DiningSlot,
@@ -100,6 +103,7 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [guestsOpen, setGuestsOpen] = useState(false);
 
   const needsRole = (query.data?.result.stays ?? []).some(isSynthesizedStay);
   const meQuery = useQuery<MeResponse>({
@@ -107,18 +111,26 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
     queryFn: () => apiRequest<MeResponse>('GET', '/me'),
     staleTime: 5 * 60 * 1000,
     retry: false,
-    enabled: needsRole,
+    enabled: needsRole || guestsOpen,
   });
   const membersQuery = useQuery<readonly TripMemberDTO[]>({
     queryKey: ['trips', 'members', tripId],
     queryFn: () => apiRequest<readonly TripMemberDTO[]>('GET', `/trips/${tripId}/members`),
     staleTime: 30 * 1000,
     retry: false,
-    enabled: needsRole,
+    enabled: needsRole || guestsOpen,
+  });
+  const guestsQuery = useQuery<readonly TripGuestDTO[]>({
+    queryKey: tripExpenseKeys.guests(tripId),
+    queryFn: () => fetchTripGuests(tripId),
+    enabled: guestsOpen,
   });
   const callerId = meQuery.data?.user?.id;
   const isOrganizer =
-    needsRole && callerId !== undefined && Array.isArray(membersQuery.data) && membersQuery.data.some((m) => m.userId === callerId && m.role === 'organizer');
+    (needsRole || guestsOpen) &&
+    callerId !== undefined &&
+    Array.isArray(membersQuery.data) &&
+    membersQuery.data.some((m) => m.userId === callerId && m.role === 'organizer');
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) navigation.goBack();
@@ -157,7 +169,18 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
           <EmptyState icon="cloud-offline-outline" title="We couldn't load the dining plan" body="Please check your connection and try again." />
           <PrimaryButton label="Retry" icon="refresh-outline" onPress={() => void query.refetch()} testID="dining-plan-retry" />
         </View>
-      </ScreenContainer>
+        {guestsOpen ? (
+        <TripGuestManagementModal
+          visible={guestsOpen}
+          tripId={tripId}
+          guests={guestsQuery.data ?? []}
+          members={Array.isArray(membersQuery.data) ? membersQuery.data : []}
+          callerId={callerId ?? ''}
+          isOrganizer={isOrganizer}
+          onClose={() => setGuestsOpen(false)}
+        />
+      ) : null}
+    </ScreenContainer>
     );
   }
 
@@ -168,7 +191,18 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
         <View style={styles.center} testID="dining-plan-loading">
           <ActivityIndicator color={t.color.primaryFg} size="large" accessibilityLabel="Loading the dining plan" />
         </View>
-      </ScreenContainer>
+        {guestsOpen ? (
+        <TripGuestManagementModal
+          visible={guestsOpen}
+          tripId={tripId}
+          guests={guestsQuery.data ?? []}
+          members={Array.isArray(membersQuery.data) ? membersQuery.data : []}
+          callerId={callerId ?? ''}
+          isOrganizer={isOrganizer}
+          onClose={() => setGuestsOpen(false)}
+        />
+      ) : null}
+    </ScreenContainer>
     );
   }
 
@@ -322,7 +356,7 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
 
         {activeTab === 'compare' ? (
           <View testID="dining-pane-compare">
-            <DiningCompareCard result={result} />
+            <DiningCompareCard result={result} party={plan.party} />
             {canExportToBudget(result) ? (
               <SecondaryButton
                 label="Add to Trip Budget"
@@ -341,6 +375,7 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
             <DiningCreditSummary
               scenario={creditScenario}
               result={result}
+              party={plan.party}
               onSelectScenario={setListCode}
               onViewCreditMealsOnCalendar={() => {
                 setCalFilter('credits');
@@ -368,6 +403,14 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
                 {staySummaryText(plan.stay)}
                 {(result.stays ?? []).length > 1 ? ` · ${(result.stays ?? []).length} hotels` : ''}
               </Text>
+              <View style={{ marginTop: 8 }}>
+                <SecondaryButton
+                  label="Add / manage guests (kids or no account)"
+                  icon="person-add-outline"
+                  onPress={() => setGuestsOpen(true)}
+                  testID="dining-settings-manage-guests"
+                />
+              </View>
             </View>
             <DiningSettingsForm
               settings={plan.settings}
@@ -404,6 +447,17 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
             setExportOpen(false);
             navigation.navigate('TripBudget', { tripId });
           }}
+        />
+      ) : null}
+      {guestsOpen ? (
+        <TripGuestManagementModal
+          visible={guestsOpen}
+          tripId={tripId}
+          guests={guestsQuery.data ?? []}
+          members={Array.isArray(membersQuery.data) ? membersQuery.data : []}
+          callerId={callerId ?? ''}
+          isOrganizer={isOrganizer}
+          onClose={() => setGuestsOpen(false)}
         />
       ) : null}
     </ScreenContainer>

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MickeyDifficulty, MickeyListItemDTO, MickeyZone, Park } from '@dwt/shared';
@@ -59,6 +60,8 @@ export default function HiddenMickeysScreen(): JSX.Element {
   const route = useRoute<ScreenRouteProp>();
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.lg + (insets?.top ?? 0);
 
   // Filters state initialized from route params if present
   const [selectedParkTab, setSelectedParkTab] = useState<'All' | Park | 'Resort'>(
@@ -292,7 +295,7 @@ export default function HiddenMickeysScreen(): JSX.Element {
   return (
     <View style={styles.container}>
       {/* Header bar */}
-      <View style={styles.header}>
+      <View testID="hidden-mickeys-header" style={[styles.header, { paddingTop: headerTopPadding }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"

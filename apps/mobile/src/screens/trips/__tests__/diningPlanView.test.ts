@@ -8,6 +8,7 @@
 import { line, planStay, result, scenario, TS_CREDITS } from '../../../test/diningPlanFixtures';
 import {
   alternativeMatrixRows,
+  ageGroupCostLines,
   canExportToBudget,
   exportCategoryLabel,
   exportGroupOf,
@@ -17,6 +18,7 @@ import {
   headerMetaSummary,
   lineUsesCredit,
   needsMealTimeText,
+  perPersonSummaryText,
   settingsChipLabel,
   shortHotelLabel,
   slotMatchesFilter,
@@ -573,5 +575,37 @@ describe('Requirement 27 view helpers (task 14.1)', () => {
     );
     expect(sens[0]).toMatchObject({ best: 'No Dining Plan', net: 'No plan is cheapest', current: false });
     expect(sens[1]).toMatchObject({ best: 'Per-Hotel Plan Mix', net: 'Saves $163.89', current: true });
+
+    expect(perPersonSummaryText(100_00, [{ key: 'm:1', label: 'A', ageBracket: 'adult', passType: 'none' }])).toBeNull();
+    expect(
+      perPersonSummaryText(300_00, [
+        { key: 'm:1', label: 'A', ageBracket: 'adult', passType: 'none' },
+        { key: 'm:2', label: 'B', ageBracket: 'adult', passType: 'none' },
+        { key: 'm:3', label: 'C', ageBracket: 'adult', passType: 'none' },
+      ]),
+    ).toBe('~$100.00/person (3 adults)');
+    expect(
+      perPersonSummaryText(300_00, [
+        { key: 'm:1', label: 'A', ageBracket: 'adult', passType: 'none' },
+        { key: 'g:1', label: 'Timmy', ageBracket: 'child', passType: 'none' },
+        { key: 'g:2', label: 'Baby', ageBracket: 'under3', passType: 'none' },
+      ]),
+    ).toBe('~$150.00/person avg (2 ages 3+)');
+
+    expect(
+      ageGroupCostLines(
+        {
+          totalCents: 394_501,
+          ageGroupTotals: [
+            { ageBracket: 'adult', count: 3, totalCents: 345_000, eachCents: 115_000 },
+            { ageBracket: 'child', count: 1, totalCents: 49_501, eachCents: 49_501 },
+          ],
+        },
+        [],
+      ),
+    ).toEqual([
+      { label: 'Per adult (×3)', value: '~$1150.00' },
+      { label: 'Per child 3–9 (×1)', value: '~$495.01' },
+    ]);
   });
 });

@@ -5,10 +5,18 @@
  */
 
 import type { Redis } from 'ioredis';
+import { PINS, PIN_SETS } from '@dwt/shared';
 import type { DbPool } from '../../db/pool.js';
 import type { SyncRunStatus, SyncRunOutcome } from '../catalog/repo.js';
 import type { SamplingRunRow } from '../intelligence/IntelligenceRepo.js';
 import { createReportsRepo } from '../photos/reportsRepo.js';
+import {
+  evaluatePinSetHealth,
+  summarizePinAwards,
+  type PinAwardCountRow,
+  type PinSetHealthRow,
+} from '../pins/evaluator.js';
+import { toEvalExperience, type ExperienceRow } from '../pins/repo.js';
 
 // ---------------------------------------------------------------------------
 // Configuration & Constants (from design.md)
@@ -274,6 +282,21 @@ export interface PhotoUsageDailyRow {
   readonly exifPresent: number;
 }
 
+export interface PinSystemSummary {
+  readonly catalogTotal: number;
+  readonly setTotal: number;
+  readonly byTier: Readonly<Record<string, number>>;
+  readonly byTrack: Readonly<Record<string, number>>;
+  readonly activeUsers: number;
+  readonly totalUnlocked: number;
+  readonly totalClaimed: number;
+  readonly usersWithUnlockedPins: number;
+  readonly showcasePlacements: number;
+  readonly showcaseUsers: number;
+  readonly setHealth: readonly PinSetHealthRow[];
+  readonly awardsByPin: readonly PinAwardCountRow[];
+}
+
 // ---------------------------------------------------------------------------
 // AdminRepo Interface
 // ---------------------------------------------------------------------------
@@ -345,6 +368,9 @@ export interface AdminRepo {
   dismissPhotoReports(photoId: string): Promise<number>;
   banUploader(photoId: string, reason?: string | null): Promise<{ banned: boolean; userId: string | null }>;
   getUploaderStrikes(photoId: string): Promise<number>;
+
+  // Requirement 21 — Pins & Achievements
+  getPinSystemSummary(): Promise<PinSystemSummary>;
 }
 
 export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
@@ -1312,6 +1338,67 @@ export function createAdminRepo(pool: DbPool, redis: Redis): AdminRepo {
       `;
       const res = await pool.query<{ upheld_count: number }>(sql, [photoId]);
       return res.rows[0]?.upheld_count ?? 0;
+    },
+
+    async getPinSystemSummary(): Promise<PinSystemSummary> {
+      const [catalogRes, activeUsersRes, pinRowsRes, showcaseRes] = await Promise.all([
+        pool.query<ExperienceRow>(
+          `SELECT upstream_entity_id AS upstream_id, category, park, land,
+                  world_showcase_country, grouped_facets, name
+             FROM experiences
+            WHERE active = TRUE`,
+        ),
+        pool.query<{ cnt: string | number }>(
+          `SELECT COUNT(*) AS cnt
+             FROM users
+            WHERE deletion_state = 'active'`,
+        ),
+        pool.query<{ user_id: string; pin_id: string; claimed_at: Date | string | null }>(
+          `SELECT up.user_id, up.pin_id, up.claimed_at
+             FROM user_pins up
+             JOIN users u ON u.id = up.user_id
+            WHERE u.deletion_state = 'active'`,
+        ),
+        pool.query<{ user_id: string }>(
+          `SELECT psp.user_id
+             FROM pin_showcase_placements psp
+             JOIN users u ON u.id = psp.user_id
+            WHERE u.deletion_state = 'active'`,
+        ),
+      ]);
+
+      const nameByUpstreamId = new Map<string, string | null>();
+      const evalCatalog = catalogRes.rows
+        .filter((r): r is ExperienceRow & { upstream_id: string } => r.upstream_id !== null)
+        .map((r) => {
+          nameByUpstreamId.set(r.upstream_id, r.name);
+          return toEvalExperience(r);
+        });
+
+      const byTier: Record<string, number> = {};
+      const byTrack: Record<string, number> = {};
+      for (const pin of PINS) {
+        byTier[pin.tier] = (byTier[pin.tier] ?? 0) + 1;
+        byTrack[pin.track] = (byTrack[pin.track] ?? 0) + 1;
+      }
+
+      const awardSummary = summarizePinAwards(pinRowsRes.rows);
+      const showcaseUsers = new Set(showcaseRes.rows.map((r) => r.user_id)).size;
+
+      return {
+        catalogTotal: PINS.length,
+        setTotal: Object.keys(PIN_SETS).length,
+        byTier,
+        byTrack,
+        activeUsers: Number(activeUsersRes.rows[0]?.cnt ?? 0),
+        totalUnlocked: awardSummary.totalUnlocked,
+        totalClaimed: awardSummary.totalClaimed,
+        usersWithUnlockedPins: awardSummary.usersWithUnlockedPins,
+        showcasePlacements: showcaseRes.rows.length,
+        showcaseUsers,
+        setHealth: evaluatePinSetHealth(evalCatalog, nameByUpstreamId),
+        awardsByPin: awardSummary.byPin,
+      };
     },
   };
 }

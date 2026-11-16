@@ -14,6 +14,7 @@ import {
   DINING_MEAL_PERIODS,
   DINING_PLAN_CODES,
   DINING_PLAN_ENTITLEMENTS_PER_NIGHT,
+  type DiningAgeGroupCostDTO,
   type DiningConfig,
   type DiningCoverage,
   type DiningCreditSummaryDTO,
@@ -518,32 +519,62 @@ export function evaluateCombination(
   const priceVerifiedAt =
     verified.length === 0 || verified.some((v) => v === null) ? null : (verified as string[]).reduce((a, b) => (b > a ? b : a));
 
+  // `mugsWanted` is a count: the mugs go first to the Persons a plan covers, then in Party order, so the covered
+  // and uncovered mugs per Person add up to the scenario's (Requirement 11.4).
+  const mugOrder = [...eligible.filter(isHolder), ...eligible.filter((p) => !isHolder(p))].slice(0, ctx.mugsWanted);
+  const uncoveredMug = new Set(mugOrder.slice(mugsCovered).map((p) => p.key));
+  // Deterministic key-sorted mug assignment for `ageGroupTotals` so age-group totals are invariant to party order (Property 25).
+  const byKey = (a: EnginePerson, b: EnginePerson) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  const mugOrderByKey = [...eligible.filter(isHolder).sort(byKey), ...eligible.filter((p) => !isHolder(p)).sort(byKey)].slice(0, ctx.mugsWanted);
+  const uncoveredMugByKey = new Set(mugOrderByKey.slice(mugsCovered).map((p) => p.key));
+
+  const personPlanCost = (key: string): Record<string, number> => {
+    const planCostByStay: Record<string, number> = {};
+    stays.forEach((s, i) => {
+      if (!onStay(key, i)) return;
+      const cost = s.planCosts[assign[i]!];
+      planCostByStay[s.key] = cost.available ? (cost.baseByPerson.get(key) ?? 0) : 0;
+    });
+    return planCostByStay;
+  };
+
   let perPerson: DiningPerPersonAmounts[] | undefined;
   if (ctx.includePerPerson === true) {
-    // `mugsWanted` is a count: the mugs go first to the Persons a plan covers, then in Party order, so the covered
-    // and uncovered mugs per Person add up to the scenario's (Requirement 11.4).
-    const mugOrder = [...eligible.filter(isHolder), ...eligible.filter((p) => !isHolder(p))].slice(0, ctx.mugsWanted);
-    const uncoveredMug = new Set(mugOrder.slice(mugsCovered).map((p) => p.key));
-    perPerson = eligible.map((p) => {
-      const planCostByStay: Record<string, number> = {};
-      stays.forEach((s, i) => {
-        if (!onStay(p.key, i)) return;
-        const cost = s.planCosts[assign[i]!];
-        planCostByStay[s.key] = cost.available ? (cost.baseByPerson.get(p.key) ?? 0) : 0;
-      });
-      return {
-        key: p.key,
-        planCostByStay,
-        oopFoodCents: foodOf.get(p.key) ?? 0,
-        oopSnackMugCents: uncoveredSnacksOf.get(p.key)! * snackCents + (uncoveredMug.has(p.key) ? mugCents : 0),
-        tipCents: tipOf.get(p.key) ?? 0,
-      };
+    perPerson = eligible.map((p) => ({
+      key: p.key,
+      planCostByStay: personPlanCost(p.key),
+      oopFoodCents: foodOf.get(p.key) ?? 0,
+      oopSnackMugCents: uncoveredSnacksOf.get(p.key)! * snackCents + (uncoveredMug.has(p.key) ? mugCents : 0),
+      tipCents: tipOf.get(p.key) ?? 0,
+    }));
+  }
+
+  const ageGroupTotals: DiningAgeGroupCostDTO[] = [];
+  for (const bracket of ['adult', 'child'] as const) {
+    const group = eligible.filter((p) => p.ageBracket === bracket);
+    if (group.length === 0) continue;
+    let sum = 0;
+    for (const p of group) {
+      const planMap = personPlanCost(p.key);
+      const pPlan = Object.values(planMap).reduce((a, b) => a + b, 0);
+      const pFood = foodOf.get(p.key) ?? 0;
+      const pSnackMug = uncoveredSnacksOf.get(p.key)! * snackCents + (uncoveredMugByKey.has(p.key) ? mugCents : 0);
+      const pTax = bpsOf(pFood + pSnackMug, ctx.taxBps);
+      const pTip = tipOf.get(p.key) ?? 0;
+      sum += pPlan + pFood + pSnackMug + pTax + pTip;
+    }
+    ageGroupTotals.push({
+      ageBracket: bracket,
+      count: group.length,
+      totalCents: sum,
+      eachCents: Math.round(sum / group.length),
     });
   }
 
   return {
     scenario: {
       ...(perPerson === undefined ? {} : { perPerson }),
+      ...(ageGroupTotals.length === 0 ? {} : { ageGroupTotals }),
       code: meta.code,
       displayName: meta.displayName,
       available: true,

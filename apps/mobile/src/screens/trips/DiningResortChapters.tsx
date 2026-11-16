@@ -51,7 +51,7 @@ const STATUS_OPTIONS: readonly { value: DiningStayPlanStatus; label: string; sho
 ];
 
 const CHANNEL_OPTIONS: readonly { value: DiningStayChannel; label: string; shortLabel: string; hint: string }[] = [
-  { value: 'package', label: 'Booked as a package', shortLabel: 'Package (Kids Free)', hint: 'Kids Eat Free can apply' },
+  { value: 'package', label: 'Booked as a package', shortLabel: 'Disney Package', hint: 'Eligible if Kids Eat Free is enabled in Settings' },
   { value: 'dvc_or_passholder', label: 'DVC or Annual Passholder booking', shortLabel: 'DVC / Passholder', hint: 'No Kids Eat Free' },
 ];
 

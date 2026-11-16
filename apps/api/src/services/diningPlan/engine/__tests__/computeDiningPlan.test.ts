@@ -47,7 +47,7 @@ function engineInput(overrides: Partial<Omit<EngineInput, 'settings'>> & { setti
 function summarize(r: DiningPlanResultDTO) {
   return {
     ...r,
-    scenarios: r.scenarios.map(({ meals, bestCreditUses, ...rest }) => ({
+    scenarios: r.scenarios.map(({ meals, bestCreditUses, ageGroupTotals: _ageGroupTotals, ...rest }) => ({
       ...rest,
       meals: meals.map((m) => `${m.date} ${m.mealPeriod} ${m.label}: ${m.coverage} saves ${m.savingsCents} pays ${m.outOfPocketCents}${m.reason ? ` (${m.reason})` : ''}`),
       bestCreditUses: bestCreditUses.length,
@@ -311,5 +311,19 @@ describe('engine properties', () => {
       }),
       { numRuns: 60 },
     );
+  });
+
+  it('computes ageGroupTotals with distinct adult and child per-person totals', () => {
+    const r = computeDiningPlan(engineInput());
+    const ts = r.scenarios.find((s) => s.code === 'table_service')!;
+    expect(ts.ageGroupTotals).toBeDefined();
+    expect(ts.ageGroupTotals!.map((g) => [g.ageBracket, g.count])).toEqual([
+      ['adult', 2],
+      ['child', 1],
+    ]);
+    const adult = ts.ageGroupTotals!.find((g) => g.ageBracket === 'adult')!;
+    const child = ts.ageGroupTotals!.find((g) => g.ageBracket === 'child')!;
+    expect(adult.eachCents).toBeGreaterThan(child.eachCents);
+    expect(adult.totalCents + child.totalCents).toBe(ts.totalCents);
   });
 });

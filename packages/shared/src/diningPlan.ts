@@ -268,7 +268,7 @@ export const diningPlanSettingsSchema = z
     appetizersPerTable: z.number().int().min(0).max(4).default(0),
     snacksPerPersonPerDay: z.number().int().min(0).max(4).default(1),
     mugsWanted: z.number().int().min(0).max(DINING_PLAN_PARTY_MAX).default(0),
-    kidsEatFree: z.boolean().default(true),
+    kidsEatFree: z.boolean().default(false),
     tipBps: z.number().int().min(0).max(5000).nullable().default(null),
     taxBps: z.number().int().min(0).max(2500).nullable().default(null),
     stayPlans: z.record(stayKeySchema, stayPlanSettingSchema).default({}),
@@ -573,6 +573,13 @@ export interface DiningPerPersonAmounts {
   readonly tipCents: number;
 }
 
+export interface DiningAgeGroupCostDTO {
+  readonly ageBracket: 'adult' | 'child';
+  readonly count: number;
+  readonly totalCents: number;
+  readonly eachCents: number;
+}
+
 export interface DiningScenarioResultDTO {
   readonly code: DiningScenarioCode;
   readonly displayName: string;
@@ -602,6 +609,8 @@ export interface DiningScenarioResultDTO {
   readonly combination?: Readonly<Record<string, DiningStayOptionCode>>;
   /** Present only when the engine ran with `includePerPerson`; never sent to the client. */
   readonly perPerson?: readonly DiningPerPersonAmounts[];
+  /** Per-age-group cost breakdown across paying guests (`adult`, `child`). */
+  readonly ageGroupTotals?: readonly DiningAgeGroupCostDTO[];
 }
 
 /** One Plan_Stay of a multi-stay result (Requirement 25.11). */

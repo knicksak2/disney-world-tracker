@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   BUDGET_CATEGORIES,
   BUDGET_DEFAULT_TAX_BPS,
@@ -81,6 +82,8 @@ export function BudgetSettingsModal({
   const styles = useStyles();
   const t = useAppTheme();
   const palette = usePalette(BUDGET_SETTINGS_MODAL);
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.md + (insets?.top ?? 0);
   const patchMutation = usePatchBudgetSettings(tripId);
 
   // Tax rates text states (displayed in %)
@@ -165,7 +168,7 @@ export function BudgetSettingsModal({
     <Modal visible={visible} animationType="slide" transparent={false} testID={testID}>
       <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View testID={`${testID}-header`} style={[styles.header, { paddingTop: headerTopPadding }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"

@@ -1,11 +1,12 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { BudgetDTO, BudgetSuggestionDTO } from '@dwt/shared';
 
-import { TripBudgetScreen } from '../TripBudgetScreen';
+import { formatLineQuantitySummary, TripBudgetScreen } from '../TripBudgetScreen';
 import * as budgetApi from '../budgetApi';
+import * as apiClient from '../../../api/client';
 
 const mockDismissMutateAsync = jest.fn();
 const mockCreateLineMutateAsync = jest.fn();
@@ -436,6 +437,206 @@ describe('TripBudgetScreen (Task 18.1, Requirements 6.2, 8.1, 16.6, 17.6, 21.3, 
     expect(mockPatchSettingsMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ savedCents: expect.any(Number) })
     );
+  });
+
+  it('does not render bare percentage shares on individual line cards', async () => {
+    renderWithClient(<TripBudgetScreen tripId={tripId} isOrganizer={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('$319.50')).toBeTruthy();
+    });
+
+    // Individual line cards do not render bare "N%" share labels
+    expect(screen.queryByText(/^\d+%$/)).toBeNull();
+
+    // Primary and secondary action buttons use clean labels and centered layout
+    expect(screen.getByText('Add Budget Item')).toBeTruthy();
+    expect(screen.getByText(/^Crew \(\d+\)$/)).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByLabelText('Add line').props.style).justifyContent).toBe('center');
+    expect(StyleSheet.flatten(screen.getByLabelText('Travelers').props.style).justifyContent).toBe('center');
+
+    // Line metadata sits below the header row so it spans the full card width
+    const headerRow = screen.getByTestId('line-header-line-1');
+    const metaText = screen.getByTestId('line-meta-line-1');
+    expect(metaText).toBeTruthy();
+    expect(within(headerRow).queryByTestId('line-meta-line-1')).toBeNull();
+  });
+
+  it('derives quantity summaries from ticket, dining, and lightning lane allocations', () => {
+    const baseLine = {
+      id: 'l-1',
+      tripId,
+      createdBy: 'u1',
+      plannedDate: '2026-12-15',
+      park: 'Magic Kingdom',
+      experienceId: null,
+      priceSource: 'disney_ticket_calendar' as const,
+      effectivePriceSource: 'disney_ticket_calendar' as const,
+      priceLabelKind: 'current' as const,
+      asOf: '2026-10-25',
+      attribution: 'disney' as const,
+      applyTip: false,
+      linkedExpenseId: null,
+      suggestionKey: null,
+      subtotalCents: 30000,
+      taxCents: 1950,
+      tipCents: 0,
+      totalCents: 31950,
+    };
+
+    expect(
+      formatLineQuantitySummary({
+        ...baseLine,
+        category: 'tickets',
+        description: '4-Day Tickets',
+        allocations: [
+          {
+            id: 'a1',
+            memberId: 'u1',
+            guestId: null,
+            storedCents: 16000,
+            effectiveCents: 16000,
+            taxCents: 1040,
+            tipCents: 0,
+            priceRef: {
+              kind: 'ticket',
+              discountGroup: 'std-gst',
+              numDays: 4,
+              optionCode: 'base',
+              startDate: '2026-12-15',
+              ageGroup: 'adult',
+            },
+          },
+          {
+            id: 'a2',
+            memberId: null,
+            guestId: 'g1',
+            storedCents: 14000,
+            effectiveCents: 14000,
+            taxCents: 910,
+            tipCents: 0,
+            priceRef: {
+              kind: 'ticket',
+              discountGroup: 'std-gst',
+              numDays: 4,
+              optionCode: 'base',
+              startDate: '2026-12-15',
+              ageGroup: 'child',
+            },
+          },
+        ],
+      })
+    ).toBe('2 tickets (1 adult, 1 child)');
+
+    expect(
+      formatLineQuantitySummary({
+        ...baseLine,
+        category: 'lightning_lane',
+        description: 'LL Multi Pass',
+        allocations: [
+          {
+            id: 'a1',
+            memberId: 'u1',
+            guestId: null,
+            storedCents: 2900,
+            effectiveCents: 2900,
+            taxCents: 189,
+            tipCents: 0,
+            priceRef: { kind: 'll', passType: 'multi', park: 'Magic Kingdom', date: '2026-12-15' },
+          },
+        ],
+      })
+    ).toBe('1 pass');
+
+    expect(
+      formatLineQuantitySummary({
+        ...baseLine,
+        category: 'dining',
+        description: "Chef Mickey's",
+        allocations: [
+          {
+            id: 'a1',
+            memberId: 'u1',
+            guestId: null,
+            storedCents: 6900,
+            effectiveCents: 6900,
+            taxCents: 449,
+            tipCents: 1242,
+            priceRef: { kind: 'menu', tier: { name: 'Adult', priceCents: 6900 } },
+          },
+          {
+            id: 'a2',
+            memberId: null,
+            guestId: 'g1',
+            storedCents: 4600,
+            effectiveCents: 4600,
+            taxCents: 299,
+            tipCents: 828,
+            priceRef: { kind: 'menu', tier: { name: 'Child', priceCents: 4600 } },
+          },
+        ],
+      })
+    ).toBe('2 diners (1 adult, 1 child)');
+
+    expect(
+      formatLineQuantitySummary({
+        ...baseLine,
+        category: 'lodging',
+        description: 'All-Star Movies',
+        allocations: [
+          {
+            id: 'a1',
+            memberId: 'u1',
+            guestId: null,
+            storedCents: 200000,
+            effectiveCents: 200000,
+            taxCents: 0,
+            tipCents: 0,
+            priceRef: null,
+          },
+        ],
+      })
+    ).toBeNull();
+  });
+
+  it('forwards /me callerId into BudgetLineFormModal so Exclude Me excludes the caller rather than the trip creator', async () => {
+    const apiSpy = jest.spyOn(apiClient, 'apiRequest').mockImplementation(async (_method, path) => {
+      if (path === '/me') {
+        return { user: { id: 'user-me' } };
+      }
+      if (path === `/trips/${tripId}/members`) {
+        return [
+          { userId: 'user-lexie', displayName: 'Lexie', avatarPreset: null, role: 'organizer' },
+          { userId: 'user-me', displayName: 'You', avatarPreset: null, role: 'member' },
+        ];
+      }
+      if (path === `/trips/${tripId}/guests`) {
+        return [];
+      }
+      return {};
+    });
+
+    try {
+      renderWithClient(<TripBudgetScreen tripId={tripId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Crew (2)')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByLabelText('Add line'));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Manual price')).toBeTruthy();
+      });
+
+      fireEvent.changeText(screen.getByLabelText('Manual price'), '100.00');
+      fireEvent.press(screen.getByLabelText('Exclude me so others split'));
+
+      expect(screen.getByLabelText('Allocation for You').props.value).toBe('0.00');
+      expect(screen.getByLabelText('Allocation for Lexie').props.value).toBe('100.00');
+    } finally {
+      apiSpy.mockRestore();
+    }
   });
 });
 

@@ -286,7 +286,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
 <body>
   <div class="card">
     <h1>Privacy Policy</h1>
-    <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 4, 2026</div>
+    <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 13, 2026</div>
     <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our <a href="/terms">Terms of Service</a>.</p>
 
     <h2>1. Information We Collect</h2>
@@ -296,6 +296,8 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
     <p>We store records of experiences you rate, mark completed, or add to your itineraries, along with your friend connections and trip plans.</p>
     <h3>User Photos</h3>
     <p>When you choose to upload photos (food logs, dish photos, or trip album photos), we process and store image files and associated metadata (such as timestamps, dish references, and captions).</p>
+    <h3>Feedback You Send</h3>
+    <p>When you use <strong>You &amp; Crew -&gt; Report a problem or send feedback</strong>, we store the message you write, the kind you choose (bug, idea, or other), and the time you sent it, linked to your account. If you leave &ldquo;Include device info&rdquo; on, we also store your app version, platform (iOS, Android, or web), and OS version. If you tick &ldquo;You may contact me at my account email&rdquo;, we store a copy of your account email with that message; otherwise we do not. The app operator reads feedback in a private admin page. We do not store your IP address or device identifiers with it.</p>
     <h3>Age Requirement (13+)</h3>
     <p>The App is not directed at children under 13, and you must be at least 13 years old to create an account. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has an account, contact us at the support email in Section 6. We will delete that account and its data.</p>
 
@@ -323,6 +325,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
       <li><strong>Photos Under Review:</strong> Photos escalated to human operator review are retained for a maximum of <strong>120 hours</strong> (<code>PHOTOS_NEEDS_REVIEW_MAX_AGE_HOURS</code>). If not approved within this window, they are automatically deleted by the system sweep.</li>
       <li><strong>Deleted Photos:</strong> When you delete a photo, its database row is marked deleted immediately, preventing further reads. Temporary serving URLs expire within 1 hour (<code>PHOTOS_GET_URL_TTL_SECONDS</code>), and underlying storage objects are hard-deleted on the next automated background sweep.</li>
       <li><strong>Deleted Accounts:</strong> When you delete your account, it is hidden immediately and then permanently erased when a grace period ends (see Section 5 for the steps and exactly what is erased and what is kept). The grace period is <strong>${safeDays} days</strong> (<code>ACCOUNT_DELETION_GRACE_DAYS</code>, default 30). Erasure runs as a background job that works in small batches, so it can finish a few hours after the grace period ends rather than at the exact moment.</li>
+      <li><strong>Feedback Messages:</strong> Feedback you send is kept until the app operator deletes it or you delete your account. Feedback the operator has marked resolved is automatically deleted after <strong>90 days</strong> (<code>FEEDBACK_RETENTION_DAYS</code>, default 90).</li>
       <li><strong>Database Backups:</strong> Our database host may keep backups of the database for its own recovery purposes. Copies of your data inside those backups are not edited when you delete your account; they age out on the hosting provider&rsquo;s own schedule. We do not state a backup retention period here because it depends on the provider&rsquo;s plan and has not been verified.</li>
     </ul>
 
@@ -337,7 +340,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
           <li><strong>On the web (including after uninstalling the app):</strong> Visit our self-service <a href="/account-deletion">Account Deletion Request page (/account-deletion)</a>, enter your account email address and password, and type <code>DELETE</code> to confirm.</li>
           <li>Sign-in is by email address and password only; the App does not use any third-party sign-in provider (such as Apple or Google), so there is no external sign-in token to revoke.</li>
           <li><strong>Grace period:</strong> After you confirm, every device is signed out and your account is hidden from friends and trip members. It is permanently deleted after the grace period (<strong>${safeDays} days</strong> by default). <strong>Signing in again with your email and password during the grace period cancels the deletion</strong> and restores your account. Resetting your password during that time also restores it. After the grace period the account cannot be restored.</li>
-          <li><strong>What is deleted:</strong> Your sign-in and profile (email, display name, avatar), your ratings, completions, notes, favorites, pins, friend connections, saved and shared lists, push notification registrations, and your photos. Trips you own are handed to another trip member, or deleted together with their photos if you are the only member. You are removed from trips you only joined.</li>
+          <li><strong>What is deleted:</strong> Your sign-in and profile (email, display name, avatar), your ratings, completions, notes, favorites, pins, friend connections, saved and shared lists, push notification registrations, the feedback messages you sent (including any contact email copied onto them), and your photos. Trips you own are handed to another trip member, or deleted together with their photos if you are the only member. You are removed from trips you only joined.</li>
           <li><strong>What is kept, anonymized:</strong> Content that other people can see and rely on is kept but shown as &ldquo;Deleted user&rdquo;, with nothing linking it back to you. This covers comments and captions on shared trips, trip history entries, shares you sent to other people, and shared expense records (so that everyone else&rsquo;s balances stay correct). Reports you filed about photos are also kept without your identity.</li>
           <li><strong>After deletion:</strong> The email address becomes available to register again.</li>
         </ul>

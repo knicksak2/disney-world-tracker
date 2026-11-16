@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { makeStyles } from '../theme/makeStyles';
 import { useAppTheme } from '../theme/useAppTheme';
 import { useDeletePhoto, useAddBlock } from './api';
@@ -58,6 +59,9 @@ export function PhotoViewer({
 }: PhotoViewerProps) {
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const topBarPaddingTop = t.spacing.lg + (insets?.top ?? 0);
+  const bottomBarPaddingBottom = t.spacing.lg + (insets?.bottom ?? 0);
 
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
@@ -119,7 +123,7 @@ export function PhotoViewer({
     >
       <View style={styles.backdrop} testID="photo-viewer-modal">
         {/* Header / close bar */}
-        <View style={styles.topBar}>
+        <View testID="photo-viewer-top-bar" style={[styles.topBar, { paddingTop: topBarPaddingTop }]}>
           <View style={styles.bylineBlock}>
             <Ionicons name="person-circle-outline" size={24} color={t.color.textSecondary} />
             <View style={styles.bylineTextContainer}>
@@ -254,7 +258,7 @@ export function PhotoViewer({
         ) : null}
 
         {/* Bottom actions toolbar */}
-        <View style={styles.bottomBar}>
+        <View testID="photo-viewer-bottom-bar" style={[styles.bottomBar, { paddingBottom: bottomBarPaddingBottom }]}>
           {footerAction ? (
             <View style={styles.footerActionContainer}>
               {React.isValidElement(footerAction) ? (

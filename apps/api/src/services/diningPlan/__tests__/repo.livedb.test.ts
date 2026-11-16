@@ -11,68 +11,35 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { DINING_PLAN_ENTRIES_MAX } from '@dwt/shared';
-import pg from 'pg';
+import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { DbPool } from '../../../db/pool.js';
+import { createLiveTestDb, probeDatabase, type LiveTestDb } from '../../../test/liveDbTemplate.js';
 import { createDiningPlanRepo } from '../repo.js';
 import type { DiningPlanRepo } from '../types.js';
 
-const { Pool } = pg;
-const BASE_DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://dwt:dwt@localhost:5432/dwt';
 const ROUNDS = 8;
-
-async function probeDatabase(): Promise<boolean> {
-  const probe = new Pool({ connectionString: BASE_DATABASE_URL, connectionTimeoutMillis: 2_000, max: 1 });
-  try {
-    await probe.query('SELECT 1');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.end().catch(() => {});
-  }
-}
-
 const DB_AVAILABLE = await probeDatabase();
-const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'migrations');
-
-function withDatabaseName(url: string, dbName: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-}
 
 describe.skipIf(!DB_AVAILABLE)('dining entry writes under concurrency (live Postgres)', () => {
-  let admin: pg.Pool;
+  let liveDb: LiveTestDb;
   let pool: pg.Pool;
-  let dbName: string;
   let repo: DiningPlanRepo;
   let userId: string;
 
   beforeAll(async () => {
-    dbName = `dwt_dining_concurrency_${randomUUID().replace(/-/g, '')}`;
-    admin = new Pool({ connectionString: BASE_DATABASE_URL, max: 1 });
-    await admin.query(`CREATE DATABASE ${dbName}`);
-    pool = new Pool({ connectionString: withDatabaseName(BASE_DATABASE_URL, dbName), max: 6 });
-    const files = readdirSync(MIGRATIONS_DIR).filter((n) => /^\d{4}_.+\.sql$/iu.test(n)).sort((a, b) => a.localeCompare(b));
-    for (const name of files) await pool.query(readFileSync(join(MIGRATIONS_DIR, name), 'utf8'));
+    liveDb = await createLiveTestDb('dwt_dining_concurrency', { maxConnections: 6 });
+    pool = liveDb.pool;
     userId = randomUUID();
     await pool.query(`INSERT INTO users (id, email, password_hash) VALUES ($1, 'dining-cc@example.com', 'hash')`, [userId]);
     repo = createDiningPlanRepo({ pool: pool as unknown as DbPool });
   }, 180_000);
 
   afterAll(async () => {
-    await pool?.end().catch(() => {});
-    if (admin && dbName) {
-      await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`).catch(() => {});
-      await admin.end().catch(() => {});
-    }
+    await liveDb?.cleanup();
   });
 
   async function newTrip(): Promise<string> {

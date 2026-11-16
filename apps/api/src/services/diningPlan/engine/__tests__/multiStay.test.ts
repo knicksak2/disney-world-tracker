@@ -189,7 +189,7 @@ describe('computeDiningPlan: stay settings', () => {
   it('issues credits and charges only the Party members named on a stay; others pay their meals there', () => {
     // Casey is only on the second stay. On the first, Alex's dinner is covered and Casey's is paid.
     const stays = [planStay('a', '2026-12-15', '2026-12-17', { partyKeys: [A1.key, 'm:nobody'] }), planStay('b', '2026-12-17', '2026-12-19')];
-    const r = computeDiningPlan(input({ persons: [A1, C1], entries: [dinner('2026-12-15'), dinner('2026-12-18')], stays, settings: { stayPlans: {} } }));
+    const r = computeDiningPlan(input({ persons: [A1, C1], entries: [dinner('2026-12-15'), dinner('2026-12-18')], stays, settings: { stayPlans: {}, kidsEatFree: true } }));
     const ts = byCode(r).table_service;
     expect(ts.planCostCents).toBe(2 * 9859 + 2 * (9859 + 0)); // a: Alex only; b: Alex and Casey (Kids Eat Free 2026)
     expect(line(ts, '2026-12-15', 'dinner')).toMatchObject({ coverage: 'partial', coveredDinerCount: 1, coveredByStayKey: 'a' });
@@ -207,7 +207,7 @@ describe('computeDiningPlan: stay settings', () => {
 
   it('applies Kids Eat Free only to a package stay', () => {
     const stays = [planStay('pkg', '2026-12-15', '2026-12-16'), planStay('dvc', '2026-12-16', '2026-12-17', { setting: setting({ channel: 'dvc_or_passholder' }) })];
-    const ts = byCode(computeDiningPlan(input({ persons: [A1, C1], stays }))).table_service;
+    const ts = byCode(computeDiningPlan(input({ persons: [A1, C1], stays, settings: { kidsEatFree: true } }))).table_service;
     expect(ts).toMatchObject({ planCostCents: 9859 + 0 + 9859 + 3194, promoLabel: 'Kids Eat Free 2026' });
   });
 

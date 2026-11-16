@@ -140,6 +140,9 @@ function installApi(roster: TripMemberDTO[], handlers: Handlers = {}): void {
       if (method === 'GET' && path === `/trips/${TRIP_ID}/invites`) {
         return handlers.invites ? await handlers.invites() : [];
       }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/guests`) {
+        return [];
+      }
       if (method === 'GET' && path === '/me/friends') {
         return handlers.friends ? await handlers.friends() : FRIENDS_RESPONSE;
       }
@@ -481,5 +484,46 @@ describe('Trip_Members screen', () => {
 
       await flushPending();
     });
+  });
+
+  test('lists trip guests and lets the user add a child guest with ageBracket=child', async () => {
+    installApi(ORGANIZER_ROSTER, {
+      mutate: async (method, path, body) => {
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/guests`) {
+          return {
+            id: 'guest-1',
+            tripId: TRIP_ID,
+            name: (body as { name: string }).name,
+            sponsorMemberId: OWN_ID,
+            createdAt: '2026-01-01T00:00:00Z',
+          };
+        }
+        if (method === 'PUT' && path === `/trips/${TRIP_ID}/budget/travelers`) {
+          return { id: 'tp-1', ...(body as object) };
+        }
+        throw new Error(`unexpected ${method} ${path}`);
+      },
+    });
+    renderMembers(makeNavigation());
+
+    await screen.findByTestId('trip-members-guests');
+    fireEvent.press(screen.getByTestId('trip-members-manage-guests'));
+
+    fireEvent.changeText(await screen.findByTestId('add-guest-name-input'), 'Little Timmy');
+    fireEvent.press(screen.getByTestId('add-guest-age-child'));
+    fireEvent.press(screen.getByTestId('add-guest-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', `/trips/${TRIP_ID}/guests`, {
+        name: 'Little Timmy',
+        sponsorMemberId: OWN_ID,
+      });
+      expect(apiRequestMock).toHaveBeenCalledWith('PUT', `/trips/${TRIP_ID}/budget/travelers`, {
+        guestId: 'guest-1',
+        ageBracket: 'child',
+      });
+    });
+
+    await flushPending();
   });
 });

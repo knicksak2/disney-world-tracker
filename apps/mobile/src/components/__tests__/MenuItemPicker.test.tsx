@@ -2,6 +2,8 @@
 // Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.8, 9.10, 22.8
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { render, fireEvent, screen } from '@testing-library/react-native';
 import { menuPriceRefSchema, type MenuDTO } from '@dwt/shared';
 
@@ -636,5 +638,38 @@ describe('MenuItemPicker (Task 17.3, Requirements 9.1-9.10)', () => {
     const parsed = menuPriceRefSchema.safeParse(priceRef);
     expect(parsed.success).toBe(true);
     expect(priceRef.items).toHaveLength(3);
+  });
+
+  it('header clears the status bar / camera cutout so Cancel and Confirm are tappable', () => {
+    const topInset = 48;
+    const cancelSpy = jest.fn();
+    render(
+      <SafeAreaInsetsContext.Provider value={{ top: topInset, bottom: 0, left: 0, right: 0 }}>
+        <MenuItemPicker
+          menus={MOCK_MENUS}
+          onConfirm={jest.fn()}
+          onCancel={cancelSpy}
+        />
+      </SafeAreaInsetsContext.Provider>
+    );
+
+    const header = StyleSheet.flatten(screen.getByTestId('menu-item-picker-header').props.style);
+    // Base padding (theme spacing.xl) plus the full top inset.
+    expect(header.paddingTop).toBeGreaterThanOrEqual(topInset + 1);
+    fireEvent.press(screen.getByLabelText('Cancel'));
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Confirm selection')).toBeTruthy();
+
+    // Without a provider (zero inset) the header is strictly shorter.
+    screen.unmount();
+    render(
+      <MenuItemPicker
+        menus={MOCK_MENUS}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+    const noInset = StyleSheet.flatten(screen.getByTestId('menu-item-picker-header').props.style);
+    expect(header.paddingTop - noInset.paddingTop).toBe(topInset);
   });
 });

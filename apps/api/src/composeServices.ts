@@ -205,7 +205,8 @@ import { createTicketPricesService } from './services/ticketPrices/refreshServic
 import { createTripBudgetRepo } from './services/tripBudget/repo.js';
 import { createDiningPlanServiceFromRepos } from './services/diningPlan/wiring.js';
 import { createDiningPlanAdminRepo } from './services/diningPlan/adminRepo.js';
-import { DEFAULT_MICKEYS_CONFIG } from './config.js';
+import { DEFAULT_FEEDBACK_CONFIG, DEFAULT_MICKEYS_CONFIG } from './config.js';
+import { createFeedbackRepo } from './services/feedback/repo.js';
 import { DefaultMickeyRepo } from './services/mickeys/repo.js';
 import { HuntService } from './services/mickeys/service.js';
 import { SubmissionService } from './services/mickeys/submissionService.js';
@@ -1072,6 +1073,9 @@ export async function buildApp(
   });
 
   // --- Hidden Mickeys wiring (hidden-mickeys spec) -------------------
+  // Feature: in-app-feedback. One repo serves both the user route and the Admin_Panel section.
+  const feedbackConfig = config.feedback ?? DEFAULT_FEEDBACK_CONFIG;
+  const feedbackRepo = createFeedbackRepo(pool);
   const mickeysConfig = config.mickeys ?? DEFAULT_MICKEYS_CONFIG;
   const mickeyRepo = new DefaultMickeyRepo(pool);
   const huntService = new HuntService(pool, mickeyRepo, mickeysConfig);
@@ -1194,6 +1198,12 @@ export async function buildApp(
     },
     // Feature: dining-plan-calculator (task 8). The Party comes from the Trips and Trip Expenses repos, the stays from
     // `trip_stays`, and the Budget export writes through the same Budget repo instance the Budget routes use.
+    feedback: {
+      repo: feedbackRepo,
+      caps: { perHour: feedbackConfig.perHour, perDay: feedbackConfig.perDay },
+      retentionDays: feedbackConfig.retentionDays,
+      requireSession: sessionMiddleware,
+    },
     diningPlan: {
       pool,
       requireSession: sessionMiddleware,
@@ -1323,6 +1333,7 @@ export async function buildApp(
       ticketPrices: adminTicketPrices,
       diningPlan: createDiningPlanAdminRepo({ pool, logger: createLogger() }),
       mickeys: adminMickeyService,
+      feedback: feedbackRepo,
       pool,
     },
     mickeys: {

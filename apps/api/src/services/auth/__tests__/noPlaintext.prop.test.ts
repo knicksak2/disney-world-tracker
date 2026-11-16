@@ -44,6 +44,7 @@
 import { Writable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 
+import argon2 from 'argon2';
 import Fastify from 'fastify';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -249,6 +250,18 @@ describe('Auth_Service — Property 16: plaintext password never appears anywher
           // None of the routes under test require a session; supply a
           // pre-handler that simply does nothing so the plugin registers.
           requireSession: async () => undefined,
+          // Real Argon2id with minimal test cost so 100 property runs complete
+          // in ~1s while still producing real `$argon2id$` hashes & verifies.
+          passwordHasher: {
+            hash: (pw) =>
+              argon2.hash(pw, {
+                type: argon2.argon2id,
+                memoryCost: 1024,
+                timeCost: 2,
+                parallelism: 1,
+              }),
+            verify: (encoded, pw) => argon2.verify(encoded, pw),
+          },
         }),
       );
       await app.ready();

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
@@ -73,6 +74,8 @@ export default function HiddenMickeyDetailScreen(): JSX.Element {
   const { mickeyId } = route.params;
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.lg + (insets?.top ?? 0);
 
   const { data: mickey, isLoading, isError } = useMickeyDetail(mickeyId);
   const hintMutation = useMickeyHint();
@@ -241,7 +244,7 @@ export default function HiddenMickeyDetailScreen(): JSX.Element {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View testID="hidden-mickey-detail-header" style={[styles.header, { paddingTop: headerTopPadding }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"

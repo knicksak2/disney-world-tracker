@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
@@ -39,6 +40,8 @@ export default function SubmitMickeyScreen(): JSX.Element {
   const route = useRoute<ScreenRouteProp>();
   const styles = useStyles();
   const t = useAppTheme();
+  const insets = React.useContext(SafeAreaInsetsContext);
+  const headerTopPadding = t.spacing.lg + (insets?.top ?? 0);
 
   const [experienceSearch, setExperienceSearch] = useState('');
   const [selectedExperience, setSelectedExperience] = useState<{ id: string; name: string } | null>(null);
@@ -143,7 +146,7 @@ export default function SubmitMickeyScreen(): JSX.Element {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View testID="submit-mickey-header" style={[styles.header, { paddingTop: headerTopPadding }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cancel"

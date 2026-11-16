@@ -352,6 +352,10 @@ tables.
    reconciliation path) and display the resulting awarded-count on the response page.
 3. IF `:userId` does not resolve to an existing User, THEN THE Admin_Panel SHALL respond `404`
    with a page stating the account was not found.
+4. WHEN rendering the per-user pin table on `GET /admin/users/:userId/pins`, THE Admin_Panel
+   SHALL also display each Pin's description and current progress toward unlock
+   (`currentValue / targetValue (percentComplete%)` or a `Complete` indicator when satisfied),
+   together with a link to the top-level `/admin/pins` console.
 
 ### Requirement 13: Growth & Engagement Counts
 
@@ -446,3 +450,25 @@ actually resolved, so that I can debug a local-vs-cloud environment mismatch wit
 3. EVERY mutating action of this section SHALL be a `POST` that enforces the same-origin check (`isSameOriginRequest`) and responds `403` with no state change on a cross-origin request, SHALL escape every rendered value, SHALL redirect with a flash message on success, and SHALL render a validation or database error as an in-page message without a stack trace; every response SHALL carry `X-Robots-Tag: noindex, nofollow` and `Cache-Control: private, no-store`.
 4. THE section's HTML forms SHALL be parsed in a child scope of the admin plugin that accepts `application/x-www-form-urlencoded` bodies, so no other admin route's body parsing changes.
 5. A change made in this section SHALL take effect on the next calculation request without a restart, and the section SHALL NOT fetch anything from Disney or ThemeParks.wiki.
+
+### Requirement 20: User feedback section (added by the `in-app-feedback` spec)
+
+**User Story:** As the operator, I want to read, triage and close the bug reports and feedback users send from the app, so that I can act on them without a database client. This requirement is additive; the full behavior is in `.kiro/specs/in-app-feedback/requirements.md` (Requirement 5).
+
+#### Acceptance Criteria
+
+1. THE Feedback routes SHALL be registered by `adminRoutes` only when it receives the optional `feedback` port (`AdminFeedbackPort`, mirroring `diningPlan?`, `ticketPrices?` and `photos?`); WHEN the port is supplied, THE Admin_Panel dashboard section list (`ADMIN_SECTIONS`) SHALL list "User Feedback" (`/admin/feedback`) under "User Operations & Security", and WHEN it is absent the routes are not registered, the section is not listed, and every existing admin test is unaffected.
+2. THE section SHALL list submissions newest first, 50 per page, filterable by status (default `new`) and kind, and SHALL provide a detail page with the full message, the optional device info, and the account email only when the user gave contact consent.
+3. THE detail page SHALL provide actions to set the status to `new`, `triaged` or `resolved` and to delete a submission, each a `POST` that enforces the same-origin check (`isSameOriginRequest`) and responds `403` with no state change on a cross-origin request.
+4. THE section SHALL escape every rendered value, SHALL carry `X-Robots-Tag: noindex, nofollow` and `Cache-Control: private, no-store` on every response, and SHALL parse its forms in a child scope that accepts `application/x-www-form-urlencoded` bodies so no other admin route's body parsing changes.
+
+### Requirement 21: Pins & Achievements Console and Visual Catalogue
+
+**User Story:** As an operator, I want a top-level Pins & Achievements section in the Admin Panel that surfaces catalog coverage, live DB award/claim/showcase metrics, per-pin set-resolution health, global reconciliation, and a read-only embed of the Series 1 visual pin catalogue, so that I can monitor and verify the achievement system end-to-end without editing catalogue artwork.
+
+#### Acceptance Criteria
+
+1. WHEN an authenticated request targets `GET /admin/pins`, THE Admin_Panel SHALL display summary cards for Series 1 catalog totals (by track and tier), active user count (`deletion_state = 'active'`), unlocked and claimed pin award counts, showcase placements, a Named Set Resolution Health table across `PIN_SETS` (`setId`, `kind`, `status` in `'ok' | 'partial' | 'empty'`, `matchedCount`, `expectedCount`, `missingIds`, `sampleNames`, `referencingPinIds`), and a per-pin table combining catalog metadata (`id`, `name`, `track`, `tier`, `criteria`, `description`) and live unlock/claim counts (`unlockedCount`, `claimedCount`), together with a prominent link to `/admin/pins/catalog`.
+2. THE Admin_Panel dashboard (`ADMIN_SECTIONS`) AND the top navigation quick-jump menu SHALL list "Pins & Achievements" (`/admin/pins`) under User Operations.
+3. WHEN an authenticated, same-origin request submits `POST /admin/pins/reconcile`, THE Admin_Panel SHALL invoke `PinRepo.reconcileAll` across all users (when `pinRepo` is configured) and display the processed user count and newly awarded pin count on the response page, AND WHEN the request is cross-origin it SHALL respond `403` without reconciling, AND WHEN `pinRepo` is absent it SHALL render a graceful disabled notice.
+4. WHEN an authenticated request targets `GET /admin/pins/catalog`, THE Admin_Panel SHALL serve the Series 1 visual catalogue (`pin-catalog-mockup.html`) read-only with an injected top navigation bar back to `/admin/pins`, AND SHALL serve its three companion JavaScript assets (`motifs/motif-paths.js`, `pins-v2-transcription.js`, `pin-descriptions.js`) behind Basic Auth under both `/admin/pins/...` and `/admin/pins/catalog/...` with `X-Robots-Tag: noindex, nofollow` and `Cache-Control: private, no-store`, responding `404` gracefully when the catalogue directory or asset is unavailable on disk.

@@ -219,6 +219,10 @@ export const DISPOSITIONS: readonly DispositionEntry[] = [
   e('mickey_still_there_votes', 'user_id', 'delete', 4, ['mickey_id'], 'cascade', false),
   e('mickey_reports', 'user_id', 'delete', 4, ['mickey_id'], 'cascade', false),
   e('mickey_submission_bans', 'user_id', 'delete', 4, ['user_id'], 'cascade', false),
+  // -- in-app feedback (in-app-feedback spec) ---------------------------------------------------
+  e('user_feedback', 'user_id', 'delete', 4, ['id'], 'cascade', false, {
+    note: 'In-app feedback. Message, optional device info and optional contact email go with the account.',
+  }),
 ];
 
 /**

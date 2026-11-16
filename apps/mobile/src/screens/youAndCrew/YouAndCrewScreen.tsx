@@ -506,6 +506,22 @@ export default function YouAndCrewScreen(): JSX.Element {
             </Pressable>
           </Card>
 
+          <Card style={styles.settingsCard} testID="you-and-crew-feedback-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => navigation.navigate('Feedback')}
+              accessibilityRole="button"
+              accessibilityLabel="Report a problem or send feedback"
+              accessibilityHint="Opens a form to send a bug report or an idea"
+              testID="feedback-entry-button"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="chatbubbles-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>Report a problem or send feedback</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
           <Card style={styles.settingsCard} testID="you-and-crew-delete-account-card">
             <Pressable
               style={styles.blockedUsersRow}

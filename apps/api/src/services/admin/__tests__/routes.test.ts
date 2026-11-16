@@ -5,6 +5,7 @@
  */
 
 import Fastify from 'fastify';
+import { PINS } from '@dwt/shared';
 import { describe, expect, it } from 'vitest';
 import { adminRoutes, ADMIN_SECTIONS } from '../routes.js';
 import { createBasicAuthHook } from '../basicAuth.js';
@@ -217,6 +218,20 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
         },
       ],
       getPurgeLedgerDaily: async () => [{ dayUtc: '2026-10-02', count: 0 }],
+      getPinSystemSummary: async () => ({
+        catalogTotal: 1,
+        setTotal: 1,
+        byTier: { Gold: 1 },
+        byTrack: { Touring: 1 },
+        activeUsers: 50,
+        totalUnlocked: 12,
+        totalClaimed: 8,
+        usersWithUnlockedPins: 6,
+        showcasePlacements: 15,
+        showcaseUsers: 4,
+        setHealth: [],
+        awardsByPin: [],
+      }),
       ...overrides,
     };
   }
@@ -302,6 +317,8 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     for (const section of ADMIN_SECTIONS) {
       expect(auth.body).toContain(section.path);
     }
+    expect(auth.body).toContain('/admin/pins');
+    expect(auth.body).toContain('Pins &amp; Achievements');
   });
 
   // ---------------------------------------------------------------------------
@@ -656,6 +673,15 @@ describe('Admin Panel Routes - Comprehensive Integration Suite', () => {
     expect(hit.statusCode).toBe(200);
     expect(hit.body).toContain('Pin Board Diagnostic');
     expect(hit.body).toContain('Coaster Royalty');
+    expect(hit.body).toContain('<th>Description</th>');
+    expect(hit.body).toContain('<th>Progress</th>');
+    const coasterDef = PINS.find((p) => p.id === 'gold_coaster_royalty');
+    if (coasterDef) {
+      expect(hit.body).toContain(coasterDef.description);
+    }
+    expect(hit.body).toContain('Complete');
+    expect(hit.body).toContain('2 / 5 (40%)');
+    expect(hit.body).toContain('href="/admin/pins"');
 
     const miss = await app.inject({
       method: 'GET',
