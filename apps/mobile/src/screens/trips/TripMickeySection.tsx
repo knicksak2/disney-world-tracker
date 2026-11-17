@@ -8,7 +8,7 @@
  * when nothing was found on the trip.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -27,18 +27,21 @@ export interface TripMickeySectionProps {
   readonly tripId: string;
   readonly onSelectMickey?: (mickeyId: string) => void;
   readonly testID?: string;
+  readonly embedded?: boolean | undefined;
 }
 
 export default function TripMickeySection({
   tripId,
   onSelectMickey,
   testID = 'trip-detail-mickeys-section',
+  embedded = false,
 }: TripMickeySectionProps): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
   const { data: config } = useMickeyConfig();
   const isEnabled = Boolean(config?.enabled);
   const { data, isLoading } = useTripMickeys(tripId, isEnabled);
+  const [expanded, setExpanded] = useState(false);
 
   if (!isEnabled) {
     return null;
@@ -47,6 +50,91 @@ export default function TripMickeySection({
   const members = data?.members ?? [];
   const mickeys = data?.mickeys ?? [];
   const totalFound = mickeys.length;
+
+  if (embedded) {
+    const memberSummary =
+      members.length > 0
+        ? members.map((m) => `${m.displayName}: ${m.count}`).join(' · ')
+        : 'No Hidden Mickeys found yet';
+
+    return (
+      <View style={styles.embeddedWrap} testID={testID}>
+        <Pressable
+          style={styles.embeddedRow}
+          onPress={() => setExpanded((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel={`Hidden Mickeys, ${totalFound} found`}
+          testID="trip-mickeys-toggle"
+        >
+          <View style={styles.embeddedIcon}>
+            <Ionicons name="sparkles" size={16} color={t.color.primaryFg} />
+          </View>
+          <View style={styles.embeddedTextWrap}>
+            <Text style={styles.embeddedTitle}>
+              Hidden Mickeys{totalFound > 0 ? ` · ${totalFound} found` : ''}
+            </Text>
+            <Text
+              style={styles.embeddedSub}
+              numberOfLines={1}
+              testID={!(isLoading && !data) && totalFound === 0 ? 'trip-mickeys-empty' : undefined}
+            >
+              {isLoading && !data ? 'Loading...' : memberSummary}
+            </Text>
+          </View>
+          <Ionicons
+            name={expanded ? 'chevron-down' : 'chevron-forward'}
+            size={15}
+            color={t.color.textSecondary}
+          />
+        </Pressable>
+
+        {expanded && totalFound > 0 ? (
+          <View style={styles.embeddedExpanded} testID="trip-mickeys-content">
+            {members.length > 0 ? (
+              <View style={styles.membersRow} testID="trip-mickeys-members">
+                {members.map((m) => (
+                  <View key={m.userId} style={styles.memberPill}>
+                    <Text style={styles.memberName}>{m.displayName}</Text>
+                    <Text style={styles.memberCount}>{m.count}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.itemsList} testID="trip-mickeys-list">
+              {mickeys.map((item) => (
+                <Card key={item.mickeyId} style={styles.itemCard}>
+                  <Pressable
+                    testID={`trip-mickey-item-${item.mickeyId}`}
+                    style={({ pressed }) => [
+                      styles.itemContent,
+                      pressed && onSelectMickey && styles.itemPressed,
+                    ]}
+                    onPress={() => onSelectMickey?.(item.mickeyId)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.clue1} at ${item.experienceName}`}
+                  >
+                    <View style={styles.itemTextWrap}>
+                      <Text style={styles.itemClue} numberOfLines={2}>
+                        {item.clue1}
+                      </Text>
+                      <Text style={styles.itemMeta} numberOfLines={1}>
+                        {item.experienceName} · Found by {item.foundByCount}{' '}
+                        {item.foundByCount === 1 ? 'member' : 'members'}
+                      </Text>
+                    </View>
+                    <Badge
+                      label={item.official ? 'Official' : 'Community'}
+                      color={item.official ? t.color.primaryFg : t.color.textSecondary}
+                    />
+                  </Pressable>
+                </Card>
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.sectionContainer} testID={testID}>
@@ -129,6 +217,47 @@ export default function TripMickeySection({
 }
 
 const useStyles = makeStyles((t) => ({
+  embeddedWrap: {
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+  },
+  embeddedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    gap: 10,
+  },
+  embeddedIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: t.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  embeddedTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  embeddedTitle: {
+    ...t.typography.body,
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  embeddedSub: {
+    ...t.typography.meta,
+    fontSize: 12,
+    color: t.color.textSecondary,
+    marginTop: 1,
+  },
+  embeddedExpanded: {
+    paddingHorizontal: 13,
+    paddingBottom: 12,
+    gap: 8,
+  },
   sectionContainer: {
     paddingHorizontal: theme.spacing.md,
     marginTop: theme.spacing.lg,

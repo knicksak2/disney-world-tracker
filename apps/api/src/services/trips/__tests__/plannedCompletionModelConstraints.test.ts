@@ -253,6 +253,8 @@ describe('Planned List Completion Sync — derived state lives off the persisted
         // (R11.6): a catalog value projected from the linked Experience, not a
         // completion state — likewise still subject to the token scan below.
         'catalogDurationMinutes',
+        // Manual per-day sort position added by day-planning-optimization (R12.1).
+        'sortOrder',
       ].sort(),
     );
 

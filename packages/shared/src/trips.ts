@@ -543,11 +543,21 @@ export const tripOptimizationInputSchema = z
     endHour: z.number().int().min(0).max(23).optional(),
     startMinutes: z.number().int().min(0).max(1439).optional(),
     startMode: z.enum(['park_open', 'party_mix_in', 'now', 'custom']).optional(),
+    preserveOrder: z.boolean().optional(),
   })
   .strict();
 
 export type TripOptimizationInput = z.infer<typeof tripOptimizationInputSchema>;
 export type OptimizationStartMode = NonNullable<TripOptimizationInput['startMode']>;
+
+export const scheduleReorderInputSchema = z
+  .object({
+    date: tripCalendarDateSchema,
+    orderedItemIds: z.array(uuidSchema).min(1).max(100),
+  })
+  .strict();
+
+export type ScheduleReorderInput = z.infer<typeof scheduleReorderInputSchema>;
 
 export interface OptimizedItem {
   readonly plannedItemId: string;
@@ -982,6 +992,11 @@ export interface PlannedItemDTO {
   readonly predictedWaitMinutes: number | null;
   readonly travelFromPrev: TripTravelLeg | null;
   readonly optimizedAt: string | null;
+  /**
+   * Manual per-day sort position (`0..n-1`) persisted when a Trip_Member
+   * reorders items on the Schedule Builder (day-planning-optimization R12.1).
+   */
+  readonly sortOrder?: number | null | undefined;
 }
 
 /**

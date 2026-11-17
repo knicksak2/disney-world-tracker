@@ -32,12 +32,14 @@ export interface GroupFavoritesSectionProps {
   readonly tripId: string;
   readonly onSelectExperience?: (experienceId: string) => void;
   readonly testID?: string;
+  readonly embedded?: boolean | undefined;
 }
 
 export default function GroupFavoritesSection({
   tripId,
   onSelectExperience,
   testID = 'trip-detail-group-favorites',
+  embedded = false,
 }: GroupFavoritesSectionProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -56,20 +58,22 @@ export default function GroupFavoritesSection({
   const items: readonly GroupFavoriteDTO[] = Array.isArray(rawItems) ? rawItems : [];
 
   return (
-    <View style={styles.sectionContainer} testID={testID}>
+    <View style={[styles.sectionContainer, embedded && { marginTop: 0 }]} testID={testID}>
       {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View style={styles.titleWrap}>
-          <Ionicons name="heart" size={18} color={pal.heart} />
-          <Text style={styles.sectionTitle}>Group Favorites</Text>
-          {items.length > 0 ? (
-            <Badge
-              label={String(items.length)}
-              color={t.color.primaryFg}
-            />
-          ) : null}
+      {!embedded ? (
+        <View style={styles.headerRow}>
+          <View style={styles.titleWrap}>
+            <Ionicons name="heart" size={18} color={pal.heart} />
+            <Text style={styles.sectionTitle}>Group Favorites</Text>
+            {items.length > 0 ? (
+              <Badge
+                label={String(items.length)}
+                color={t.color.primaryFg}
+              />
+            ) : null}
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {/* Loading state */}
       {query.isLoading && !query.data ? (

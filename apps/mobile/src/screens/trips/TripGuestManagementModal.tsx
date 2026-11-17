@@ -38,7 +38,7 @@ import {
   tripExpenseKeys,
 } from './tripExpenseApi';
 import { ApiError } from '../../api/client';
-import { putTravelerProfile } from './budgetApi';
+import { budgetKeys, putTravelerProfile } from './budgetApi';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 
 const GUEST_AGE_OPTIONS: ReadonlyArray<{ readonly value: AgeBracket; readonly label: string }> = [
@@ -93,6 +93,7 @@ export function TripGuestManagementModal({
     queryClient.invalidateQueries({ queryKey: tripExpenseKeys.guests(tripId) });
     queryClient.invalidateQueries({ queryKey: ['trips', 'diningPlan', tripId] });
     queryClient.invalidateQueries({ queryKey: ['trips', 'budget', tripId] });
+    queryClient.invalidateQueries({ queryKey: budgetKeys.detail(tripId) });
     queryClient.invalidateQueries({ queryKey: ['trips', 'stays', tripId] });
   };
 

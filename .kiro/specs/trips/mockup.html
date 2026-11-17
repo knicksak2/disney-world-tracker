@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trips Screen Redesign v5 — Compact Days + Clean Active Mode</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--background, #0e071c);
+      color: var(--foreground, #f5f1ff);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .studio-wrap {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 20px 16px 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Studio Header */
+    .studio-header {
+      background: var(--card, #1a0f30);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+      border-radius: 18px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .studio-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .eyebrow-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--secondary, #2a1d42);
+      color: var(--secondary-foreground, #e9d5ff);
+      margin-bottom: 8px;
+    }
+
+    .studio-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .studio-sub {
+      font-size: 13px;
+      color: var(--muted-foreground, #b8a9d9);
+      max-width: 860px;
+      margin-top: 4px;
+    }
+
+    .metrics-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .metric-chip {
+      padding: 6px 12px;
+      border-radius: 12px;
+      background: var(--background, #120a1f);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .metric-chip.good {
+      border-color: rgba(76, 195, 138, 0.4);
+      color: #4cc38a;
+      background: rgba(76, 195, 138, 0.1);
+    }
+
+    .mode-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border, rgba(167, 139, 250, 0.18));
+    }
+
+    .mode-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .mode-btn {
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.24));
+      background: var(--background, #120a1f);
+      color: var(--muted-foreground, #b8a9d9);
+      padding: 8px 14px;
+      border-radius: 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .mode-btn:hover {
+      color: var(--foreground, #ffffff);
+      border-color: rgba(196, 163, 255, 0.5);
+    }
+
+    .mode-btn.active {
+      background: #7e57c2;
+      border-color: #9d7ae0;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(126, 87, 194, 0.35);
+    }
+
+    .controls-right {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .phase-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted-foreground, #b8a9d9);
+      font-weight: 700;
+    }
+
+    .pill-switch {
+      display: inline-flex;
+      gap: 3px;
+      background: var(--background, #120a1f);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+    }
+
+    .pill-switch button {
+      border: none;
+      background: transparent;
+      color: var(--muted-foreground, #b8a9d9);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pill-switch button.active {
+      background: #7e57c2;
+      color: #ffffff;
+    }
+
+    /* Stage Layouts */
+    .compare-stage {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 28px;
+      align-items: flex-start;
+    }
+
+    .focused-stage {
+      display: grid;
+      grid-template-columns: 392px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1000px) {
+      .focused-stage {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .phone-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .phone-caption {
+      width: 376px;
+      max-width: 100%;
+      background: var(--card, #1a0f30);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Phone Shell (Twilight Dark Mode matching theme.ts) */
+    .phone-shell {
+      width: 376px;
+      max-width: 100%;
+      background: #120a1f;
+      color: #f3eefc;
+      border-radius: 38px;
+      border: 6px solid #2b2140;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Interactive Day Bottom Sheet Overlay inside Phone */
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 4, 16, 0.72);
+      z-index: 30;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .sheet-panel {
+      width: 100%;
+      background: #1e1430;
+      border-top: 1px solid #4a3a6b;
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      padding: 14px 15px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.55);
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #2b2042;
+    }
+
+    .sheet-close {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid #3c2c5c;
+      background: #25193d;
+      color: #e6dcf7;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sheet-park-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sheet-park-option {
+      width: 100%;
+      border: 1px solid #33264d;
+      background: #25193d;
+      border-radius: 11px;
+      padding: 9px 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #f3eefc;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .sheet-park-option.selected {
+      border-color: #9d7ae0;
+      background: #2f1f4d;
+    }
+
+    .sheet-primary-btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #7e57c2 0%, #5b2a86 100%);
+      color: #ffffff;
+      padding: 11px 12px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    .phone-toast {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 72px;
+      z-index: 25;
+      background: #2a1d42;
+      border: 1px solid #9d7ae0;
+      color: #f3eefc;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .status-bar {
+      background: linear-gradient(135deg, #5b2a86 0%, #3b1d6e 60%, #1a0d33 100%);
+      padding: 10px 18px 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .battery-chip {
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.22);
+      font-size: 12px;
+    }
+
+    .tw-header {
+      background: linear-gradient(135deg, #5b2a86 0%, #3b1d6e 55%, #1a0d33 100%);
+      padding: 6px 14px 11px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .tw-header-left {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .tw-back {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .tw-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tw-sub {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.84);
+    }
+
+    .tw-header-desc {
+      font-size: 12px;
+      color: rgba(235, 224, 255, 0.78);
+      margin-top: 2px;
+    }
+
+    .status-pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.16);
+      color: #c4a3ff;
+    }
+    .status-pill.active-trip {
+      background: rgba(76, 195, 138, 0.22);
+      color: #4cc38a;
+    }
+
+    .phone-scroll {
+      height: 620px;
+      overflow-y: auto;
+      padding: 12px 13px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      scrollbar-width: thin;
+      scrollbar-color: #4a3a6b #120a1f;
+    }
+    .phone-scroll::-webkit-scrollbar { width: 5px; }
+    .phone-scroll::-webkit-scrollbar-track { background: #120a1f; }
+    .phone-scroll::-webkit-scrollbar-thumb { background: #4a3a6b; border-radius: 999px; }
+
+    /* Clean Unified Surface Primitives */
+    .tw-card {
+      background: #1e1430;
+      border: 1px solid #33264d;
+      border-radius: 16px;
+      padding: 11px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .tw-grouped-list {
+      background: #1e1430;
+      border: 1px solid #33264d;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .grouped-row {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #2b2042;
+    }
+    .grouped-row:last-child { border-bottom: none; }
+
+    .tw-active-card {
+      background: linear-gradient(135deg, #1b2a4a 0%, #162038 100%);
+      border: 1px solid rgba(96, 165, 250, 0.45);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .section-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px;
+      gap: 8px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      color: #b3a8c9;
+    }
+
+    .title-sm {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f3eefc;
+    }
+
+    .sub-sm {
+      font-size: 12px;
+      color: #b3a8c9;
+    }
+
+    .icon-sq {
+      width: 29px;
+      height: 29px;
+      border-radius: 9px;
+      background: #2a1d42;
+      color: #c4a3ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pill-btn {
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #2a1d42;
+      border: 1px solid #4a3a6b;
+      color: #c4a3ff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .subtle-log-btn {
+      border: 1px solid rgba(196, 163, 255, 0.4);
+      background: rgba(126, 87, 194, 0.25);
+      color: #f3eefc;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .avatar-stack {
+      display: flex;
+      align-items: center;
+    }
+    .avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: #ffffff;
+      border: 2px solid #1e1430;
+      margin-left: -6px;
+    }
+    .avatar:first-child { margin-left: 0; }
+
+    /* Horizontal Scroll Containers */
+    .h-scroll {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .h-scroll::-webkit-scrollbar { display: none; }
+
+    /* SIZE A: Integrated Compact Strip (86px wide x ~58px tall — ~4 visible!) */
+    .compact-day-chip {
+      flex-shrink: 0;
+      width: 86px;
+      background: #25193d;
+      border: 1px solid #3c2c5c;
+      border-radius: 11px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .compact-day-chip.today-glow {
+      border-color: rgba(96, 165, 250, 0.6);
+      background: #222349;
+    }
+
+    /* SIZE B: Slim Standalone Cards (106px wide x ~68px tall — 3+ visible!) */
+    .slim-day-card {
+      flex-shrink: 0;
+      width: 106px;
+      background: #1e1430;
+      border: 1px solid #33264d;
+      border-radius: 13px;
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .slim-day-card.today-glow {
+      border-color: rgba(96, 165, 250, 0.6);
+    }
+
+    /* SIZE C: Ultra-Compact Single-Line Pills (34px tall) */
+    .single-pill-day {
+      flex-shrink: 0;
+      background: #25193d;
+      border: 1px solid #3c2c5c;
+      border-radius: 999px;
+      padding: 5px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .single-pill-day.today-glow {
+      border-color: rgba(96, 165, 250, 0.65);
+      background: #222349;
+    }
+
+    /* Current App Horizontal Day Card (faithful to user's screenshot) */
+    .old-day-card {
+      flex-shrink: 0;
+      width: 138px;
+      background: #1e1430;
+      border: 1px solid #33264d;
+      border-radius: 14px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* React Pills on Feed Card */
+    .react-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .react-pills {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .react-btn {
+      border: 1px solid #4a3a6b;
+      background: #261a3d;
+      color: #e6dcf7;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .react-btn.mine {
+      background: rgba(196, 163, 255, 0.22);
+      border-color: #c4a3ff;
+      color: #ffffff;
+    }
+
+    /* Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+
+    .bento-tile {
+      background: #1e1430;
+      border: 1px solid #33264d;
+      border-radius: 14px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .bento-val {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .mini-bar {
+      width: 64px;
+      height: 5px;
+      border-radius: 999px;
+      background: #2a1d42;
+      overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: #2dd4bf;
+    }
+
+    /* Segmented 3-in-1 Saved Lists Card */
+    .seg-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      background: #140c24;
+      border-radius: 10px;
+      padding: 3px;
+      border: 1px solid #33264d;
+    }
+
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: #b3a8c9;
+      padding: 5px 4px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .seg-btn.active {
+      background: #7e57c2;
+      color: #ffffff;
+    }
+
+    .inner-row {
+      background: #2a1d42;
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .summary-strip {
+      background: linear-gradient(135deg, #3c1f6e 0%, #241345 100%);
+      border: 1px solid #5b3a96;
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .tab-bar {
+      background: #160d26;
+      border-top: 1px solid #2d2145;
+      padding: 7px 16px 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      color: #8e82a8;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .tab-item.active { color: #f6c343; }
+
+    .magic-fab {
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      margin-top: -20px;
+      background: linear-gradient(135deg, #9d7ae0 0%, #7e57c2 60%, #5b2a86 100%);
+      border: 2px solid #160d26;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 16px rgba(126, 87, 194, 0.45);
+    }
+
+    .noise-badge {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #2a1d42;
+      color: #c4a3ff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .fold-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ff6b9a;
+      font-size: 12px;
+      font-weight: 800;
+      margin: 2px 0;
+    }
+    .fold-line::before,
+    .fold-line::after {
+      content: "";
+      flex: 1;
+      border-top: 1px dashed #ff6b9a;
+    }
+
+    .feature-pulse {
+      box-shadow: 0 0 0 2px #f6c343, 0 0 18px rgba(246, 195, 67, 0.6) !important;
+      border-color: #f6c343 !important;
+    }
+
+    /* Inspector / Rationale Side Panel */
+    .inspector-card {
+      background: var(--card, #1a0f30);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .days-compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .days-opt-box {
+      background: var(--background, #120a1f);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.22));
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+    }
+
+    .days-opt-box.active {
+      border-color: #9d7ae0;
+      background: rgba(126, 87, 194, 0.14);
+    }
+
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 8px;
+    }
+
+    .check-btn {
+      background: var(--background, #120a1f);
+      border: 1px solid var(--border, rgba(167, 139, 250, 0.2));
+      border-radius: 11px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+    }
+    .check-btn:hover { border-color: #f6c343; }
+    .check-btn.selected {
+      border-color: #f6c343;
+      background: rgba(246, 195, 67, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <div class="studio-wrap">
+    <!-- Top Studio Header -->
+    <header class="studio-header">
+      <div class="studio-top">
+        <div>
+          <span class="eyebrow-badge">Trip Screen Redesign · Final Polish (#1 Symmetric Itinerary Rows + #2 Day Sheet)</span>
+          <h1 class="studio-title">3.5–4 Days Visible at Once + Tap Any Day Chip for Park &amp; Schedule</h1>
+          <p class="studio-sub">
+            Shrinks Day chips to <strong><code>86px</code></strong> (tap any day chip to open the <strong>Choose Park + Open in Schedule Builder</strong> sheet), aligns <strong>Schedule Builder · 3 scheduled ›</strong> as a clean 1-line row so <strong>Trip Activity</strong> reactions fit cleanly above the tab bar in both phases.
+          </p>
+        </div>
+
+        <div class="metrics-cluster">
+          <div class="metric-chip good">✓ 21 / 21 Features</div>
+          <div class="metric-chip good">~4 Days Visible at Once</div>
+        </div>
+      </div>
+
+      <div class="mode-bar">
+        <div class="mode-tabs">
+          <button class="mode-btn active" data-mode="compare" onclick="setMode('compare')">1. Side-by-Side: Current vs. Redesign</button>
+          <button class="mode-btn" data-mode="focused" onclick="setMode('focused')">2. Focused Redesign</button>
+        </div>
+
+        <div class="controls-right">
+          <div class="phase-wrap">
+            <span>Days Size:</span>
+            <div class="pill-switch">
+              <button class="active" data-days="integrated" onclick="setDaysStyle('integrated')">Integrated (86px)</button>
+              <button data-days="slim" onclick="setDaysStyle('slim')">Slim Cards (106px)</button>
+              <button data-days="ribbon" onclick="setDaysStyle('ribbon')">Pill Ribbon (34px)</button>
+            </div>
+          </div>
+
+          <div class="phase-wrap">
+            <span>Phase:</span>
+            <div class="pill-switch">
+              <button class="active" data-phase="upcoming" onclick="setPhase('upcoming')">Upcoming ('27)</button>
+              <button data-phase="active" onclick="setPhase('active')">In-Park Active</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Stage -->
+    <div id="stage-mount"></div>
+
+    <!-- Bottom Interactive Days Size Comparison + 21-Feature Parity Checker -->
+    <section class="inspector-card">
+      <div>
+        <h2 style="font-size:17px;font-weight:800;">Compare the 3 Smaller Day Sizes (Click to Switch)</h2>
+        <p class="sub-sm" style="margin-top:3px;">
+          In v4, each Day card was <code>158px × 105px</code>—so only 2 days fit on screen. Shrinking them lets users scan half a week at once and brings <strong>Trip Activity</strong> cleanly into view on the first screen:
+        </p>
+      </div>
+
+      <div class="days-compare-grid">
+        <button class="days-opt-box" id="dopt-integrated" onclick="setDaysStyle('integrated')">
+          <span style="font-size:12px;font-weight:800;color:#4cc38a;">★ Size A: Integrated 86px Strip (Recommended)</span>
+          <span class="sub-sm">Lives right inside the top of the <strong>Itinerary</strong> card (~4 days visible at once: <code>Wed 6/30</code> + <code>MK ▾</code> + item dot). Zero extra card borders!</span>
+        </button>
+        <button class="days-opt-box" id="dopt-slim" onclick="setDaysStyle('slim')">
+          <span style="font-size:12px;font-weight:800;color:#c4a3ff;">Size B: Slim 106px Day Cards</span>
+          <span class="sub-sm">Standalone mini-cards above Itinerary (~3.2 days visible at once: <code>D1 · 6/30</code> + <code>MK ▾</code> + <code>3 items</code>), ~35% smaller than v4.</span>
+        </button>
+        <button class="days-opt-box" id="dopt-ribbon" onclick="setDaysStyle('ribbon')">
+          <span style="font-size:12px;font-weight:800;color:#f6c343;">Size C: Single-Line 34px Pill Ribbon</span>
+          <span class="sub-sm">Shortest height: inline horizontal pills (<code>6/30 · MK ▾</code>) inside the top of the Itinerary card so Trip Activity sits higher.</span>
+        </button>
+      </div>
+
+      <div style="border-top:1px solid var(--border,rgba(167,139,250,0.18));padding-top:12px;">
+        <h3 style="font-size:15px;font-weight:800;margin-bottom:8px;">21-Feature Parity Checklist (Click Any Feature to Pulse It Inside the Phone)</h3>
+        <div class="checklist-grid" id="checklist-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const FEATURES = [
+      { id: 'f1',  num: 1,  name: 'Header, Status & Edit', note: 'Pinned gradient header' },
+      { id: 'f2',  num: 2,  name: 'Trip Description', note: 'Tucked cleanly in purple header subtitle (saves Hero tier!)' },
+      { id: 'f3',  num: 3,  name: 'Split Stays (Coronado +2)', note: 'Full-width resort name (zero truncation)' },
+      { id: 'f4',  num: 4,  name: 'Crew Roster (3) & Manage', note: 'Inline avatars + Manage ›' },
+      { id: 'f5',  num: 5,  name: 'Phase Milestone / Up Next', note: 'Hero footer when Upcoming; Live Up Next card when Active' },
+      { id: 'f6',  num: 6,  name: 'Planned List (Wishlist)', note: 'Row inside unified Itinerary card' },
+      { id: 'f7',  num: 7,  name: 'Schedule Builder', note: 'Row inside unified Itinerary card' },
+      { id: 'f8',  num: 8,  name: 'Reservations (Dining & LL)', note: 'Row inside unified Itinerary card' },
+      { id: 'f9',  num: 9,  name: 'Trip Activity (Live Feed)', note: 'Un-nested above-the-fold card (1 latest item max)' },
+      { id: 'f10', num: 10, name: 'Budget & Savings Plan', note: '1/3 Finances Bento strip ($4,200)' },
+      { id: 'f11', num: 11, name: 'Expenses & Balances', note: '1/3 Finances Bento strip' },
+      { id: 'f12', num: 12, name: 'Dining Plan Calculator', note: '1/3 Finances Bento strip' },
+      { id: 'f13', num: 13, name: 'Booking Timeline (May 1)', note: 'Hero footer when Upcoming; Prep card when Active' },
+      { id: 'f14', num: 14, name: 'Packing List (12/28)', note: 'Grouped Prep & Memories card' },
+      { id: 'f15', num: 15, name: 'Trip Album (Photos)', note: 'Grouped Prep & Memories card' },
+      { id: 'f16', num: 16, name: 'Days (Per-Day Park Picker)', note: 'Compact 86px / 106px / 34px strip (~4 days visible!)' },
+      { id: 'f17', num: 17, name: 'Hidden Mickeys Tally', note: 'Grouped Prep & Memories card' },
+      { id: 'f18', num: 18, name: 'Attached Food Lists', note: 'Food tab in 3-in-1 Saved Lists card' },
+      { id: 'f19', num: 19, name: 'Attached Exp Lists', note: 'Exp tab in 3-in-1 Saved Lists card' },
+      { id: 'f20', num: 20, name: 'Group Favorites (2+)', note: 'Group Favs tab in 3-in-1 Saved Lists card' },
+      { id: 'f21', num: 21, name: 'Vacation Progress & Summary', note: 'Milestone footer banner' },
+    ];
+
+    const state = {
+      mode: 'compare',          // 'compare' | 'focused'
+      daysStyle: 'integrated',  // 'integrated' | 'slim' | 'ribbon'
+      phase: 'upcoming',        // 'upcoming' | 'active'
+      staysExpanded: false,
+      listTab: 'favs',          // 'favs' | 'food' | 'exp'
+      sheetDayIdx: null,
+      toastMsg: null,
+      highlighted: null,
+      feedLogs: [
+        {
+          id: 'log1',
+          actor: 'L',
+          actorColor: '#7e57c2',
+          headline: 'L rode Cosmic Rewind · ★ 5.0',
+          meta: 'with G, K · "Best coaster in EPCOT!" · 12m ago',
+          reactions: { fire: { count: 2, mine: false }, heart: { count: 1, mine: true }, party: { count: 1, mine: false } },
+          comments: 2,
+        },
+      ],
+      days: [
+        { num: 1, dayLabel: 'Wed', shortDate: '6/30', fullDate: 'Jun 30', park: 'MK', fullPark: 'Magic Kingdom', color: '#60a5fa', itemsCount: 3, isPast: true, isToday: false },
+        { num: 2, dayLabel: 'Thu', shortDate: '7/1',  fullDate: 'Jul 1',  park: 'EPCOT', fullPark: 'EPCOT', color: '#c4a3ff', itemsCount: 2, isPast: false, isToday: true },
+        { num: 3, dayLabel: 'Fri', shortDate: '7/2',  fullDate: 'Jul 2',  park: '+ Park', fullPark: 'No park yet', color: '#8e82a8', itemsCount: 0, isPast: false, isToday: false },
+        { num: 4, dayLabel: 'Sat', shortDate: '7/3',  fullDate: 'Jul 3',  park: 'HS', fullPark: 'Hollywood Studios', color: '#ff6b9a', itemsCount: 1, isPast: false, isToday: false },
+        { num: 5, dayLabel: 'Sun', shortDate: '7/4',  fullDate: 'Jul 4',  park: 'AK', fullPark: 'Animal Kingdom', color: '#4cc38a', itemsCount: 1, isPast: false, isToday: false },
+      ],
+    };
+
+    const PARK_CYCLE = [
+      { park: 'MK', fullPark: 'Magic Kingdom', color: '#60a5fa' },
+      { park: 'EPCOT', fullPark: 'EPCOT', color: '#c4a3ff' },
+      { park: 'HS', fullPark: 'Hollywood Studios', color: '#ff6b9a' },
+      { park: 'AK', fullPark: 'Animal Kingdom', color: '#4cc38a' },
+      { park: '+ Park', fullPark: 'No park yet', color: '#8e82a8' },
+    ];
+
+    function svg(name, size = 15) {
+      const p = {
+        back: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"/>',
+        map: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>',
+        edit: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>',
+        bed: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 7v10m0-5h18m0 5v-6a2 2 0 00-2-2H7a2 2 0 00-2 2m0-2V9a2 2 0 012-2h2a2 2 0 012 2v3"/>',
+        list: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>',
+        calendar: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
+        ticket: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>',
+        chat: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>',
+        wallet: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>',
+        cash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>',
+        utensils: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v14m0-14c-1.5 0-3 1.5-3 4h6c0-2.5-1.5-4-3-4zm-6 0v7a2 2 0 002 2h0v5m10-14v14"/>',
+        bag: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>',
+        photo: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
+        sparkles: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>',
+        home: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>',
+        compass: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 2a10 10 0 100 20 10 10 0 000-20zm3.5 6.5l-2 5-5 2 2-5 5-2z"/>',
+        vault: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>',
+        sun: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>',
+        chevronRight: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>',
+      };
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display:inline-block;vertical-align:middle;flex-shrink:0;">${p[name] || ''}</svg>`;
+    }
+
+    function hl(fid) {
+      return state.highlighted === fid ? ' feature-pulse' : '';
+    }
+
+    function phoneHeader(isCurrent = false) {
+      const isUpcoming = isCurrent || state.phase === 'upcoming';
+      return `
+        <div class="status-bar">
+          <span>7:44</span>
+          <div style="display:flex;align-items:center;gap:6px;"><span>5G</span><span class="battery-chip">55</span></div>
+        </div>
+        <div class="tw-header${hl('f1')}" data-feature="f1">
+          <div class="tw-header-left">
+            <div class="tw-back">${svg('back', 14)}</div>
+            <div style="min-width:0;">
+              <div style="display:flex;align-items:center;gap:5px;">
+                <span style="color:#f6c343;">${svg('map', 14)}</span>
+                <span class="tw-title">Summer '27!</span>
+              </div>
+              <div class="tw-sub">${isUpcoming ? 'Jun 30 – Jul 9, 2027' : 'Day 2 of 10 · Jun 30 – Jul 9'}</div>
+              ${!isCurrent ? `<div class="tw-header-desc${hl('f2')}" data-feature="f2">Lakeshore lodge opening!</div>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <span class="status-pill ${isUpcoming ? '' : 'active-trip'}">${isUpcoming ? 'Upcoming' : 'Active'}</span>
+            <span style="color:#fff;">${svg('edit', 16)}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function phoneTabBar() {
+      return `
+        <div class="tab-bar">
+          <div class="tab-item">${svg('home', 17)}<span>Home</span></div>
+          <div class="tab-item">${svg('compass', 17)}<span>Explore</span></div>
+          <div class="magic-fab">${svg('sparkles', 18)}</div>
+          <div class="tab-item active">${svg('map', 17)}<span>Trips</span></div>
+          <div class="tab-item">${svg('vault', 17)}<span>Vault</span></div>
+        </div>
+      `;
+    }
+
+    /* Clean 2-to-3 Row Hero Card (Zero duplication in Active mode!) */
+    function cleanHeroCard() {
+      const isUpcoming = state.phase === 'upcoming';
+      return `
+        <div class="tw-card" style="gap:9px;">
+          <div class="${hl('f3')}" data-feature="f3" onclick="toggleStays()" style="cursor:pointer;display:flex;flex-direction:column;gap:4px;border-radius:10px;padding:2px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span class="eyebrow">STAYING AT · 1 OF 3 STAYS</span>
+              <span class="pill-btn" style="padding:2px 8px;">Jun 30–Jul 1 ${state.staysExpanded ? '▴' : '▾'}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="icon-sq">${svg('bed', 15)}</div>
+              <div class="title-sm" style="font-size:15px;">Coronado Springs Resort</div>
+            </div>
+          </div>
+
+          ${state.staysExpanded ? `
+            <div style="border-top:1px solid #2b2042;padding-top:8px;display:flex;flex-direction:column;gap:6px;">
+              <div class="inner-row"><div><div class="title-sm" style="font-size:13px;">Coronado Springs Resort</div><div class="sub-sm">3 of 3 people</div></div><span class="sub-sm">Jun 30–Jul 1</span></div>
+              <div class="inner-row"><div><div class="title-sm" style="font-size:13px;">Lakeshore Lodge</div><div class="sub-sm">3 of 3 people</div></div><span class="sub-sm">Jul 1–Jul 5</span></div>
+              <div class="inner-row"><div><div class="title-sm" style="font-size:13px;">Polynesian Village</div><div class="sub-sm">Undated stay</div></div><span style="font-size:12px;font-weight:700;color:#c4a3ff;">Add dates</span></div>
+              <div style="background:#3a2c0e;color:#ffd27a;border-radius:9px;padding:6px 9px;font-size:12px;">⚠ 4 nights (Jul 5–Jul 9) have no lodging assigned yet.</div>
+            </div>
+          ` : ''}
+
+          <div style="border-top:1px solid #2b2042;padding-top:8px;display:flex;align-items:center;justify-content:space-between;border-radius:8px;" class="${hl('f4')}" data-feature="f4">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="eyebrow">CREW (3)</span>
+              <span class="pill-btn" style="padding:2px 8px;">Manage ›</span>
+            </div>
+            <div class="avatar-stack">
+              <span class="avatar" style="background:#7e57c2;">L</span>
+              <span class="avatar" style="background:#2f80ed;">G</span>
+              <span class="avatar" style="background:#2e9e6b;">K</span>
+            </div>
+          </div>
+
+          ${isUpcoming ? `
+            <div style="border-top:1px solid #2b2042;padding-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:8px;" class="${hl('f5')} ${hl('f13')}" data-feature="f5">
+              <span style="font-size:12px;font-weight:700;color:#f6c343;">⏳ 227 days · Dining opens May 1</span>
+              <span data-feature="f13" style="font-size:12px;font-weight:700;color:#c4a3ff;white-space:nowrap;">Booking dates ›</span>
+            </div>
+          ` : ''}
+        </div>
+
+        ${!isUpcoming ? `
+          <div class="tw-active-card${hl('f5')}" data-feature="f5">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="eyebrow" style="color:#60a5fa;">⚡ UP NEXT TODAY · EPCOT</span>
+              <span class="pill-btn" style="color:#f6c343;">11:30 AM</span>
+            </div>
+            <div class="title-sm">Guardians: Cosmic Rewind (Lightning Lane)</div>
+            <div class="sub-sm">World Discovery · Party of 3</div>
+          </div>
+        ` : ''}
+      `;
+    }
+
+    function renderDayChipList() {
+      const isActive = state.phase === 'active';
+      // Hide past days when Active (d >= today) so Today is always anchored on the left
+      const visibleDays = state.days
+        .map((d, idx) => ({ d, idx }))
+        .filter(({ d }) => !isActive || !d.isPast);
+
+      if (state.daysStyle === 'integrated') {
+        return `
+          <div style="padding:9px 11px;border-bottom:1px solid #2b2042;" class="${hl('f16')}" data-feature="f16">
+            <div class="h-scroll">
+              ${visibleDays.map(({ d, idx }) => `
+                <button class="compact-day-chip ${isActive && d.isToday ? 'today-glow' : ''}" onclick="openDaySheet(${idx})">
+                  <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+                    <span style="font-size:12px;font-weight:700;color:#f3eefc;">${d.dayLabel} ${d.shortDate}</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+                    <span style="font-size:12px;font-weight:800;color:${d.color};">${d.park} ▾</span>
+                  </div>
+                  <span style="font-size:12px;color:#9f92b8;">${isActive && d.isToday ? 'Today' : (d.itemsCount > 0 ? d.itemsCount + ' planned' : 'Open')}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (state.daysStyle === 'slim') {
+        return `
+          <div class="h-scroll${hl('f16')}" data-feature="f16" style="border-radius:12px;">
+            ${visibleDays.map(({ d, idx }) => `
+              <button class="slim-day-card ${isActive && d.isToday ? 'today-glow' : ''}" onclick="openDaySheet(${idx})">
+                <div style="display:flex;justify-content:space-between;width:100%;">
+                  <span style="font-size:12px;font-weight:800;color:#b3a8c9;">${isActive && d.isToday ? 'TODAY' : 'D' + d.num}</span>
+                  <span style="font-size:12px;color:#b3a8c9;">${d.shortDate}</span>
+                </div>
+                <span style="font-size:13px;font-weight:800;color:${d.color};">${d.park} ▾</span>
+                <span style="font-size:12px;color:#9f92b8;">${d.itemsCount > 0 ? d.itemsCount + ' items ›' : 'Empty ›'}</span>
+              </button>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      // Single-line pill ribbon
+      return `
+        <div style="padding:9px 11px;border-bottom:1px solid #2b2042;" class="${hl('f16')}" data-feature="f16">
+          <div class="h-scroll">
+            ${visibleDays.map(({ d, idx }) => `
+              <button class="single-pill-day ${isActive && d.isToday ? 'today-glow' : ''}" onclick="openDaySheet(${idx})">
+                <span style="color:#f3eefc;">${isActive && d.isToday ? 'Today' : d.shortDate}</span>
+                <span style="color:#7e6d9e;">·</span>
+                <span style="color:${d.color};">${d.park} ▾</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function itinerarySection() {
+      const isActive = state.phase === 'active';
+      const visibleDays = isActive ? state.days.filter((d) => !d.isPast) : state.days;
+      const plannedCount = visibleDays.filter((d) => !d.park.startsWith('+')).length;
+      const totalDays = isActive ? 9 : 10;
+
+      const listRows = `
+        <div class="grouped-row${hl('f7')}" data-feature="f7">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="icon-sq">${svg('calendar', 16)}</div>
+            <div class="title-sm">Schedule Builder</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="sub-sm" style="font-weight:700;color:#f3eefc;">3 scheduled</span>
+            <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+          </div>
+        </div>
+        <div class="grouped-row${hl('f6')}" data-feature="f6">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="icon-sq">${svg('list', 16)}</div>
+            <div class="title-sm">Planned List</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="sub-sm" style="font-weight:700;color:#f3eefc;">4 items</span>
+            <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+          </div>
+        </div>
+        <div class="grouped-row${hl('f8')}" data-feature="f8">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="icon-sq" style="color:#f6c343;">${svg('ticket', 16)}</div>
+            <div class="title-sm">Reservations</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="sub-sm" style="font-weight:700;color:#f3eefc;">${state.phase === 'active' ? '2 booked' : '0 booked'}</span>
+            <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+          </div>
+        </div>
+      `;
+
+      if (state.daysStyle === 'slim') {
+        return `
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="section-header-row">
+              <span class="eyebrow">ITINERARY &amp; DAYS</span>
+              <span class="sub-sm">${plannedCount} of ${totalDays} parks set</span>
+            </div>
+            ${renderDayChipList()}
+            <div class="tw-grouped-list">${listRows}</div>
+          </div>
+        `;
+      }
+
+      // Integrated (86px) or Pill Ribbon (34px) sits INSIDE the single cohesive Itinerary card!
+      return `
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div class="section-header-row">
+            <span class="eyebrow">ITINERARY &amp; DAYS</span>
+            <span class="sub-sm">${plannedCount} of 10 parks set</span>
+          </div>
+          <div class="tw-grouped-list">
+            ${renderDayChipList()}
+            ${listRows}
+          </div>
+        </div>
+      `;
+    }
+
+    function cleanTripActivitySection() {
+      const item = state.feedLogs[0];
+      const totalLogs = state.feedLogs.length + 2;
+      return `
+        <div style="display:flex;flex-direction:column;gap:7px;" class="${hl('f9')}" data-feature="f9">
+          <div class="section-header-row">
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span class="eyebrow">TRIP ACTIVITY</span>
+              <span class="sub-sm">· ${totalLogs} logs</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="subtle-log-btn" onclick="quickAddSampleLog()">+ Log</button>
+              <span style="font-size:12px;font-weight:700;color:#c4a3ff;">All ›</span>
+            </div>
+          </div>
+
+          <div class="tw-card" style="gap:8px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <span class="avatar" style="background:${item.actorColor};margin-left:0;border:none;width:26px;height:26px;">${item.actor}</span>
+              <div style="min-width:0;flex:1;">
+                <div class="title-sm" style="font-size:13px;">${item.headline}</div>
+                <div class="sub-sm">${item.meta}</div>
+              </div>
+            </div>
+            <div class="react-row">
+              <div class="react-pills">
+                <button class="react-btn ${item.reactions.fire.mine ? 'mine' : ''}" onclick="toggleReaction('${item.id}','fire')">🔥 ${item.reactions.fire.count}</button>
+                <button class="react-btn ${item.reactions.heart.mine ? 'mine' : ''}" onclick="toggleReaction('${item.id}','heart')">❤️ ${item.reactions.heart.count}</button>
+                <button class="react-btn ${item.reactions.party.mine ? 'mine' : ''}" onclick="toggleReaction('${item.id}','party')">🎉 ${item.reactions.party.count}</button>
+              </div>
+              <span class="sub-sm">💬 ${item.comments} comments</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function savedListsCard() {
+      const tab = state.listTab;
+      let content = '';
+      if (tab === 'favs') {
+        content = `
+          <div class="${hl('f20')}" data-feature="f20" style="display:flex;flex-direction:column;gap:6px;border-radius:10px;padding:2px;">
+            <div class="inner-row">
+              <div><div class="title-sm" style="font-size:13px;">Guardians: Cosmic Rewind</div><div class="sub-sm">EPCOT · L, G, K</div></div>
+              <span class="pill-btn" style="color:#ff6b9a;border-color:rgba(255,107,154,0.35);">♥ 3</span>
+            </div>
+            <div class="inner-row">
+              <div><div class="title-sm" style="font-size:13px;">Flight of Passage</div><div class="sub-sm">Animal Kingdom · L, K</div></div>
+              <span class="pill-btn" style="color:#ff6b9a;border-color:rgba(255,107,154,0.35);">♥ 2</span>
+            </div>
+          </div>
+        `;
+      } else if (tab === 'food') {
+        content = `
+          <div class="${hl('f18')}" data-feature="f18" style="display:flex;flex-direction:column;gap:6px;border-radius:10px;padding:2px;">
+            <div class="inner-row">
+              <div><div class="title-sm" style="font-size:13px;">EPCOT Festival Must-Eats</div><div class="sub-sm">14 items · by L</div></div>
+              <span style="font-size:12px;font-weight:700;color:#ff6b9a;">Detach</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+              <span class="pill-btn">+ Attach Food List</span>
+            </div>
+          </div>
+        `;
+      } else {
+        content = `
+          <div class="${hl('f19')}" data-feature="f19" style="display:flex;flex-direction:column;gap:6px;border-radius:10px;padding:2px;">
+            <div class="inner-row">
+              <div><div class="title-sm" style="font-size:13px;">Classic Fantasyland Queue</div><div class="sub-sm">9 items · by G</div></div>
+              <span style="font-size:12px;font-weight:700;color:#ff6b9a;">Detach</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+              <span class="pill-btn">+ Attach Exp List</span>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div class="section-header-row">
+            <span class="eyebrow">SAVED LISTS &amp; FAVORITES</span>
+            <span class="sub-sm">Shared with crew</span>
+          </div>
+          <div class="tw-card">
+            <div class="seg-bar">
+              <button class="seg-btn ${tab === 'favs' ? 'active' : ''}" onclick="setListTab('favs')">♥ Favs (2)</button>
+              <button class="seg-btn ${tab === 'food' ? 'active' : ''}" onclick="setListTab('food')">🍴 Food (1)</button>
+              <button class="seg-btn ${tab === 'exp' ? 'active' : ''}" onclick="setListTab('exp')">🎢 Exp (1)</button>
+            </div>
+            ${content}
+          </div>
+        </div>
+      `;
+    }
+
+    function financesAndPrepSections() {
+      const isActive = state.phase === 'active';
+      return `
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <span class="eyebrow" style="padding-left:2px;">FINANCES</span>
+          <div class="grid-3">
+            <div class="bento-tile${hl('f10')}" data-feature="f10">
+              <div style="color:#4cc38a;">${svg('wallet', 15)}</div>
+              <div class="sub-sm" style="font-weight:700;color:#f3eefc;">Budget</div>
+              <div class="bento-val">$4,200</div>
+            </div>
+            <div class="bento-tile${hl('f11')}" data-feature="f11">
+              <div style="color:#4cc38a;">${svg('cash', 15)}</div>
+              <div class="sub-sm" style="font-weight:700;color:#f3eefc;">Expenses</div>
+              <div class="bento-val">${isActive ? '$142' : '$0'}</div>
+            </div>
+            <div class="bento-tile${hl('f12')}" data-feature="f12">
+              <div style="color:#f6c343;">${svg('utensils', 15)}</div>
+              <div class="sub-sm" style="font-weight:700;color:#f3eefc;">Dining Plan</div>
+              <div class="sub-sm" style="color:#c4a3ff;font-weight:700;">Worth it? ›</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <span class="eyebrow" style="padding-left:2px;">PREP &amp; MEMORIES</span>
+          <div class="tw-grouped-list">
+            <div class="grouped-row${hl('f14')}" data-feature="f14">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="icon-sq" style="color:#2dd4bf;">${svg('bag', 15)}</div>
+                <div>
+                  <div class="title-sm">Packing List</div>
+                  <div class="sub-sm">12 of 28 packed</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="mini-bar"><div class="mini-bar-fill" style="width:43%;"></div></div>
+                <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+              </div>
+            </div>
+
+            <div class="grouped-row${hl('f15')}" data-feature="f15">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="icon-sq" style="color:#ff6b9a;">${svg('photo', 15)}</div>
+                <div>
+                  <div class="title-sm">Trip Album</div>
+                  <div class="sub-sm">6 shared photos</div>
+                </div>
+              </div>
+              <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+            </div>
+
+            <div class="grouped-row${hl('f17')}" data-feature="f17">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="icon-sq" style="color:#c4a3ff;">${svg('sparkles', 15)}</div>
+                <div>
+                  <div class="title-sm">Hidden Mickeys · 3 found</div>
+                  <div class="sub-sm">L: 2 · G: 1 · K: 0</div>
+                </div>
+              </div>
+              <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+            </div>
+
+            ${isActive ? `
+              <div class="grouped-row${hl('f13')}" data-feature="f13">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div class="icon-sq" style="color:#60a5fa;">${svg('calendar', 15)}</div>
+                  <div>
+                    <div class="title-sm">Booking Timeline</div>
+                    <div class="sub-sm">All windows passed</div>
+                  </div>
+                </div>
+                <span style="color:#b3a8c9;">${svg('chevronRight', 15)}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="summary-strip${hl('f21')}" data-feature="f21">
+          <div>
+            <div class="eyebrow" style="color:#f6c343;">✨ VACATION MILESTONE</div>
+            <div class="title-sm">${state.feedLogs.length + 2} magical moments logged!</div>
+          </div>
+          <span class="pill-btn" style="color:#f6c343;border-color:rgba(246,195,67,0.4);">Recap ›</span>
+        </div>
+      `;
+    }
+
+    function renderCurrentPhone() {
+      return `
+        <div class="phone-shell">
+          ${phoneHeader(true)}
+          <div class="phone-scroll">
+            <div class="sub-sm${hl('f2')}" data-feature="f2">Lakeshore lodge opening!</div>
+            <div class="tw-card" style="gap:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;" class="${hl('f3')}" data-feature="f3">
+                <div><div class="eyebrow">STAYING AT (1 of 3 stays)</div><div class="title-sm">Coronado Springs Resort</div></div>
+                <span class="pill-btn">Jun 30–Jul 1 ▾</span>
+              </div>
+              <div style="border-top:1px solid #2b2042;padding-top:8px;display:flex;justify-content:space-between;align-items:center;" class="${hl('f4')}" data-feature="f4">
+                <div style="display:flex;gap:6px;align-items:center;"><span class="eyebrow">CREW (3)</span><span class="pill-btn" style="padding:2px 8px;">Manage ›</span></div>
+                <div class="avatar-stack"><span class="avatar" style="background:#7e57c2;">L</span><span class="avatar" style="background:#2f80ed;">G</span><span class="avatar" style="background:#2e9e6b;">K</span></div>
+              </div>
+            </div>
+
+            <span class="eyebrow">⚡ LIVE GLANCE</span>
+            <div class="tw-card${hl('f5')}" data-feature="f5" style="border-style:dashed;background:#211538;">
+              <div class="eyebrow" style="color:#c4a3ff;">${svg('sun', 13)} TODAY · RESORT &amp; FREE TIME</div>
+              <div class="title-sm">No Scheduled Plans Today</div>
+              <div class="sub-sm">Relax at your resort or explore Disney Springs!</div>
+              <div style="display:flex;gap:6px;"><span class="pill-btn">+ Add from Wishlist</span><span class="pill-btn">Open Schedule</span></div>
+            </div>
+
+            <div class="section-header-row"><span class="eyebrow">VACATION TOOLS</span><span class="sub-sm">Core Itinerary</span></div>
+            <div class="grid-2">
+              <div class="bento-tile${hl('f6')}" data-feature="f6"><div style="display:flex;justify-content:space-between;"><span style="color:#c4a3ff;">${svg('list', 15)}</span><span class="noise-badge">0 Items</span></div><div class="title-sm">Planned List</div><div class="sub-sm">Group wishlist &amp; park targets.</div></div>
+              <div class="bento-tile${hl('f7')}" data-feature="f7"><div style="display:flex;justify-content:space-between;"><span style="color:#b28dff;">${svg('calendar', 15)}</span><span class="noise-badge">Timeline</span></div><div class="title-sm">Schedule Builder</div><div class="sub-sm">Day-by-day optimizer &amp; timeline.</div></div>
+              <div class="bento-tile${hl('f8')}" data-feature="f8"><div style="display:flex;justify-content:space-between;"><span style="color:#f6c343;">${svg('ticket', 15)}</span><span class="noise-badge">0 Booked</span></div><div class="title-sm">Reservations</div><div class="sub-sm">Dining, Lightning Lane &amp; bookings.</div></div>
+              <div class="bento-tile${hl('f9')}" data-feature="f9"><div style="display:flex;justify-content:space-between;"><span style="color:#ff6b9a;">${svg('chat', 15)}</span><span class="noise-badge" style="color:#ff6b9a;">3 Logs</span></div><div class="title-sm">Trip Activity</div><div class="sub-sm">Group completions &amp; reactions.</div></div>
+            </div>
+
+            <span class="eyebrow">FINANCES</span>
+            <div class="grid-2">
+              <div class="bento-tile${hl('f10')}" data-feature="f10"><div style="display:flex;justify-content:space-between;"><span style="color:#4cc38a;">${svg('wallet', 14)}</span><span class="noise-badge" style="color:#4cc38a;">Plan</span></div><div class="title-sm">Budget</div><div class="sub-sm">Plan costs...</div></div>
+              <div class="bento-tile${hl('f11')}" data-feature="f11"><div style="display:flex;justify-content:space-between;"><span style="color:#4cc38a;">${svg('cash', 14)}</span><span class="noise-badge">Ledger</span></div><div class="title-sm">Expenses</div><div class="sub-sm">Shared ledger...</div></div>
+            </div>
+            <div class="tw-card${hl('f12')}" data-feature="f12" style="flex-direction:row;justify-content:space-between;align-items:center;">
+              <div><div class="title-sm">Dining Plan</div><div class="sub-sm">Is the dining plan worth it?</div></div>
+              <span class="noise-badge">Compare</span>
+            </div>
+
+            <div class="fold-line">BELOW THE FOLD</div>
+
+            <div class="grid-3">
+              <div class="bento-tile${hl('f13')}" data-feature="f13"><div class="title-sm" style="font-size:12px;">Booking</div><span class="noise-badge">Timeline</span></div>
+              <div class="bento-tile${hl('f14')}" data-feature="f14"><div class="title-sm" style="font-size:12px;">Packing</div><span class="noise-badge">12 of 28</span></div>
+              <div class="bento-tile${hl('f15')}" data-feature="f15"><div class="title-sm" style="font-size:12px;">Album</div><span class="noise-badge">Photos</span></div>
+            </div>
+
+            <div class="section-header-row"><span class="title-sm">Days <span class="sub-sm" style="font-weight:400;">0 of 10 planned</span></span></div>
+            <div class="h-scroll${hl('f16')}" data-feature="f16">
+              <div class="old-day-card"><span class="eyebrow">DAY 1</span><span class="title-sm">Wed, Jun 30</span><span class="pill-btn" style="text-align:center;">+ Choose park</span></div>
+              <div class="old-day-card"><span class="eyebrow">DAY 2</span><span class="title-sm">Thu, Jul 1</span><span class="pill-btn" style="text-align:center;">+ Choose park</span></div>
+              <div class="old-day-card"><span class="eyebrow">DAY 3</span><span class="title-sm">Fri, Jul 2</span><span class="pill-btn" style="text-align:center;">+ Choose park</span></div>
+            </div>
+
+            <div class="tw-card${hl('f17')}" data-feature="f17"><div class="title-sm">Hidden Mickeys (3)</div><div class="sub-sm">L: 2 · G: 1 · K: 0</div></div>
+            <div class="tw-card${hl('f18')}" data-feature="f18"><div class="title-sm">Attached Food Lists (1)</div><div class="sub-sm">EPCOT Festival Must-Eats · + Attach</div></div>
+            <div class="tw-card${hl('f19')}" data-feature="f19"><div class="title-sm">Attached Experience Lists (1)</div><div class="sub-sm">Classic Fantasyland Queue · + Attach</div></div>
+            <div class="tw-card${hl('f20')}" data-feature="f20"><div class="title-sm">Group Favorites (2)</div><div class="sub-sm">Cosmic Rewind ♥ 3 · Flight of Passage ♥ 2</div></div>
+            <div class="summary-strip${hl('f21')}" data-feature="f21"><div class="title-sm">Vacation Milestone · 3 logged</div><span class="sub-sm">Recap ›</span></div>
+          </div>
+          ${phoneTabBar()}
+        </div>
+      `;
+    }
+
+    function renderDaySheetOverlay() {
+      if (state.sheetDayIdx === null) return '';
+      const d = state.days[state.sheetDayIdx];
+      if (!d) return '';
+      const plannedLabel = d.itemsCount === 1 ? '1 planned item' : `${d.itemsCount} planned items`;
+      return `
+        <div class="sheet-backdrop" onclick="closeDaySheet()">
+          <div class="sheet-panel" onclick="event.stopPropagation()">
+            <div class="sheet-header">
+              <div>
+                <div class="title-sm" style="font-size:15px;">${d.dayLabel}, ${d.fullDate} · Day ${d.num}</div>
+                <div class="sub-sm">${plannedLabel}</div>
+              </div>
+              <button class="sheet-close" onclick="closeDaySheet()" aria-label="Close">✕</button>
+            </div>
+
+            <div class="sheet-park-list">
+              ${PARK_CYCLE.map((opt, optIdx) => {
+                const isSelected = d.fullPark === opt.fullPark;
+                return `
+                  <button class="sheet-park-option ${isSelected ? 'selected' : ''}" onclick="selectParkFromSheet(${state.sheetDayIdx}, ${optIdx})">
+                    <span style="display:flex;align-items:center;gap:9px;">
+                      <span style="width:10px;height:10px;border-radius:999px;background:${opt.color};display:inline-block;"></span>
+                      <span style="color:${isSelected ? opt.color : '#f3eefc'};">${opt.fullPark}</span>
+                    </span>
+                    <span style="color:${opt.color};font-weight:800;">${isSelected ? '✓' : ''}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+
+            <button class="sheet-primary-btn" onclick="openDayInSchedule(${state.sheetDayIdx})">
+              Open ${d.dayLabel}, ${d.fullDate} in Schedule Builder ›
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRedesignedPhone() {
+      return `
+        <div class="phone-shell">
+          ${phoneHeader(false)}
+          <div class="phone-scroll">
+            ${cleanHeroCard()}
+            ${itinerarySection()}
+            ${cleanTripActivitySection()}
+            ${savedListsCard()}
+            ${financesAndPrepSections()}
+          </div>
+          ${phoneTabBar()}
+          ${state.toastMsg ? `
+            <div class="phone-toast">
+              <span>${state.toastMsg}</span>
+              <button onclick="dismissToast()" style="border:none;background:transparent;color:#c4a3ff;font-weight:800;cursor:pointer;">✕</button>
+            </div>
+          ` : ''}
+          ${renderDaySheetOverlay()}
+        </div>
+      `;
+    }
+
+    function render() {
+      document.querySelectorAll('.mode-btn').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
+      });
+      document.querySelectorAll('[data-days]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-days') === state.daysStyle);
+      });
+      document.querySelectorAll('[data-phase]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-phase') === state.phase);
+      });
+      ['integrated', 'slim', 'ribbon'].forEach((k) => {
+        document.getElementById('dopt-' + k).classList.toggle('active', state.daysStyle === k);
+      });
+
+      const mount = document.getElementById('stage-mount');
+      if (state.mode === 'compare') {
+        mount.innerHTML = `
+          <div class="compare-stage">
+            <div class="phone-col">
+              <div class="phone-caption">
+                <span>BEFORE: Current Build</span>
+                <span style="color:#ff6b9a;">10+ boxes · Days buried below fold</span>
+              </div>
+              ${renderCurrentPhone()}
+            </div>
+            <div class="phone-col">
+              <div class="phone-caption">
+                <span>AFTER: v5 Redesign (~4 Days Visible)</span>
+                <span style="color:#4cc38a;">Tight Hero + Compact Days + Live Feed</span>
+              </div>
+              ${renderRedesignedPhone()}
+            </div>
+          </div>
+        `;
+      } else {
+        mount.innerHTML = `
+          <div class="focused-stage">
+            <div class="phone-col">
+              <div class="phone-caption"><span>Redesigned Trip Screen (${state.daysStyle === 'integrated' ? 'Integrated 86px Strip' : state.daysStyle === 'slim' ? 'Slim 106px Cards' : 'Pill Ribbon 34px'})</span></div>
+              ${renderRedesignedPhone()}
+            </div>
+            <div class="inspector-card">
+              <h2 style="font-size:17px;font-weight:800;">What Changed in This Polish</h2>
+              <ul style="padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted-foreground,#b8a9d9);">
+                <li><strong>Symmetric 1-line <code>Schedule Builder</code> row:</strong> Replaced the 2-line description with live status (<code>3 scheduled ›</code>), matching <code>Planned List</code> and <code>Reservations</code> and freeing ~18px so <code>Trip Activity</code> reactions sit cleanly above the tab bar in Active mode.</li>
+                <li><strong>Single-tap Day Chip → Bottom Sheet:</strong> Tapping any <code>86px</code> day chip (<code>Wed 6/30</code>, <code>Thu 7/1</code>) opens a forgiving <strong>Choose Park</strong> sheet with a direct <strong>Open in Schedule Builder ›</strong> action at the bottom.</li>
+                <li><strong>3-row Hero + Clean Active Mode:</strong> Keeps the description in the purple header and removes redundant footer rows during active trips.</li>
+              </ul>
+            </div>
+          </div>
+        `;
+      }
+
+      document.getElementById('checklist-grid').innerHTML = FEATURES.map((f) => `
+        <button class="check-btn ${state.highlighted === f.id ? 'selected' : ''}" onclick="locateFeature('${f.id}')">
+          <div style="display:flex;justify-content:space-between;gap:6px;align-items:center;">
+            <span style="font-size:12px;font-weight:800;">${f.num}. ${f.name}</span>
+            <span style="font-size:12px;font-weight:700;color:#4cc38a;">✓</span>
+          </div>
+          <span class="sub-sm">${f.note}</span>
+        </button>
+      `).join('');
+
+      if (state.highlighted) {
+        requestAnimationFrame(() => {
+          document.querySelectorAll(`[data-feature="${state.highlighted}"]`).forEach((el) => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        });
+      }
+    }
+
+    function setMode(m) { state.mode = m; render(); }
+    function setDaysStyle(s) { state.daysStyle = s; render(); }
+    function setPhase(p) { state.phase = p; render(); }
+    function toggleStays() { state.staysExpanded = !state.staysExpanded; render(); }
+    function setListTab(t) { state.listTab = t; render(); }
+    function openDaySheet(idx) { state.sheetDayIdx = idx; state.toastMsg = null; render(); }
+    function closeDaySheet() { state.sheetDayIdx = null; render(); }
+    function dismissToast() { state.toastMsg = null; render(); }
+
+    function selectParkFromSheet(dayIdx, optIdx) {
+      const cur = state.days[dayIdx];
+      const next = PARK_CYCLE[optIdx];
+      if (!cur || !next) return;
+      cur.park = next.park;
+      cur.fullPark = next.fullPark;
+      cur.color = next.color;
+      state.sheetDayIdx = null;
+      state.toastMsg = `${cur.dayLabel}, ${cur.fullDate} set to ${next.fullPark}`;
+      render();
+    }
+
+    function openDayInSchedule(dayIdx) {
+      const d = state.days[dayIdx];
+      state.sheetDayIdx = null;
+      if (d) {
+        state.toastMsg = `Opened ${d.dayLabel}, ${d.fullDate} in Schedule Builder`;
+      }
+      render();
+    }
+
+    function toggleReaction(logId, kind) {
+      const entry = state.feedLogs.find((l) => l.id === logId);
+      if (!entry) return;
+      const r = entry.reactions[kind];
+      r.mine = !r.mine;
+      r.count += r.mine ? 1 : -1;
+      render();
+    }
+
+    function quickAddSampleLog() {
+      const samples = [
+        { actor: 'K', actorColor: '#2e9e6b', headline: 'K rode Seven Dwarfs Mine Train · ★ 5.0', meta: 'with L, G · "Rope drop worked!" · Just now' },
+        { actor: 'L', actorColor: '#7e57c2', headline: 'L logged Cheeseburger Pods · ★ 4.5', meta: 'Satu\'li Canteen · Animal Kingdom · Just now' },
+      ];
+      const pick = samples[state.feedLogs.length % samples.length];
+      state.feedLogs[0] = {
+        id: 'log-' + Date.now(),
+        actor: pick.actor,
+        actorColor: pick.actorColor,
+        headline: pick.headline,
+        meta: pick.meta,
+        reactions: { fire: { count: 0, mine: false }, heart: { count: 1, mine: true }, party: { count: 0, mine: false } },
+        comments: 0,
+      };
+      render();
+    }
+
+    function locateFeature(fid) {
+      state.highlighted = fid;
+      if (fid === 'f3') state.staysExpanded = true;
+      if (fid === 'f18') state.listTab = 'food';
+      if (fid === 'f19') state.listTab = 'exp';
+      if (fid === 'f20') state.listTab = 'favs';
+      render();
+    }
+
+    render();
+  </script>
+</body>
+</html>

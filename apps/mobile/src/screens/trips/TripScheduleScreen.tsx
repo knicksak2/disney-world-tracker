@@ -14,6 +14,10 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  NestableDraggableFlatList,
+  NestableScrollContainer,
+} from 'react-native-draggable-flatlist';
 
 import {
   type CrowdCalendarDayDTO,
@@ -24,6 +28,7 @@ import {
   type PlannedItemDTO,
   type PlannedItemEditInput,
   type ReservationKind,
+  type ScheduleReorderInput,
   type TouringStartMode,
   type TripDTO,
   type TripEditInput,
@@ -514,9 +519,14 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   React.useEffect(() => {
     if (selectedDate === null && tripQuery.data?.startDate) {
       const futureDates = generateDateRange(tripQuery.data.startDate, tripQuery.data.endDate, true);
-      setSelectedDate(futureDates.length > 0 ? futureDates[0]! : tripQuery.data.startDate);
+      const requested = route.params.initialDate;
+      if (requested && futureDates.includes(requested)) {
+        setSelectedDate(requested);
+      } else {
+        setSelectedDate(futureDates.length > 0 ? futureDates[0]! : tripQuery.data.startDate);
+      }
     }
-  }, [selectedDate, tripQuery.data?.startDate, tripQuery.data?.endDate]);
+  }, [selectedDate, tripQuery.data?.startDate, tripQuery.data?.endDate, route.params.initialDate]);
 
   const tripPatchMutation = useMutation<TripDTO, ApiError, TripEditInput>({
     mutationFn: (body) => apiRequest<TripDTO>('PATCH', `/trips/${tripId}`, body),
@@ -618,6 +628,17 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
     },
   });
 
+  const reorderMutation = useMutation<{ items: PlannedItemDTO[] }, ApiError, ScheduleReorderInput>({
+    mutationFn: async (input) =>
+      apiRequest<{ items: PlannedItemDTO[] }>('PATCH', `/trips/${tripId}/schedule/reorder`, input),
+    onSuccess: () => {
+      optimizeMutation.reset();
+      void queryClient.invalidateQueries({
+        queryKey: tripPlannedListKeys.items(tripId),
+      });
+    },
+  });
+
   const items = itemsQuery.data ?? [];
 
   // Requirement 15.5: Trip-wide (any date) set of Experience ids already on
@@ -645,7 +666,29 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
   const scheduledDayItems = dayItems
     .filter((i) => i.plannedTime)
     .sort((a, b) => (a.plannedTime ?? '').localeCompare(b.plannedTime ?? ''));
-  const unscheduledDayItems = dayItems.filter((i) => !i.plannedTime);
+  const unscheduledDayItems = dayItems
+    .filter((i) => !i.plannedTime)
+    .sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
+
+  const handleMoveItem = (
+    list: readonly PlannedItemDTO[],
+    index: number,
+    direction: -1 | 1,
+    appendOthers: readonly PlannedItemDTO[] = [],
+  ) => {
+    if (activeDate === 'No Date') return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= list.length) return;
+    const reordered = [...list];
+    const [moved] = reordered.splice(index, 1);
+    if (!moved) return;
+    reordered.splice(targetIdx, 0, moved);
+    const orderedItemIds = [
+      ...reordered.map((i) => i.id),
+      ...appendOthers.map((i) => i.id),
+    ];
+    reorderMutation.mutate({ date: activeDate, orderedItemIds });
+  };
 
   const activeDayParks = [...new Set(dayItems.map((i) => i.park).filter((p): p is import('@dwt/shared').Park => p != null))];
 
@@ -1235,38 +1278,78 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
           </View>
 
           <View style={styles.actionBar}>
-            <SecondaryButton
-              label={`+ Add to ${formatDatePill(activeDate)}`}
-              icon="add-circle-outline"
-              onPress={handleOpenAddModal}
-            />
-            <PrimaryButton
-              label={optimizeMutation.isPending ? 'Optimizing...' : '✨ Optimize'}
-              onPress={() => {
-                if (activeDate !== 'No Date') {
-                  const effStartMins = isToday
-                    ? Math.max(currentStartMinutes ?? roundedNowMinutes, roundedNowMinutes)
-                    : currentStartMinutes;
-                  const effStartHour = isToday
-                    ? Math.floor(effStartMins / 60)
-                    : currentStartHour;
-                  const effStartMode = isToday && currentStartMode === 'park_open' && isParkAlreadyOpen
-                    ? 'now'
-                    : currentStartMode;
-                  optimizeMutation.mutate({
-                    date: activeDate,
-                    startHour: effStartHour,
-                    endHour: currentEndHour,
-                    startMode: effStartMode,
-                    ...(effStartMins !== undefined ? { startMinutes: effStartMins } : {}),
-                  });
-                }
-              }}
-              disabled={optimizeMutation.isPending}
-            />
+            {(() => {
+              const runScheduleEvaluation = (preserveOrder?: boolean) => {
+                if (activeDate === 'No Date') return;
+                const effStartMins = isToday
+                  ? Math.max(currentStartMinutes ?? roundedNowMinutes, roundedNowMinutes)
+                  : currentStartMinutes;
+                const effStartHour = isToday
+                  ? Math.floor(effStartMins / 60)
+                  : currentStartHour;
+                const effStartMode = isToday && currentStartMode === 'park_open' && isParkAlreadyOpen
+                  ? 'now'
+                  : currentStartMode;
+                optimizeMutation.mutate({
+                  date: activeDate,
+                  startHour: effStartHour,
+                  endHour: currentEndHour,
+                  startMode: effStartMode,
+                  ...(effStartMins !== undefined ? { startMinutes: effStartMins } : {}),
+                  ...(preserveOrder ? { preserveOrder: true } : {}),
+                });
+              };
+
+              if (dayItems.length === 0) {
+                return (
+                  <View style={styles.actionBarRow}>
+                    <View style={styles.actionBarFlexItem}>
+                      <SecondaryButton
+                        label={`+ Add to ${formatDatePill(activeDate)}`}
+                        icon="add-circle-outline"
+                        onPress={handleOpenAddModal}
+                      />
+                    </View>
+                    <View style={styles.actionBarFlexItem}>
+                      <PrimaryButton
+                        label={optimizeMutation.isPending ? 'Optimizing...' : '✨ Optimize'}
+                        onPress={() => runScheduleEvaluation(false)}
+                        disabled={optimizeMutation.isPending}
+                      />
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <>
+                  <SecondaryButton
+                    label={`+ Add to ${formatDatePill(activeDate)}`}
+                    icon="add-circle-outline"
+                    onPress={handleOpenAddModal}
+                  />
+                  <View style={styles.actionBarRow}>
+                    <View style={styles.actionBarFlexItem}>
+                      <SecondaryButton
+                        label={optimizeMutation.isPending ? 'Estimating...' : '⏱️ Estimate Order'}
+                        onPress={() => runScheduleEvaluation(true)}
+                        disabled={optimizeMutation.isPending}
+                      />
+                    </View>
+                    <View style={styles.actionBarFlexItem}>
+                      <PrimaryButton
+                        label={optimizeMutation.isPending ? 'Optimizing...' : '✨ Optimize'}
+                        onPress={() => runScheduleEvaluation(false)}
+                        disabled={optimizeMutation.isPending}
+                      />
+                    </View>
+                  </View>
+                </>
+              );
+            })()}
           </View>
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <NestableScrollContainer contentContainerStyle={styles.content}>
             {/* Park Mismatch Banner (Requirement 24.12) */}
             {isParkMismatch && mismatchTargetPark && (
               <View style={styles.mismatchBanner} testID="day-park-mismatch-banner">
@@ -1305,23 +1388,21 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                     <Text style={styles.parkHoursTimeHoriz}>
                       {parkDetails.openTimeText}
                     </Text>
-                    <View style={styles.parkTagRowHoriz}>
-                      {showEarlyEntry && parkDetails.earlyEntryTimeText && (
-                        <View style={styles.earlyEntryBadge}>
-                          <Text style={styles.earlyEntryBadgeText}>Early Entry {parkDetails.earlyEntryTimeText}</Text>
-                        </View>
-                      )}
-                      {currentUseExtendedEvening && (
-                        <View style={styles.extendedHoursBadge}>
-                          <Text style={styles.extendedHoursBadgeText}>Extended Hours 11 PM</Text>
-                        </View>
-                      )}
-                      {currentHasAfterHoursTicket && (
-                        <View style={styles.afterHoursBadge}>
-                          <Text style={styles.afterHoursBadgeText}>After-Hours Event</Text>
-                        </View>
-                      )}
-                    </View>
+                    {showEarlyEntry && parkDetails.earlyEntryTimeText && (
+                      <View style={styles.earlyEntryBadge}>
+                        <Text style={styles.earlyEntryBadgeText}>Early Entry {parkDetails.earlyEntryTimeText}</Text>
+                      </View>
+                    )}
+                    {currentUseExtendedEvening && (
+                      <View style={styles.extendedHoursBadge}>
+                        <Text style={styles.extendedHoursBadgeText}>Extended Hours 11 PM</Text>
+                      </View>
+                    )}
+                    {currentHasAfterHoursTicket && (
+                      <View style={styles.afterHoursBadge}>
+                        <Text style={styles.afterHoursBadgeText}>After-Hours Event</Text>
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -1352,22 +1433,38 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
               </View>
             )}
 
-            {/* Optimized / Scheduled Itinerary Timeline */}
-            {(optResult || scheduledDayItems.length > 0) ? (
+            {/* Optimized / Manual / Scheduled Itinerary Timeline */}
+            {(optResult || scheduledDayItems.length > 0 || unscheduledDayItems.length > 0) ? (
               <View style={styles.timelineSectionContainer}>
                 <Text style={styles.sectionTitle}>{formatDatePill(activeDate)} Itinerary</Text>
 
-                {/* R8.2 / R8.3: show when the day was last optimized, or a
+                {/* R8.2 / R8.3 / R12.5: show when the day was last optimized or estimated, or a
                     notice that it has not been optimized yet (no fake waits). */}
                 {dayIsOptimized ? (
-                  lastOptimizedAt && (
-                    <Text style={styles.lastOptimizedHint} testID="last-optimized-hint">
-                      Last optimized {formatLastOptimized(lastOptimizedAt)}
-                    </Text>
-                  )
+                  (() => {
+                    const isEstimatedOrder = Boolean(
+                      optResult &&
+                        typeof optimizeMutation.variables === 'object' &&
+                        optimizeMutation.variables?.preserveOrder,
+                    );
+                    if (isEstimatedOrder) {
+                      return (
+                        <Text style={styles.lastOptimizedHint} testID="last-optimized-hint">
+                          {lastOptimizedAt
+                            ? `Estimated for your order · ${formatLastOptimized(lastOptimizedAt)}`
+                            : 'Estimated for your order'}
+                        </Text>
+                      );
+                    }
+                    return lastOptimizedAt ? (
+                      <Text style={styles.lastOptimizedHint} testID="last-optimized-hint">
+                        Last optimized {formatLastOptimized(lastOptimizedAt)}
+                      </Text>
+                    ) : null;
+                  })()
                 ) : (
                   <Text style={styles.notOptimizedNotice} testID="not-optimized-notice">
-                    Not optimized yet — tap Optimize Day to build your plan and see predicted waits.
+                    Manual schedule — tap Optimize anytime to calculate predicted waits and walk times.
                   </Text>
                 )}
 
@@ -1404,25 +1501,62 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   {/* Thin Vertical Track Line */}
                   <View style={styles.verticalTrackLine} />
 
-                  {(optResult ? optResult.items.map((optItem) => {
-                    const matched = items.find((d) => d.id === optItem.plannedItemId);
-                    return matched ? { item: matched, suggestedArrival: optItem.suggestedArrival, predictedWaitMinutes: optItem.predictedWaitMinutes, travelFromPrev: optItem.travelFromPrev } : null;
-                  }).filter(Boolean) : scheduledDayItems.map((item) => {
-                    // R8.2/R8.3: render the persisted optimization result; never
-                    // fabricate placeholder wait/travel. Null means "not optimized".
-                    return {
-                      item,
-                      suggestedArrival: item.plannedTime,
-                      predictedWaitMinutes: item.predictedWaitMinutes,
-                      travelFromPrev: item.travelFromPrev,
+                  {(() => {
+                    type TimelineEntry = {
+                      item: PlannedItemDTO;
+                      suggestedArrival: string | null;
+                      predictedWaitMinutes: number | null;
+                      travelFromPrev: { readonly kind: 'walk' | 'park_hop'; readonly minutes: number } | null;
                     };
-                  })).map((entry, idx) => {
-                    if (!entry) return null;
-                    const { item, suggestedArrival, predictedWaitMinutes, travelFromPrev } = entry;
-                    const expInfo = item.experienceId ? catalogMap.get(item.experienceId) : undefined;
-                    const isParkHop = travelFromPrev?.kind === 'park_hop';
-                    const travelMins = travelFromPrev?.minutes ?? 0;
-                    const timeText = formatTimeDisplay(suggestedArrival);
+                    const timelineEntries: TimelineEntry[] = optResult
+                      ? optResult.items
+                          .map((optItem): TimelineEntry | null => {
+                            const matched = items.find((d) => d.id === optItem.plannedItemId);
+                            return matched
+                              ? {
+                                  item: matched,
+                                  suggestedArrival: optItem.suggestedArrival,
+                                  predictedWaitMinutes: optItem.predictedWaitMinutes,
+                                  travelFromPrev: optItem.travelFromPrev,
+                                }
+                              : null;
+                          })
+                          .filter((x): x is TimelineEntry => x !== null)
+                      : [
+                          ...scheduledDayItems.map((item): TimelineEntry => ({
+                            item,
+                            suggestedArrival: item.plannedTime,
+                            predictedWaitMinutes: item.predictedWaitMinutes,
+                            travelFromPrev: item.travelFromPrev,
+                          })),
+                          ...unscheduledDayItems.map((item): TimelineEntry => ({
+                            item,
+                            suggestedArrival: null,
+                            predictedWaitMinutes: null,
+                            travelFromPrev: null,
+                          })),
+                        ];
+
+                    return (
+                      <NestableDraggableFlatList
+                        data={timelineEntries}
+                        keyExtractor={(entry) => entry.item.id}
+                        scrollEnabled={false}
+                        extraData={t.scheme}
+                        onDragEnd={({ data }) => {
+                          if (activeDate === 'No Date') return;
+                          reorderMutation.mutate({
+                            date: activeDate,
+                            orderedItemIds: data.map((e) => e.item.id),
+                          });
+                        }}
+                        renderItem={({ item: entry, getIndex, drag, isActive }) => {
+                          const idx = getIndex() ?? 0;
+                          const { item, suggestedArrival, predictedWaitMinutes, travelFromPrev } = entry;
+                          const expInfo = item.experienceId ? catalogMap.get(item.experienceId) : undefined;
+                          const isParkHop = travelFromPrev?.kind === 'park_hop';
+                          const travelMins = travelFromPrev?.minutes ?? 0;
+                          const timeText = formatTimeDisplay(suggestedArrival);
 
                     return (
                       <View key={item.id} style={styles.timelineStepContainer}>
@@ -1470,18 +1604,26 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                             <View style={styles.speechBubbleWrapper}>
                               <View style={styles.speechBubbleTriangle} />
                               <View style={styles.speechPillPointer}>
-                                <Text style={styles.speechPillText}>{timeText}</Text>
+                                <Text style={styles.speechPillText}>
+                                  {suggestedArrival ? timeText : `Step ${idx + 1}`}
+                                </Text>
                               </View>
                             </View>
                           </View>
                         )}
 
                         <View style={styles.timelineCardRow}>
-                          {/* Vertical Time Digits for Item 2+ */}
+                          {/* Vertical Time Digits or Step Number for Item 2+ */}
                           {idx > 0 && (
                             <View style={styles.verticalTimeBox}>
-                              <Text style={styles.vertTimeDigits}>{timeText.replace(/\s*(AM|PM)/i, '')}</Text>
-                              <Text style={styles.vertTimeAmpm}>{timeText.includes('PM') ? 'PM' : 'AM'}</Text>
+                              {suggestedArrival ? (
+                                <>
+                                  <Text style={styles.vertTimeDigits}>{timeText.replace(/\s*(AM|PM)/i, '')}</Text>
+                                  <Text style={styles.vertTimeAmpm}>{timeText.includes('PM') ? 'PM' : 'AM'}</Text>
+                                </>
+                              ) : (
+                                <Text style={styles.vertTimeDigits}>#{idx + 1}</Text>
+                              )}
                             </View>
                           )}
 
@@ -1610,46 +1752,62 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                                     </Text>
                                   </View>
                                 )}
+                                {!suggestedArrival && (
+                                  <>
+                                    <Pressable
+                                      style={styles.timelineUnassignPill}
+                                      onPress={() => openEditModal(item)}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Edit Settings for ${item.customTitle || item.experienceName || 'Planned Item'}`}
+                                    >
+                                      <Text style={styles.timelineUnassignText}>Edit Settings</Text>
+                                    </Pressable>
+                                    <Pressable
+                                      style={styles.timelineUnassignPill}
+                                      onPress={() => handleQuickEdit(item, { plannedDate: undefined, plannedTime: undefined })}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Unassign ${item.customTitle || item.experienceName || 'Planned Item'}`}
+                                    >
+                                      <Text style={styles.timelineUnassignText}>Unassign</Text>
+                                    </Pressable>
+                                  </>
+                                )}
                               </View>
                             </View>
+                            {timelineEntries.length > 1 && (
+                              <Pressable
+                                onPressIn={drag}
+                                onLongPress={drag}
+                                disabled={reorderMutation.isPending}
+                                style={[styles.dragHandleBtn, isActive && styles.dragHandleActive]}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Reorder ${item.customTitle || item.experienceName || 'Planned Item'}`}
+                                accessibilityActions={[
+                                  { name: 'moveUp', label: 'Move up' },
+                                  { name: 'moveDown', label: 'Move down' },
+                                ]}
+                                onAccessibilityAction={(event) => {
+                                  const plainItems = timelineEntries.map((e) => e.item);
+                                  if (event.nativeEvent.actionName === 'moveUp') {
+                                    handleMoveItem(plainItems, idx, -1);
+                                  } else if (event.nativeEvent.actionName === 'moveDown') {
+                                    handleMoveItem(plainItems, idx, 1);
+                                  }
+                                }}
+                                testID={`drag-handle-${item.id}`}
+                              >
+                                <Ionicons name="reorder-three-outline" size={20} color={t.color.textSecondary} />
+                              </Pressable>
+                            )}
                           </Pressable>
                         </View>
                       </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : unscheduledDayItems.length > 0 ? (
-              <View style={styles.resultContainer}>
-                <Text style={styles.sectionTitle}>{formatDatePill(activeDate)} Planned Items</Text>
-                {unscheduledDayItems.map((item) => (
-                  <Card key={item.id} style={styles.itemCard}>
-                    <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
-                    {item.customTitle && item.experienceName ? (
-                      <Text style={styles.itemMeta} testID={`unscheduled-item-location-${item.id}`}>
-                        📍 {item.experienceName}
-                      </Text>
-                    ) : null}
-                    <View style={styles.itemProps}>
-                      {item.reservationKind != null && (
-                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
-                      )}
-                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
-                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
-                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
-                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
-                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
-                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
-                    </View>
-                    <View style={styles.itemActions}>
-                      <SecondaryButton
-                        label="Unassign"
-                        onPress={() => handleQuickEdit(item, { plannedDate: undefined, plannedTime: undefined })}
+                          );
+                        }}
                       />
-                      <SecondaryButton label="Edit Settings" onPress={() => openEditModal(item)} />
-                    </View>
-                  </Card>
-                ))}
+                    );
+                  })()}
+                </View>
               </View>
             ) : (
               <View style={styles.emptyDayContainer}>
@@ -1658,41 +1816,6 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                   title={`No plans for ${formatDatePill(activeDate)} yet`}
                   body="Tap + Add to build your schedule."
                 />
-              </View>
-            )}
-
-            {/* Unscheduled Items for Day */}
-            {!optResult && scheduledDayItems.length > 0 && unscheduledDayItems.length > 0 && (
-              <View style={styles.resultContainer}>
-                <Text style={styles.sectionTitle}>Unscheduled for {formatDatePill(activeDate)}</Text>
-                {unscheduledDayItems.map((item) => (
-                  <Card key={item.id} style={styles.itemCard}>
-                    <Text style={styles.itemName}>{item.customTitle || item.experienceName || 'Planned Item'}</Text>
-                    {item.customTitle && item.experienceName ? (
-                      <Text style={styles.itemMeta} testID={`unscheduled-day-item-location-${item.id}`}>
-                        📍 {item.experienceName}
-                      </Text>
-                    ) : null}
-                    <View style={styles.itemProps}>
-                      {item.reservationKind != null && (
-                        <Badge label={reservationBadgeLabel(item.reservationKind)} color={t.color.accentDark} />
-                      )}
-                      {item.isFixed && item.reservationKind == null && <Badge label="Fixed" color={t.color.primaryFg} />}
-                      {item.isLightningLane && <Badge label="⚡ LL" color={t.color.accent} />}
-                      {item.useSingleRider && <Badge label="👤 Single Rider" color={t.color.primaryLight} />}
-                      {item.itemType === 'break' && item.reservationKind == null && <Badge label={`☕ Break (${item.durationMinutes || 45}m)`} color={t.color.success} />}
-                      {item.mealPeriod && <Badge label={`🍽️ ${item.mealPeriod}`} color={pal.mealBadge} />}
-                      <Badge label={`Priority: ${item.priority ?? 2}`} color={t.color.textSecondary} />
-                    </View>
-                    <View style={styles.itemActions}>
-                      <SecondaryButton
-                        label="Unassign"
-                        onPress={() => handleQuickEdit(item, { plannedDate: undefined, plannedTime: undefined })}
-                      />
-                      <SecondaryButton label="Edit Settings" onPress={() => openEditModal(item)} />
-                    </View>
-                  </Card>
-                ))}
               </View>
             )}
 
@@ -1729,7 +1852,7 @@ export default function TripScheduleScreen({ navigation, route }: Props): JSX.El
                 </Card>
               ))
             )}
-          </ScrollView>
+          </NestableScrollContainer>
 
           <Modal visible={showAddModal} animationType="slide" onRequestClose={handleCloseAddModal}>
             <ScreenContainer>
@@ -3002,13 +3125,19 @@ const useStyles = makeStyles((t) => ({
     opacity: 0.9,
   },
   actionBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
     paddingHorizontal: t.spacing.lg,
     paddingVertical: t.spacing.md,
     backgroundColor: t.color.surface,
     gap: t.spacing.sm,
+  },
+  actionBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+  },
+  actionBarFlexItem: {
+    flex: 1,
   },
   touringStartBadgeContainer: {
     paddingHorizontal: t.spacing.lg,
@@ -3171,12 +3300,16 @@ const useStyles = makeStyles((t) => ({
     marginBottom: t.spacing.md,
   },
   parkHoursCardHorizontal: {
-    width: 190,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: t.spacing.xs,
     backgroundColor: t.color.surface,
     ...t.outline.card,
-    borderRadius: 16,
-    padding: 12,
-    borderLeftWidth: 5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderLeftWidth: 4,
     borderLeftColor: SCHEDULE[t.scheme].parkStripeGreen,
     elevation: 2,
     shadowColor: '#000',
@@ -3546,6 +3679,68 @@ const useStyles = makeStyles((t) => ({
   itemActions: {
     flexDirection: 'row',
     gap: t.spacing.sm,
+  },
+  manualItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.xs,
+    marginBottom: t.spacing.xs,
+  },
+  manualStepBadge: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.sm,
+    paddingHorizontal: t.spacing.xs,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  manualItemName: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  reorderRow: {
+    flexDirection: 'row',
+    gap: t.spacing.xs,
+    marginTop: t.spacing.xs,
+  },
+  reorderBtn: {
+    paddingHorizontal: t.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: t.radius.sm,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  reorderBtnDisabled: {
+    opacity: 0.4,
+  },
+  reorderBtnText: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  timelineUnassignPill: {
+    paddingHorizontal: t.spacing.xs,
+    paddingVertical: 2,
+    borderRadius: t.radius.sm,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    backgroundColor: t.color.surfaceAlt,
+  },
+  timelineUnassignText: {
+    ...t.typography.meta,
+    fontSize: 11,
+    color: t.color.textSecondary,
+  },
+  dragHandleBtn: {
+    alignSelf: 'center',
+    padding: t.spacing.xs,
+    borderRadius: t.radius.sm,
+  },
+  dragHandleActive: {
+    backgroundColor: t.color.surfaceAlt,
   },
   emptyDayContainer: {
     paddingVertical: t.spacing.lg,

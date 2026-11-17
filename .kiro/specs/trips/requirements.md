@@ -487,6 +487,18 @@ _(Extended by `unified-experience-logging`: feed `rode_with` entries carry `tagI
 3. THE Trips tab stack SHALL register `TripDiningPlan` (param `tripId`) and the standalone `DiningPlanCalculator` screen (no params), and THE Trips_List_Screen SHALL offer an entry to the standalone calculator whether or not the User has Trips (dining-plan-calculator Requirement 20.1); the standalone calculator SHALL store nothing on the server.
 4. THE Trip's Dining Plan settings and meal entries (`trip_dining_plan_scenarios`, `trip_dining_plan_entries`) SHALL be deleted with the Trip through `ON DELETE CASCADE` (dining-plan-calculator Requirement 17.2), so the Trip deletions of Requirements 3 and 5 need no extra step, and the Dining Plan SHALL read the Trip's party and Stays (Requirement 26) without writing to them.
 
+### Requirement 28: Trip Detail Hub Unified Layout and Inline Activity Preview
+
+**User Story:** As a Trip_Member, I want the Trip detail hub organized into predictable, low-clutter groups with an inline Days strip, live Trip Activity preview, and segmented Saved Lists, so that I can find itinerary tools, log completions, and check crew activity without hunting through a long stack of separate cards.
+
+#### Acceptance Criteria
+
+1. THE Trip_Detail_View SHALL display `description` (when non-empty) inside the header subtitle area rather than as a separate card above the hero, and SHALL keep the Hero card (`trip-detail-hero`) composed of the `Where you're staying` summary (`TripStaysCard`), the `Crew` row (`trip-detail-section-members`), and—while `Trip_Status` is `upcoming`—a countdown and `Booking dates ›` shortcut opening `TripBookingTimeline`.
+2. THE Trip_Detail_View SHALL combine the `Days` horizontal strip (`TripDayParksSection`, Requirement 24.8) with `Schedule Builder`, `Planned List`, and `Reservations` into a single unified `Itinerary & Days` card; tapping any Day chip SHALL open the Day_Park picker sheet offering all seven `PARKS`, "No park yet", and a primary button to open that specific date in `TripSchedule`.
+3. THE Trip_Detail_View SHALL render an inline `Trip Activity` preview section showing the total log count, a `+ Log` shortcut opening `TripFeed` directly into completion logging, an `All ›` link (`trip-detail-section-activity`) opening `TripFeed`, and the latest `TripFeedItemDTO` with interactive reaction toggles (`POST/DELETE /trips/:id/feed/:targetType/:itemId/reactions`) and comment count.
+4. THE Trip_Detail_View SHALL group `GroupFavoritesSection`, `AttachedFoodListsSection`, and `AttachedExperienceListsSection` into a single segmented `Saved Lists & Favorites` card with `Favs`, `Food`, and `Exp` tabs, preserving all attach, detach, and detail-navigation behaviors.
+5. THE Trip_Detail_View SHALL present `Budget`, `Expenses`, and `Dining Plan` in a 3-up `Finances` row (`trip-detail-tier-finances`), and SHALL present `Packing list` (with packed progress bar), `Trip Album`, `Booking timeline`, and `Hidden Mickeys` (when enabled) in a grouped `Prep & Memories` card (`trip-detail-tier-prep`), while preserving `HUB_SECTIONS` byte-for-byte.
+
 ## Out of Scope (Future Work)
 
 - **Real-time group chat**: Live, real-time messaging within a Trip is deferred. Trip_Comments in Requirement 13 are not real-time chat.

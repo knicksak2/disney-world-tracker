@@ -77,6 +77,38 @@ export function formatDayDate(dateStr: string): string {
   return dateStr;
 }
 
+/** Compact date label for the integrated day chip (e.g. "Thu 10/1"). */
+export function formatCompactDayDate(dateStr: string): string {
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (y && m && d) {
+      const date = new Date(Date.UTC(y, m - 1, d));
+      const weekday = date.toLocaleDateString('en-US', {
+        timeZone: 'UTC',
+        weekday: 'short',
+      });
+      return `${weekday} ${m}/${d}`;
+    }
+  } catch {
+    // fallback
+  }
+  return dateStr;
+}
+
+const SHORT_PARK_LABEL: Record<Park, string> = {
+  'Magic Kingdom': 'MK',
+  EPCOT: 'EPCOT',
+  'Hollywood Studios': 'HS',
+  'Animal Kingdom': 'AK',
+  'Typhoon Lagoon': 'TL',
+  'Blizzard Beach': 'BB',
+  'Disney Springs': 'DS',
+};
+
+export function shortParkLabel(park: Park): string {
+  return SHORT_PARK_LABEL[park] ?? park;
+}
+
 // ---------------------------------------------------------------------------
 // Mutation hook
 // ---------------------------------------------------------------------------
@@ -148,6 +180,7 @@ export interface DayParkPickerSheetProps {
   readonly currentPark: Park | null;
   readonly onSelect: (park: Park | null) => void;
   readonly onClose: () => void;
+  readonly onOpenScheduleDate?: ((date: string) => void) | undefined;
 }
 
 export function DayParkPickerSheet({
@@ -156,6 +189,7 @@ export function DayParkPickerSheet({
   currentPark,
   onSelect,
   onClose,
+  onOpenScheduleDate,
 }: DayParkPickerSheetProps): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
@@ -230,6 +264,27 @@ export function DayParkPickerSheet({
               )}
             </Pressable>
           </ScrollView>
+
+          {onOpenScheduleDate ? (
+            <View style={styles.sheetFooter}>
+              <Pressable
+                style={styles.sheetPrimaryButton}
+                onPress={() => {
+                  const targetDate = date;
+                  onClose();
+                  onOpenScheduleDate(targetDate);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${formatDayDate(date)} in Schedule Builder`}
+                testID="day-park-open-schedule"
+              >
+                <Ionicons name="calendar-outline" size={16} color={t.color.textOnPrimary} />
+                <Text style={styles.sheetPrimaryButtonText}>
+                  Open {formatDayDate(date)} in Schedule Builder ›
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -245,6 +300,9 @@ export interface TripDayParksSectionProps {
   readonly startDate: string;
   readonly endDate: string;
   readonly dayTouringHours?: Record<string, DayTouringHoursDTO> | undefined;
+  readonly embedded?: boolean | undefined;
+  readonly plannedCountsByDate?: Record<string, number> | undefined;
+  readonly onOpenScheduleDate?: ((date: string) => void) | undefined;
 }
 
 export default function TripDayParksSection({
@@ -252,6 +310,9 @@ export default function TripDayParksSection({
   startDate: propStartDate,
   endDate: propEndDate,
   dayTouringHours: propDayTouringHours,
+  embedded = false,
+  plannedCountsByDate,
+  onOpenScheduleDate,
 }: TripDayParksSectionProps): JSX.Element | null {
   const styles = useStyles();
   const t = useAppTheme();
@@ -322,17 +383,22 @@ export default function TripDayParksSection({
   }
 
   return (
-    <View style={styles.container} testID="trip-day-parks-section">
-      <View style={styles.sectionHeader}>
-        <View style={styles.titleRow}>
-          <Text style={styles.sectionTitle}>Days</Text>
-          {dates.length > 0 && (
-            <Text style={styles.sectionSubtitle}>
-              {assignedCount} of {dates.length} planned
-            </Text>
-          )}
+    <View
+      style={embedded ? styles.embeddedContainer : styles.container}
+      testID="trip-day-parks-section"
+    >
+      {!embedded ? (
+        <View style={styles.sectionHeader}>
+          <View style={styles.titleRow}>
+            <Text style={styles.sectionTitle}>Days</Text>
+            {dates.length > 0 && (
+              <Text style={styles.sectionSubtitle}>
+                {assignedCount} of {dates.length} planned
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {errorMessage && (
         <View style={[styles.errorContainer, { backgroundColor: pal.errorBg }]}>
@@ -345,14 +411,55 @@ export default function TripDayParksSection({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={embedded ? styles.embeddedScrollContent : styles.scrollContent}
       >
         {dates.map((date) => {
           const startingPark = dayTouringHours?.[date]?.startingPark;
           const park = isKnownPark(startingPark) ? startingPark : null;
-          const dateLabel = formatDayDate(date);
+          const dateLabel = embedded ? formatCompactDayDate(date) : formatDayDate(date);
           const accentColor = park ? t.parkAccent[park] : undefined;
-          const a11yLabel = `${dateLabel} (${date}), ${park ?? 'Choose park'}`;
+          const a11yLabel = `${formatDayDate(date)} (${date}), ${park ?? 'Choose park'}`;
+          const isToday = date === today;
+          const plannedCount = plannedCountsByDate?.[date] ?? 0;
+
+          if (embedded) {
+            return (
+              <Pressable
+                key={date}
+                style={[
+                  styles.compactDayChip,
+                  isToday && {
+                    borderColor: t.color.primaryFg,
+                    backgroundColor: withAlpha(t.color.primary, 0.12),
+                  },
+                  park && accentColor && !isToday
+                    ? { borderColor: withAlpha(accentColor, 0.35) }
+                    : null,
+                ]}
+                onPress={() => handleOpenPicker(date)}
+                accessibilityRole="button"
+                accessibilityLabel={a11yLabel}
+                testID={`day-park-row-${date}`}
+              >
+                <Text style={styles.compactDateText} numberOfLines={1}>
+                  {dateLabel}
+                </Text>
+                <Text
+                  style={[
+                    styles.compactParkText,
+                    { color: park && accentColor ? accentColor : t.color.textSecondary },
+                  ]}
+                  testID={`day-park-label-${date}`}
+                  numberOfLines={1}
+                >
+                  {park ? `${shortParkLabel(park)} ▾` : '+ Park ▾'}
+                </Text>
+                <Text style={styles.compactMetaText} numberOfLines={1}>
+                  {isToday ? 'Today' : plannedCount > 0 ? `${plannedCount} planned` : 'Open'}
+                </Text>
+              </Pressable>
+            );
+          }
 
           return (
             <Pressable
@@ -433,6 +540,7 @@ export default function TripDayParksSection({
         currentPark={currentParkForActiveDate}
         onSelect={handleSelectPark}
         onClose={() => setActiveDate(null)}
+        onOpenScheduleDate={onOpenScheduleDate}
       />
     </View>
   );
@@ -445,6 +553,60 @@ export default function TripDayParksSection({
 const useStyles = makeStyles((t) => ({
   container: {
     marginVertical: 12,
+  },
+  embeddedContainer: {
+    paddingVertical: t.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
+  },
+  embeddedScrollContent: {
+    paddingHorizontal: t.spacing.sm + 2,
+    gap: 8,
+  },
+  compactDayChip: {
+    width: 88,
+    minHeight: 74,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: t.radius.md,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    justifyContent: 'space-between',
+  },
+  compactDateText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  compactParkText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  compactMetaText: {
+    fontSize: 11,
+    color: t.color.textSecondary,
+  },
+  sheetFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+  },
+  sheetPrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: t.color.primary,
+    borderRadius: t.radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  sheetPrimaryButtonText: {
+    color: t.color.textOnPrimary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   sectionHeader: {
     flexDirection: 'row',

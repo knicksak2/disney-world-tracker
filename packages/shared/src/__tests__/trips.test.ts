@@ -31,6 +31,7 @@ import {
   dayParkSetSchema,
   dayParkParamsSchema,
   tripOptimizationInputSchema,
+  scheduleReorderInputSchema,
   tripEditSchema,
   tripLogEntryCreateSchema,
   rodeWithConfirmSchema,
@@ -578,5 +579,55 @@ describe('rodeWithConfirmSchema', () => {
 
   it('rejects invalid resolution string', () => {
     expect(rodeWithConfirmSchema.safeParse({ resolution: 'invalid_mode' }).success).toBe(false);
+  });
+});
+
+describe('scheduleReorderInputSchema (day-planning-optimization R12.2)', () => {
+  it('accepts a valid date and non-empty UUID list', () => {
+    const parsed = scheduleReorderInputSchema.safeParse({
+      date: '2026-12-15',
+      orderedItemIds: [
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts preserveOrder on tripOptimizationInputSchema', () => {
+    const parsed = tripOptimizationInputSchema.safeParse({
+      date: '2026-12-15',
+      preserveOrder: true,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.preserveOrder).toBe(true);
+  });
+
+  it('rejects empty orderedItemIds, invalid dates, non-UUIDs, and extra fields', () => {
+    expect(
+      scheduleReorderInputSchema.safeParse({
+        date: '2026-12-15',
+        orderedItemIds: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      scheduleReorderInputSchema.safeParse({
+        date: '12/15/2026',
+        orderedItemIds: ['11111111-1111-4111-8111-111111111111'],
+      }).success,
+    ).toBe(false);
+    expect(
+      scheduleReorderInputSchema.safeParse({
+        date: '2026-12-15',
+        orderedItemIds: ['not-a-uuid'],
+      }).success,
+    ).toBe(false);
+    expect(
+      scheduleReorderInputSchema.safeParse({
+        date: '2026-12-15',
+        orderedItemIds: ['11111111-1111-4111-8111-111111111111'],
+        extra: true,
+      }).success,
+    ).toBe(false);
   });
 });

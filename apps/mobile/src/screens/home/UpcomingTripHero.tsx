@@ -14,9 +14,10 @@ import React, { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import type { BookingTimelineDTO, TripDTO, TripMemberDTO, TripStatus } from '@dwt/shared';
+import { isAvatarPresetId, type BookingTimelineDTO, type TripDTO, type TripMemberDTO, type TripStatus } from '@dwt/shared';
 
 import { apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import {
   navigateToBookingTimeline,
   navigateToTripDetail,
@@ -188,12 +189,17 @@ export default function UpcomingTripHero({
                       backgroundColor: avatarColors[index % avatarColors.length],
                       marginLeft: index === 0 ? 0 : -8,
                       zIndex: 10 - index,
+                      overflow: 'hidden',
                     },
                   ]}
                 >
-                  <Text style={styles.crewAvatarText}>
-                    {member.displayName?.charAt(0).toUpperCase() || '?'}
-                  </Text>
+                  {isAvatarPresetId(member.avatarPreset) ? (
+                    renderAvatarPreset(member.avatarPreset, 21)
+                  ) : (
+                    <Text style={styles.crewAvatarText}>
+                      {member.displayName?.charAt(0).toUpperCase() || '?'}
+                    </Text>
+                  )}
                 </View>
               ))}
               {totalPartyCount > 4 ? (

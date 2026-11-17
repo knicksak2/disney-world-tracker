@@ -25,6 +25,59 @@ import TripScheduleScreen, {
 import { tripDetailKeys } from '../tripDetailQueryKeys';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 
+jest.mock('react-native-draggable-flatlist', () => {
+  const ReactActual = jest.requireActual('react');
+  const { Pressable: PressableActual, View: ViewActual } = jest.requireActual('react-native');
+  function NestableScrollContainerMock({ children }: { children: React.ReactNode }) {
+    return ReactActual.createElement(ViewActual, null, children);
+  }
+  function NestableDraggableFlatListMock({
+    data,
+    renderItem,
+    onDragEnd,
+    keyExtractor,
+  }: {
+    readonly data: readonly unknown[];
+    readonly renderItem: (params: {
+      item: unknown;
+      getIndex: () => number | undefined;
+      drag: () => void;
+      isActive: boolean;
+    }) => React.ReactNode;
+    readonly onDragEnd?: (params: { data: unknown[] }) => void;
+    readonly keyExtractor: (item: unknown, index: number) => string;
+  }) {
+    return ReactActual.createElement(
+      ViewActual,
+      null,
+      data.map((item, index) =>
+        ReactActual.createElement(
+          ViewActual,
+          { key: keyExtractor(item, index) },
+          renderItem({ item, getIndex: () => index, drag: () => {}, isActive: false }),
+          ReactActual.createElement(
+            PressableActual,
+            {
+              testID: `test-simulate-drag-to-end-${keyExtractor(item, index)}`,
+              onPress: () => {
+                const reordered = data.filter((_, i) => i !== index);
+                reordered.push(item);
+                onDragEnd?.({ data: reordered });
+              },
+            },
+            null,
+          ),
+        ),
+      ),
+    );
+  }
+  return {
+    __esModule: true,
+    NestableScrollContainer: NestableScrollContainerMock,
+    NestableDraggableFlatList: NestableDraggableFlatListMock,
+  };
+});
+
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {
@@ -2886,8 +2939,8 @@ describe('TripScheduleScreen', () => {
         expect(screen.getByText('Midday Nap')).toBeTruthy();
       });
 
-      expect(screen.getByTestId('unscheduled-item-location-item-unscheduled-break')).toBeTruthy();
-      expect(screen.getByText("📍 Disney's Polynesian Village Resort")).toBeTruthy();
+      expect(screen.getByTestId('item-location-item-unscheduled-break')).toBeTruthy();
+      expect(screen.getByText("Disney's Polynesian Village Resort")).toBeTruthy();
     });
   });
 
@@ -4667,6 +4720,195 @@ describe('TripScheduleScreen — dark mode', () => {
 
       await screen.findByText('Space Mountain');
       expect(screen.queryByTestId('day-park-mismatch-banner')).toBeNull();
+    });
+  });
+
+  describe('Manual Schedule Ordering (R12.3, R12.4)', () => {
+    it('renders unscheduled day items in sortOrder and dispatches PATCH /schedule/reorder on move-down', async () => {
+      let currentItems = [
+        {
+          ...PLANNED_ITEM,
+          id: 'item-a',
+          experienceName: 'Space Mountain',
+          plannedDate: '2026-10-01',
+          plannedTime: null,
+          sortOrder: 1,
+        },
+        {
+          ...PLANNED_ITEM,
+          id: 'item-b',
+          experienceName: 'Haunted Mansion',
+          plannedDate: '2026-10-01',
+          plannedTime: null,
+          sortOrder: 0,
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-02',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return currentItems as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/schedule/reorder`) {
+          currentItems = [
+            { ...currentItems[0]!, sortOrder: 0 },
+            { ...currentItems[1]!, sortOrder: 1 },
+          ];
+          return { items: currentItems } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await screen.findByText('Haunted Mansion');
+      expect(screen.getByTestId('drag-handle-item-b')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('test-simulate-drag-to-end-item-b'));
+
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalledWith(
+          'PATCH',
+          `/trips/${TRIP_ID}/schedule/reorder`,
+          {
+            date: '2026-10-01',
+            orderedItemIds: ['item-a', 'item-b'],
+          },
+        );
+      });
+    });
+
+    it('allows reordering from an optimized timeline via drag-and-drop and clears stale optimization state', async () => {
+      let currentItems: any[] = [
+        {
+          ...PLANNED_ITEM,
+          id: 'item-1',
+          experienceName: 'Space Mountain',
+          plannedDate: '2026-10-01',
+          plannedTime: '2026-10-01T13:00:00.000Z',
+          predictedWaitMinutes: 25,
+          optimizedAt: '2026-10-01T10:00:00.000Z',
+          sortOrder: 0,
+        },
+        {
+          ...PLANNED_ITEM,
+          id: 'item-2',
+          experienceName: 'Peter Pan',
+          plannedDate: '2026-10-01',
+          plannedTime: '2026-10-01T14:00:00.000Z',
+          predictedWaitMinutes: 40,
+          optimizedAt: '2026-10-01T10:00:00.000Z',
+          sortOrder: 1,
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-02',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return currentItems as any;
+        }
+        if (method === 'PATCH' && path === `/trips/${TRIP_ID}/schedule/reorder`) {
+          currentItems = [
+            { ...currentItems[1]!, plannedTime: null, predictedWaitMinutes: null, optimizedAt: null, sortOrder: 0 },
+            { ...currentItems[0]!, plannedTime: null, predictedWaitMinutes: null, optimizedAt: null, sortOrder: 1 },
+          ];
+          return { items: currentItems } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await screen.findByTestId('last-optimized-hint');
+      fireEvent.press(screen.getByTestId('test-simulate-drag-to-end-item-1'));
+
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalledWith(
+          'PATCH',
+          `/trips/${TRIP_ID}/schedule/reorder`,
+          {
+            date: '2026-10-01',
+            orderedItemIds: ['item-2', 'item-1'],
+          },
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('last-optimized-hint')).toBeNull();
+      });
+    });
+
+    it('dispatches POST /schedule/optimize with preserveOrder: true when Estimate Order is pressed', async () => {
+      const items = [
+        {
+          ...PLANNED_ITEM,
+          id: 'item-1',
+          experienceName: 'Space Mountain',
+          plannedDate: '2026-10-01',
+          plannedTime: null,
+          sortOrder: 0,
+        },
+      ];
+
+      apiRequestMock.mockImplementation(async (method, path) => {
+        if (method === 'GET' && path === `/trips/${TRIP_ID}`) {
+          return {
+            id: TRIP_ID,
+            startDate: '2026-10-01',
+            endDate: '2026-10-02',
+          } as any;
+        }
+        if (method === 'GET' && path === `/trips/${TRIP_ID}/planned-items`) {
+          return items as any;
+        }
+        if (method === 'POST' && path === `/trips/${TRIP_ID}/schedule/optimize`) {
+          return {
+            items: [
+              {
+                plannedItemId: 'item-1',
+                suggestedArrival: '2026-10-01T13:00:00.000Z',
+                predictedWaitMinutes: 15,
+                travelFromPrev: null,
+              },
+            ],
+            totalWaitMinutes: 15,
+            totalWalkMinutes: 0,
+            unfittedItemIds: [],
+            warnings: [],
+          } as any;
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      });
+
+      renderScreen();
+
+      await screen.findByText('⏱️ Estimate Order');
+      fireEvent.press(screen.getByText('⏱️ Estimate Order'));
+
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalledWith(
+          'POST',
+          `/trips/${TRIP_ID}/schedule/optimize`,
+          expect.objectContaining({
+            date: '2026-10-01',
+            preserveOrder: true,
+          }),
+        );
+      });
+      const hint = await screen.findByTestId('last-optimized-hint');
+      expect(hint.props.children).toContain('Estimated for your order');
     });
   });
 });

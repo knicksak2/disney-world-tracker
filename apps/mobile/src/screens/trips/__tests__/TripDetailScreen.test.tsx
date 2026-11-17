@@ -833,7 +833,8 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     await screen.findByTestId('trip-detail-hub');
 
     expect(await screen.findByTestId('trip-detail-group-favorites')).toBeTruthy();
-    expect(screen.getByText('Group Favorites')).toBeTruthy();
+    expect(screen.getByText('SAVED LISTS & FAVORITES')).toBeTruthy();
+    expect(screen.getByTestId('trip-detail-saved-tab-favs')).toBeTruthy();
 
     // Must be textually distinct from any "Crowd Favorite" superlative
     expect(screen.queryByText(/Crowd Favorite/i)).toBeNull();
@@ -917,13 +918,13 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       expect(flat(rootContainer()).backgroundColor).toBe(darkTheme.color.background);
       // (b) primary text — a tool tile title.
       expect(flat(screen.getByText('Planned List')).color).toBe(darkTheme.color.textPrimary);
-      // (c) converted literals: the Trip Activity tile badge (rule 3 red T)
-      // and the Ledger badge (`primary` as text → `primaryFg`, rule 1a).
-      expect(flat(screen.getByText(/ Logs$/)).color).toBe(HUB_TILE.dark.activityText);
-      expect(flat(screen.getByText('Ledger')).color).toBe(darkTheme.color.primaryFg);
+      // (c) converted literals: the Trip Activity + Log pill (rule 3 red T)
+      // and the Dining Plan "Worth it? ›" link (`primaryFg`).
+      expect(flat(screen.getByText('+ Log')).color).toBe(HUB_TILE.dark.activityText);
+      expect(flat(screen.getByText('Worth it? ›')).color).toBe(darkTheme.color.primaryFg);
       // Tool tile icons follow dark (B5-1: the rendered tiles, not HUB_SECTIONS).
       const tileIcon = (id: string): unknown =>
-        within(screen.getByTestId(id)).UNSAFE_getByType(Ionicons).props.color;
+        within(screen.getByTestId(id)).UNSAFE_getAllByType(Ionicons)[0]?.props.color;
       expect(tileIcon('trip-detail-section-planned')).toBe(darkTheme.color.primaryFg);
       expect(tileIcon('trip-detail-section-schedule')).toBe(darkTheme.color.primaryLight);
       expect(tileIcon('trip-detail-section-reservations')).toBe(DARK_TONAL.amber.fg);
@@ -976,10 +977,10 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       renderDetail(makeNavigation());
 
       await screen.findByTestId('trip-detail-hub');
-      expect(flat(screen.getByText(/ Logs$/)).color).toBe('#e8505b');
-      expect(flat(screen.getByText('Ledger')).color).toBe('#5b2a86');
+      expect(flat(screen.getByText('+ Log')).color).toBe('#e8505b');
+      expect(flat(screen.getByText('Worth it? ›')).color).toBe('#5b2a86');
       const tileIcon = (id: string): unknown =>
-        within(screen.getByTestId(id)).UNSAFE_getByType(Ionicons).props.color;
+        within(screen.getByTestId(id)).UNSAFE_getAllByType(Ionicons)[0]?.props.color;
       expect(tileIcon('trip-detail-section-planned')).toBe('#5b2a86');
       expect(tileIcon('trip-detail-section-schedule')).toBe('#7e57c2');
       expect(tileIcon('trip-detail-section-reservations')).toBe('#b27a00');
@@ -1030,7 +1031,7 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       renderDetail(makeNavigation());
       await screen.findByTestId('trip-detail-hub');
 
-      expect(await screen.findByText('3 of 7')).toBeTruthy();
+      expect(await screen.findByText('3 of 7 packed')).toBeTruthy();
     });
 
     test('empty packing list renders "0 of 0"', async () => {
@@ -1045,7 +1046,7 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       renderDetail(makeNavigation());
       await screen.findByTestId('trip-detail-hub');
 
-      expect(await screen.findByText('0 of 0')).toBeTruthy();
+      expect(await screen.findByText('0 of 0 packed')).toBeTruthy();
     });
 
     test('rejected query renders no count text on packing tile', async () => {
@@ -1066,109 +1067,70 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     });
   });
 
-  describe('Budget hub tile & 4 + 2 + 3 tiered layout (Task 18.5, R22.14)', () => {
-    test('renders 4 + 2 + 3 tiered hub layout with Core 2x2, 2-up Finances row (Budget + Expenses), and 3-up Prep & Memories strip', async () => {
+  describe('Unified hub layout: Itinerary & Days, 3-up Finances, Prep & Memories (R28)', () => {
+    test('renders unified Itinerary & Days card, 3-up Finances Bento row, and grouped Prep & Memories card', async () => {
       apiRequestMock.mockResolvedValue(TRIP);
       const navigation = makeNavigation();
 
       renderDetail(navigation);
       await screen.findByTestId('trip-detail-hub');
 
-      // 1. Tile presence and labels
+      // 1. Budget tile presence and labels
       const budgetTile = screen.getByTestId('trip-detail-section-budget');
       expect(budgetTile).toBeTruthy();
       expect(screen.getByLabelText('Budget')).toBeTruthy();
       expect(within(budgetTile).getByText('Budget')).toBeTruthy();
-      expect(
-        within(budgetTile).getByText('Plan costs & save per week.'),
-      ).toBeTruthy();
-      expect(within(budgetTile).getByText('Plan')).toBeTruthy();
+      expect(within(budgetTile).getByText('Plan costs')).toBeTruthy();
 
       // 2. Icon is wallet-outline with emerald finance accent
       const icon = within(budgetTile).UNSAFE_getByType(Ionicons);
       expect(icon.props.name).toBe('wallet-outline');
       expect(icon.props.color).toBe(HUB_TILE.light.financeIcon);
 
-      // 3. Tiered structure inside trip-detail-grid:
-      //    - 2 Core Itinerary rows (2x2 = 4 tiles)
-      //    - Tier 2 FINANCES row (2 tiles: Budget, Expenses)
-      //    - Tier 3 PREP & MEMORIES row (3 tiles: Booking timeline, Packing list, Trip Album)
-      interface TestElementProps {
-        testID?: string;
-        children?: React.ReactNode;
-      }
-      const grid = screen.getByTestId('trip-detail-grid');
-      const gridBlocks = React.Children.toArray(
-        grid.props.children,
-      ) as React.ReactElement<TestElementProps>[];
-      expect(gridBlocks).toHaveLength(4);
+      // 3. Unified Itinerary & Days card rows:
+      expect(screen.getByText('ITINERARY & DAYS')).toBeTruthy();
+      expect(screen.getByTestId('trip-detail-section-schedule')).toBeTruthy();
+      expect(screen.getByTestId('trip-detail-section-planned')).toBeTruthy();
+      expect(screen.getByTestId('trip-detail-section-reservations')).toBeTruthy();
 
-      const row0Children = React.Children.toArray(
-        gridBlocks[0]!.props.children,
-      ) as React.ReactElement<TestElementProps>[];
-      expect(row0Children.map((c) => c.props.testID)).toEqual([
-        'trip-detail-section-planned',
-        'trip-detail-section-schedule',
-      ]);
-
-      const row1Children = React.Children.toArray(
-        gridBlocks[1]!.props.children,
-      ) as React.ReactElement<TestElementProps>[];
-      expect(row1Children.map((c) => c.props.testID)).toEqual([
-        'trip-detail-section-reservations',
-        'trip-detail-section-activity',
-      ]);
-
+      // 4. 3-up Finances Bento row (Budget, Expenses, Dining Plan)
       expect(screen.getByText('FINANCES')).toBeTruthy();
       const financesRow = screen.getByTestId('trip-detail-finances-row');
-      const financeChildren = React.Children.toArray(
-        financesRow.props.children,
-      ) as React.ReactElement<TestElementProps>[];
-      expect(financeChildren.map((c) => c.props.testID)).toEqual([
-        'trip-detail-section-budget',
-        'trip-detail-section-expenses',
-      ]);
+      expect(within(financesRow).getByTestId('trip-detail-section-budget')).toBeTruthy();
+      expect(within(financesRow).getByTestId('trip-detail-section-expenses')).toBeTruthy();
+      expect(within(financesRow).getByTestId('trip-detail-section-diningPlan')).toBeTruthy();
 
+      // 5. Grouped Prep & Memories card (Packing, Album, Booking timeline)
       expect(screen.getByText('PREP & MEMORIES')).toBeTruthy();
-      const prepRow = screen.getByTestId('trip-detail-prep-row');
-      const prepChildren = React.Children.toArray(
-        prepRow.props.children,
-      ) as React.ReactElement<TestElementProps>[];
-      expect(prepChildren.map((c) => c.props.testID)).toEqual([
-        'trip-detail-section-booking',
-        'trip-detail-section-packing',
-        'trip-detail-section-album',
-      ]);
+      const prepCard = screen.getByTestId('trip-detail-prep-row');
+      expect(within(prepCard).getByTestId('trip-detail-section-packing')).toBeTruthy();
+      expect(within(prepCard).getByTestId('trip-detail-section-album')).toBeTruthy();
+      expect(within(prepCard).getByTestId('trip-detail-section-booking')).toBeTruthy();
 
-      // 4. Expenses tile renders alongside Budget with its labels and navigates to TripExpenses
+      // 6. Expenses tile renders alongside Budget and navigates to TripExpenses
       const expensesTile = screen.getByTestId('trip-detail-section-expenses');
-      expect(expensesTile).toBeTruthy();
       expect(within(expensesTile).getByText('Expenses')).toBeTruthy();
-      expect(
-        within(expensesTile).getByText('Shared ledger & balances.'),
-      ).toBeTruthy();
       expect(within(expensesTile).getByText('Ledger')).toBeTruthy();
       fireEvent.press(expensesTile);
       expect(navigation.navigate).toHaveBeenCalledWith('TripExpenses', {
         tripId: TRIP_ID,
       });
 
-      // 5. Trip Album tile in Prep & Memories strip shows Photos badge and navigates to TripAlbum
+      // 7. Trip Album row navigates to TripAlbum
       const albumTile = screen.getByTestId('trip-detail-section-album');
       expect(within(albumTile).getByText('Trip Album')).toBeTruthy();
-      expect(within(albumTile).getByText('Photos')).toBeTruthy();
       fireEvent.press(albumTile);
       expect(navigation.navigate).toHaveBeenCalledWith('TripAlbum', {
         tripId: TRIP_ID,
       });
 
-      // 6. Press Budget tile navigates to TripBudget with tripId
+      // 8. Press Budget tile navigates to TripBudget with tripId
       fireEvent.press(budgetTile);
       expect(navigation.navigate).toHaveBeenCalledWith('TripBudget', {
         tripId: TRIP_ID,
       });
 
-      // 7. Pinned contract list: HUB_SECTIONS has budget right after expenses
+      // 9. Pinned contract list: HUB_SECTIONS has budget right after expenses
       const expensesIndex = HUB_SECTIONS.findIndex((s) => s.key === 'expenses');
       expect(expensesIndex).toBeGreaterThanOrEqual(0);
       expect(HUB_SECTIONS[expensesIndex + 1]).toEqual(
@@ -1180,32 +1142,25 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
           icon: 'wallet-outline',
         }),
       );
-      // dining-plan-calculator R1.1: the Dining Plan section follows Budget.
       expect(HUB_SECTIONS).toHaveLength(11);
     });
 
     // Feature: dining-plan-calculator, task 11.3 (Requirements 1.1, 19.1, 22.2).
-    test('the Dining Plan tile sits in the Finances tier below Budget + Expenses and opens TripDiningPlan', async () => {
+    test('the Dining Plan tile sits in the Finances tier and opens TripDiningPlan', async () => {
       apiRequestMock.mockResolvedValue(TRIP);
       const navigation = makeNavigation();
 
       renderDetail(navigation);
       await screen.findByTestId('trip-detail-hub');
 
-      const diningRow = screen.getByTestId('trip-detail-finances-dining-row');
-      const tiles = React.Children.toArray(diningRow.props.children) as React.ReactElement<{ testID?: string }>[];
-      expect(tiles.map((c) => c.props.testID)).toEqual(['trip-detail-section-diningPlan']);
-
       const tile = screen.getByTestId('trip-detail-section-diningPlan');
       expect(tile.props.accessibilityLabel).toBe('Dining Plan: is the dining plan worth it? Compare plans for your meals.');
       expect(within(tile).getByText('Dining Plan')).toBeTruthy();
-      expect(within(tile).getByText('Compare')).toBeTruthy();
-      expect(within(tile).getByText('Is the dining plan worth it? Compare plans for your meals.')).toBeTruthy();
+      expect(within(tile).getByText('Worth it? ›')).toBeTruthy();
       const icon = within(tile).UNSAFE_getByType(Ionicons);
       expect(icon.props.name).toBe('restaurant-outline');
       expect(icon.props.color).toBe(HUB_TILE.light.financeIcon);
 
-      // The tile is inside the FINANCES tier, not the Prep strip.
       expect(within(screen.getByTestId('trip-detail-tier-finances')).getByTestId('trip-detail-section-diningPlan')).toBeTruthy();
 
       fireEvent.press(tile);
@@ -1220,6 +1175,173 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
         icon: 'restaurant-outline',
         color: '#5b2a86',
       });
+    });
+
+    test('R28: upcoming trip shows countdown and Booking dates shortcut inside Hero card', async () => {
+      const futureStart = addCalendarDays(getTodayWDW(), 30);
+      const futureEnd = addCalendarDays(getTodayWDW(), 34);
+      apiRequestMock.mockResolvedValue({
+        ...TRIP,
+        status: 'upcoming',
+        startDate: futureStart,
+        endDate: futureEnd,
+      });
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      const bookingLink = screen.getByTestId('trip-detail-hero-booking-link');
+      expect(within(bookingLink).getByText(/30 days to go/)).toBeTruthy();
+      expect(within(bookingLink).getByText('Booking dates ›')).toBeTruthy();
+      expect(screen.queryByTestId('trip-detail-glance-card')).toBeNull();
+
+      fireEvent.press(bookingLink);
+      expect(navigation.navigate).toHaveBeenCalledWith('TripBookingTimeline', {
+        tripId: TRIP_ID,
+      });
+    });
+
+    test('R28: inline Trip Activity preview renders latest item, + Log opens TripFeed with openLog, and reaction pill posts reaction', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/feed`) {
+          return [
+            {
+              id: 'feed-1',
+              tripId: TRIP_ID,
+              type: 'completion_logged',
+              actorId: 'u1',
+              actorDisplayName: 'Alex',
+              actorAvatarPreset: null,
+              createdAt: '2024-05-02T12:00:00Z',
+              metadata: {
+                experienceName: 'Cosmic Rewind',
+                rating: 5,
+                note: 'Amazing coaster!',
+              },
+              reactions: [{ reaction: 'like', count: 2, mine: false }],
+              comments: [{ id: 'c1', body: 'Nice!', authorId: 'u2', authorDisplayName: 'Sam', createdAt: '2024-05-02T12:01:00Z', mine: false }],
+            },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/feed/feed_item/feed-1/reactions`) {
+          return {};
+        }
+        return [];
+      });
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      expect(await screen.findByTestId('trip-detail-activity-card')).toBeTruthy();
+      expect(screen.getByText('Alex rode Cosmic Rewind · ★ 5.0')).toBeTruthy();
+      expect(screen.getByText('💬 1 comment')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('trip-detail-activity-log-btn'));
+      expect(navigation.navigate).toHaveBeenCalledWith('TripFeed', {
+        tripId: TRIP_ID,
+        openLog: true,
+      });
+
+      fireEvent.press(screen.getByTestId('trip-detail-feed-rx-like'));
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalledWith(
+          'POST',
+          `/trips/${TRIP_ID}/feed/feed_item/feed-1/reactions`,
+          { reaction: 'like' },
+        );
+      });
+    });
+
+    test('R28: tapping a Day chip opens sheet with Open in Schedule Builder forwarding initialDate', async () => {
+      const futureStart = addCalendarDays(getTodayWDW(), 5);
+      const futureEnd = addCalendarDays(getTodayWDW(), 7);
+      apiRequestMock.mockResolvedValue({
+        ...TRIP,
+        status: 'upcoming',
+        startDate: futureStart,
+        endDate: futureEnd,
+      });
+      const navigation = makeNavigation();
+
+      renderDetail(navigation);
+      await screen.findByTestId('trip-detail-hub');
+
+      fireEvent.press(await screen.findByTestId(`day-park-row-${futureStart}`));
+      const openBtn = await screen.findByTestId('day-park-open-schedule');
+      fireEvent.press(openBtn);
+
+      expect(navigation.navigate).toHaveBeenCalledWith('TripSchedule', {
+        tripId: TRIP_ID,
+        initialDate: futureStart,
+      });
+    });
+
+    test('CREW count and avatars include both members and guests', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/members`) {
+          return [
+            { userId: 'u1', displayName: 'Knicks', avatarPreset: null, role: 'organizer' },
+            { userId: 'u2', displayName: 'Test', avatarPreset: null, role: 'member' },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/guests`) {
+          return [
+            { id: 'g1', tripId: TRIP_ID, sponsorMemberId: 'u2', name: 'Kid', createdAt: '2026-01-01T00:00:00Z' },
+          ];
+        }
+        return [];
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      const crewRow = await screen.findByTestId('trip-detail-section-members');
+      expect(await within(crewRow).findByText('CREW (3)')).toBeTruthy();
+      expect(within(crewRow).getAllByText('K')).toHaveLength(2);
+      expect(within(crewRow).getAllByText('T')).toHaveLength(1);
+    });
+
+    test('CREW and Trip Activity preview render avatarPreset SVG when set, falling back to initials for null/guests', async () => {
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return TRIP;
+        if (path === `/trips/${TRIP_ID}/members`) {
+          return [
+            { userId: 'u1', displayName: 'Knicks', avatarPreset: 'castle', role: 'organizer' },
+            { userId: 'u2', displayName: 'Test', avatarPreset: null, role: 'member' },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/feed`) {
+          return [
+            {
+              id: 'feed-1',
+              tripId: TRIP_ID,
+              type: 'completion_logged',
+              actorId: 'u1',
+              actorDisplayName: 'Knicks',
+              actorAvatarPreset: 'castle',
+              createdAt: '2024-05-02T12:00:00Z',
+              metadata: { experienceName: 'Space Mountain', rating: 5 },
+              reactions: [],
+              comments: [],
+            },
+          ];
+        }
+        return [];
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      const crewRow = await screen.findByTestId('trip-detail-section-members');
+      expect(within(crewRow).queryByText('K')).toBeNull();
+      expect(within(crewRow).getByText('T')).toBeTruthy();
+
+      const activityCard = await screen.findByTestId('trip-detail-activity-card');
+      expect(within(activityCard).queryByText('K')).toBeNull();
     });
   });
 
@@ -1272,6 +1394,7 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
       renderDetail(navigation);
 
       expect(await screen.findByTestId('trip-detail-mickeys-section')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('trip-mickeys-toggle'));
       expect(await screen.findByTestId('trip-mickeys-content')).toBeTruthy();
       expect(screen.getByText('Donald')).toBeTruthy();
       expect(screen.getByText('Look at the gear pattern')).toBeTruthy();

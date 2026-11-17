@@ -1172,6 +1172,12 @@ Added by the `trip-budget` spec. For every Trip_Role, `can(role, 'view_budget')`
 
 **Validates: Requirements 20.10, 20.11, 20.12**
 
+### Property 33: Trip Detail Hub Unified Layout preserves all 21 hub capabilities and routes
+
+*For any* `TripDTO` rendered in `TripDetailScreen`: (a) `HUB_SECTIONS` remains byte-for-byte identical to its canonical 11-entry contract; (b) `upcoming` trips show the countdown + `Booking dates` shortcut inside the Hero card while `active` trips show the `UP NEXT TODAY` live glance card; (c) the unified `Itinerary & Days` card filters out past dates (`d < today`) in `TripDayParksSection`, lets the member assign/clear any of the 7 `PARKS`, and forwards `initialDate` to `TripSchedule` from the Day sheet; (d) `Trip Activity` renders the latest feed entry with interactive `Trip_Reaction` toggles and a `+ Log` shortcut forwarding `openLog: true` to `TripFeed`; and (e) `Saved Lists & Favorites` switches cleanly between `Favs`, `Food`, and `Exp` tabs while preserving attach/detach and detail navigation.
+
+**Validates: Requirements 28.1, 28.2, 28.3, 28.4, 28.5**
+
 ## Error Handling
 
 All errors are thrown as `AppError(code, message, { field? })` with `code` drawn from the closed

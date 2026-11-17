@@ -403,8 +403,58 @@ export function ExperiencePicker({
       style={[styles.container, fillContainer && styles.containerFill, style]}
       testID={`${testIDPrefix}-container`}
     >
+      <View style={styles.searchWrap}>
+        <Ionicons
+          name="search"
+          size={18}
+          color={t.color.textSecondary}
+        />
+        <TextInput
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder={
+            activeTab === 'dining'
+              ? 'Search restaurants, cuisines, or locations...'
+              : activeTab === 'shows'
+              ? 'Search shows or locations...'
+              : activeTab === 'breaks'
+              ? 'Search break locations...'
+              : activeTab === 'myLists'
+              ? 'Search your attached lists...'
+              : activeTab === 'favorites'
+              ? 'Search your favorites...'
+              : 'Search experiences, lands, or facets...'
+          }
+          placeholderTextColor={t.color.textSecondary}
+          keyboardAppearance={t.scheme}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!busy}
+          style={styles.searchInput}
+          accessibilityLabel="Search experiences, lands, or facets"
+          testID={`${testIDPrefix}-search`}
+        />
+        {searchInput.length > 0 ? (
+          <Ionicons
+            name="close-circle"
+            size={18}
+            color={t.color.textSecondary}
+            onPress={clear}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            testID={`${testIDPrefix}-search-clear`}
+          />
+        ) : null}
+      </View>
+
       {showTabs && (
-        <View style={styles.tabBar} testID={`${testIDPrefix}-tabs`}>
+        <View style={styles.tabBarUnderline} testID={`${testIDPrefix}-tabs`}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterBarScroll}
+            keyboardShouldPersistTaps="handled"
+          >
           <Pressable
             style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
             onPress={() => handleTabChange('all')}
@@ -472,6 +522,7 @@ export function ExperiencePicker({
               <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>❤️ Favorites</Text>
             </Pressable>
           )}
+          </ScrollView>
         </View>
       )}
 
@@ -871,50 +922,6 @@ export function ExperiencePicker({
         </View>
       )}
 
-      <View style={styles.searchWrap}>
-        <Ionicons
-          name="search"
-          size={18}
-          color={t.color.textSecondary}
-        />
-        <TextInput
-          value={searchInput}
-          onChangeText={setSearchInput}
-          placeholder={
-            activeTab === 'dining'
-              ? 'Search restaurants, cuisines, or locations...'
-              : activeTab === 'shows'
-              ? 'Search shows or locations...'
-              : activeTab === 'breaks'
-              ? 'Search break locations...'
-              : activeTab === 'myLists'
-              ? 'Search your attached lists...'
-              : activeTab === 'favorites'
-              ? 'Search your favorites...'
-              : 'Search experiences, lands, or facets...'
-          }
-          placeholderTextColor={t.color.textSecondary}
-          keyboardAppearance={t.scheme}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!busy}
-          style={styles.searchInput}
-          accessibilityLabel="Search experiences, lands, or facets"
-          testID={`${testIDPrefix}-search`}
-        />
-        {searchInput.length > 0 ? (
-          <Ionicons
-            name="close-circle"
-            size={18}
-            color={t.color.textSecondary}
-            onPress={clear}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-            testID={`${testIDPrefix}-search-clear`}
-          />
-        ) : null}
-      </View>
-
       <View style={[styles.resultsArea, fillContainer && styles.resultsAreaFill]}>
         {!searchActive ? (
           <Text style={styles.hint} testID={`${testIDPrefix}-search-hint`}>
@@ -976,6 +983,7 @@ export function ExperiencePicker({
                       addedCount={count}
                       alreadyPlanned={alreadyPlannedSet.has(item.id)}
                       isStaged={isStagedOnBreaks}
+                      showParkBadge={selectedPark === 'all'}
                       busy={busy}
                       onPress={() => {
                         if (activeTab === 'breaks') {
@@ -1011,6 +1019,7 @@ function ExperienceResultRow({
   addedCount = 0,
   alreadyPlanned = false,
   isStaged = false,
+  showParkBadge = true,
   busy,
   onPress,
   testID,
@@ -1028,6 +1037,7 @@ function ExperienceResultRow({
    */
   readonly alreadyPlanned?: boolean;
   readonly isStaged?: boolean;
+  readonly showParkBadge?: boolean;
   readonly busy: boolean;
   readonly onPress: () => void;
   readonly testID: string;
@@ -1072,7 +1082,7 @@ function ExperienceResultRow({
                 : { label: experience.category || 'Experience', tint: t.color.textSecondary };
             return <Badge label={visual.label} color={visual.tint} />;
           })()}
-          {experience.park !== null ? (
+          {showParkBadge && experience.park !== null ? (
             <Badge label={experience.park} color={t.color.primaryFg} />
           ) : null}
           {addedCount > 0 ? (
@@ -1120,27 +1130,21 @@ const useStyles = makeStyles((t) => ({
   // wrapped second row (needed once a 6th tab like "My Lists" no longer
   // fits) reads as an ordinary chip row, not an orphaned control sitting in
   // dead space inside a shared bar background.
-  tabBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.xs,
+  tabBarUnderline: {
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
     marginBottom: theme.spacing.sm,
   },
   tabBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: t.color.surfaceAlt,
-    borderWidth: 1,
-    borderColor: t.color.border,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   tabBtnActive: {
-    backgroundColor: t.color.primary,
-    borderColor: t.color.primary,
+    borderBottomColor: t.color.primaryFg,
   },
   tabText: {
     ...theme.typography.meta,
@@ -1148,7 +1152,7 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '500',
   },
   tabTextActive: {
-    color: t.color.textOnPrimary,
+    color: t.color.primaryFg,
     fontWeight: '700',
   },
   filterBarWrap: {

@@ -25,7 +25,7 @@
 // `TripsStackParamList`). Styling follows the shared "Magical / Whimsical"
 // theme, mirroring `TripsListScreen`.
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -36,21 +36,28 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   completedExperienceIdsFromFeed,
+  isAvatarPresetId,
+  TRIP_REACTION_VALUES,
+  tripReactionValueSchema,
+  type GroupFavoritesResponseDTO,
   type PackingListDTO,
   type Park,
   type PlannedItemDTO,
   type TripDTO,
   type TripFeedItemDTO,
+  type TripFeedTargetType,
   type TripGuestDTO,
   type TripMemberDTO,
+  type TripReactionValue,
   type TripStatus,
 } from '@dwt/shared';
 
 import { type ApiError, apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
 import { theme, withAlpha, type AppTheme, type ColorScheme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
@@ -75,7 +82,7 @@ import AttachedFoodListsSection from './AttachedFoodListsSection';
 import AttachedExperienceListsSection from './AttachedExperienceListsSection';
 import GroupFavoritesSection from './GroupFavoritesSection';
 import TripMickeySection from './TripMickeySection';
-import TripDayParksSection, { isKnownPark } from './TripDayParksSection';
+import TripDayParksSection, { enumerateTripDates, isKnownPark } from './TripDayParksSection';
 import { getTodayWDW } from './wdwDate';
 import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
 import { TripStaysCard } from './TripStaysCard';
@@ -294,6 +301,73 @@ function formatDisplayTime(timeStr?: string | null): string {
   return timeStr;
 }
 
+function daysUntilStart(startDate: string, today: string): number | null {
+  const startMs = new Date(`${startDate}T00:00:00Z`).getTime();
+  const todayMs = new Date(`${today}T00:00:00Z`).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(todayMs)) return null;
+  const diff = Math.round((startMs - todayMs) / (24 * 3600 * 1000));
+  return diff > 0 ? diff : null;
+}
+
+const FEED_TARGET_TYPE: TripFeedTargetType = 'feed_item';
+
+const REACTION_EMOJI: Record<TripReactionValue, { readonly emoji: string; readonly label: string }> = {
+  like: { emoji: '👍', label: 'Like' },
+  love: { emoji: '❤️', label: 'Love' },
+  celebrate: { emoji: '🎉', label: 'Celebrate' },
+  wow: { emoji: '🤩', label: 'Wow' },
+};
+
+function applyFeedReaction(
+  reactions: TripFeedItemDTO['reactions'],
+  reaction: TripReactionValue,
+  remove: boolean,
+): TripFeedItemDTO['reactions'] {
+  const existing = reactions.find((r) => r.reaction === reaction);
+  if (remove) {
+    return reactions
+      .map((r) =>
+        r.reaction === reaction
+          ? { ...r, count: Math.max(0, r.count - 1), mine: false }
+          : r,
+      )
+      .filter((r) => r.count > 0);
+  }
+  if (existing) {
+    return reactions.map((r) =>
+      r.reaction === reaction
+        ? { ...r, count: r.mine ? r.count : r.count + 1, mine: true }
+        : r,
+    );
+  }
+  return [...reactions, { reaction, count: 1, mine: true }];
+}
+
+function formatFeedPreviewHeadline(item: TripFeedItemDTO): { title: string; meta: string } {
+  const actor = item.actorDisplayName || 'Crew';
+  const metaObj = item.metadata ?? {};
+  const expName = typeof metaObj['experienceName'] === 'string' ? metaObj['experienceName'] : null;
+  const rating = typeof metaObj['rating'] === 'number' ? metaObj['rating'] : null;
+  const note = typeof metaObj['note'] === 'string' ? metaObj['note'] : null;
+  const caption = typeof metaObj['caption'] === 'string' ? metaObj['caption'] : null;
+
+  if (item.type === 'completion_logged' && expName) {
+    const ratingSuffix = rating !== null ? ` · ★ ${rating.toFixed(1)}` : '';
+    const detail = note ? `"${note}"` : 'Logged completion';
+    return { title: `${actor} rode ${expName}${ratingSuffix}`, meta: detail };
+  }
+  if (item.type === 'member_post') {
+    return {
+      title: `${actor} posted an update`,
+      meta: caption ?? 'Shared a trip moment',
+    };
+  }
+  return {
+    title: `${actor} · ${item.type.replace(/_/g, ' ')}`,
+    meta: expName ?? caption ?? 'Tap All to view activity',
+  };
+}
+
 function getVacationDayText(startDate: string, endDate: string): string | null {
   const today = new Date().toISOString().slice(0, 10);
   if (today < startDate) {
@@ -407,6 +481,9 @@ export default function TripDetailScreen({
   navigation,
   route,
 }: Props): JSX.Element {
+  const queryClient = useQueryClient();
+  const [savedListTab, setSavedListTab] = useState<'favs' | 'food' | 'exp'>('favs');
+
   const styles = useStyles();
   const t = useAppTheme();
   const crewAvatar = usePalette(CREW_AVATAR);
@@ -474,12 +551,66 @@ export default function TripDetailScreen({
     retry: false,
   });
 
+  // Subscribe to cached Group Favorites count (populated by GroupFavoritesSection)
+  const groupFavsQuery = useQuery<GroupFavoritesResponseDTO, ApiError>({
+    queryKey: ['trips', tripId, 'favorites', 'shared'],
+    queryFn: () =>
+      apiRequest<GroupFavoritesResponseDTO>('GET', `/trips/${tripId}/favorites/shared`),
+    enabled: false,
+  });
+
+  const feedReactionMutation = useMutation<
+    void,
+    ApiError,
+    { itemId: string; reaction: TripReactionValue; remove: boolean },
+    { previous: readonly TripFeedItemDTO[] | undefined }
+  >({
+    mutationFn: async ({ itemId, reaction, remove }) => {
+      const parsed = tripReactionValueSchema.safeParse(reaction);
+      if (!parsed.success) return;
+      const base = `/trips/${tripId}/feed/${FEED_TARGET_TYPE}/${itemId}/reactions`;
+      if (remove) {
+        await apiRequest<void>('DELETE', `${base}/${parsed.data}`);
+      } else {
+        await apiRequest<void>('POST', base, { reaction: parsed.data });
+      }
+    },
+    onMutate: async ({ itemId, reaction, remove }) => {
+      const feedKey = tripFeedKeys.feed(tripId);
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previous = queryClient.getQueryData<readonly TripFeedItemDTO[]>(feedKey);
+      queryClient.setQueryData<readonly TripFeedItemDTO[]>(feedKey, (prev) =>
+        prev?.map((it) =>
+          it.id === itemId
+            ? { ...it, reactions: applyFeedReaction(it.reactions, reaction, remove) }
+            : it,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(tripFeedKeys.feed(tripId), context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: tripFeedKeys.feed(tripId) });
+    },
+  });
+
   const packingBadgeText = useMemo(() => {
     if (packingQuery.isError || !packingQuery.data) {
       return null;
     }
     const { packedCount = 0, totalCount = 0 } = packingQuery.data;
     return `${packedCount} of ${totalCount}`;
+  }, [packingQuery.data, packingQuery.isError]);
+
+  const packingRatio = useMemo(() => {
+    if (packingQuery.isError || !packingQuery.data) return 0;
+    const { packedCount = 0, totalCount = 0 } = packingQuery.data;
+    if (totalCount <= 0) return 0;
+    return Math.min(100, Math.round((packedCount / totalCount) * 100));
   }, [packingQuery.data, packingQuery.isError]);
 
   const callerId = meQuery.data?.user?.id;
@@ -494,6 +625,22 @@ export default function TripDetailScreen({
   const stayPeople: StayPerson[] = [
     ...members.map((m) => ({ key: memberKey(m.userId), name: m.displayName })),
     ...guests.map((g) => ({ key: guestKey(g.id), name: g.name })),
+  ];
+  const crewPeople: ReadonlyArray<{
+    readonly key: string;
+    readonly name: string;
+    readonly avatarPreset: string | null;
+  }> = [
+    ...members.map((m) => ({
+      key: memberKey(m.userId),
+      name: m.displayName,
+      avatarPreset: m.avatarPreset,
+    })),
+    ...guests.map((g) => ({
+      key: guestKey(g.id),
+      name: g.name,
+      avatarPreset: null,
+    })),
   ];
 
   const plannedItems = Array.isArray(itemsQuery.data) ? itemsQuery.data : [];
@@ -613,12 +760,38 @@ export default function TripDetailScreen({
     todayDayPark,
   );
   const dayText = trip ? getVacationDayText(trip.startDate, trip.endDate) : null;
+  const daysToGo = trip.status === 'upcoming' ? daysUntilStart(trip.startDate, wdwToday) : null;
+  const trimmedDesc = trip.description.trim();
+  const headerSubtitle =
+    trimmedDesc.length > 0
+      ? `${formatDateRange(trip)} · ${trimmedDesc}`
+      : formatDateRange(trip);
+
+  const allTripDates = enumerateTripDates(trip.startDate, trip.endDate);
+  const remainingTripDates = allTripDates.filter((d) => d >= wdwToday);
+  const assignedParksCount = remainingTripDates.reduce((acc, d) => {
+    const sp = trip.dayTouringHours?.[d]?.startingPark;
+    return isKnownPark(sp) ? acc + 1 : acc;
+  }, 0);
+
+  const plannedCountsByDate: Record<string, number> = {};
+  let scheduledCount = 0;
+  for (const item of plannedItems) {
+    if (item.plannedDate) {
+      plannedCountsByDate[item.plannedDate] = (plannedCountsByDate[item.plannedDate] ?? 0) + 1;
+      scheduledCount += 1;
+    }
+  }
+
+  const latestFeedItem = feedItems[0] ?? null;
+  const latestFeedHeadline = latestFeedItem ? formatFeedPreviewHeadline(latestFeedItem) : null;
+  const favsCount = Array.isArray(groupFavsQuery.data?.items) ? groupFavsQuery.data.items.length : 0;
 
   return (
     <ScreenContainer>
       <GradientHeader
         title={trip.name}
-        subtitle={formatDateRange(trip)}
+        subtitle={headerSubtitle}
         icon="map"
         compact
         onBack={handleBack}
@@ -644,14 +817,8 @@ export default function TripDetailScreen({
       />
 
       <ScrollView contentContainerStyle={styles.content} testID="trip-detail-hub" keyboardShouldPersistTaps="handled">
-        {trip.description.trim().length > 0 ? (
-          <Text style={styles.description}>{trip.description}</Text>
-        ) : null}
-
-        {/* Hero Card: Where you're staying summary & Crew Preview row */}
+        {/* Hero Card: Where you're staying + Crew + Upcoming Booking Countdown */}
         <View style={styles.heroCard} testID="trip-detail-hero">
-          {/* Where you're staying (trip-lodging-stays R7.1 to R7.3, R7.7): replaces the resort chip row inside
-              heroCard. Read-only; an Organizer gets "Add dates" on an undated stay, which opens the Trip edit form. */}
           {trip.stays.length > 0 ? (
             <TripStaysCard
               mode="read"
@@ -675,7 +842,7 @@ export default function TripDetailScreen({
           >
             <View style={styles.crewLeft}>
               <Text style={styles.crewLabel}>
-                {isCompleted ? 'TRAVEL PARTY' : 'CREW'}{members.length > 0 ? ` (${members.length})` : ''}
+                {isCompleted ? 'TRAVEL PARTY' : 'CREW'}{crewPeople.length > 0 ? ` (${crewPeople.length})` : ''}
               </Text>
               <View style={styles.managePill}>
                 <Text style={styles.managePillText}>Manage ›</Text>
@@ -683,25 +850,33 @@ export default function TripDetailScreen({
             </View>
             <View style={styles.crewRight}>
               <View style={styles.avatarStack}>
-                {members.slice(0, 4).map((member, index) => (
-                  <View
-                    key={member.userId}
-                    style={[
-                      styles.crewAvatar,
-                      {
-                        backgroundColor:
-                          avatarColors[index % avatarColors.length],
-                        marginLeft: index === 0 ? 0 : -8,
-                        zIndex: 10 - index,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.crewAvatarText}>
-                      {member.displayName?.charAt(0).toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                ))}
-                {members.length > 4 ? (
+                {crewPeople.slice(0, 4).map((person, index) => {
+                  const hasPreset = isAvatarPresetId(person.avatarPreset);
+                  return (
+                    <View
+                      key={person.key}
+                      style={[
+                        styles.crewAvatar,
+                        {
+                          backgroundColor:
+                            avatarColors[index % avatarColors.length],
+                          marginLeft: index === 0 ? 0 : -8,
+                          zIndex: 10 - index,
+                          overflow: 'hidden',
+                        },
+                      ]}
+                    >
+                      {hasPreset ? (
+                        renderAvatarPreset(person.avatarPreset, 24)
+                      ) : (
+                        <Text style={styles.crewAvatarText}>
+                          {person.name?.charAt(0).toUpperCase() || '?'}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+                {crewPeople.length > 4 ? (
                   <View
                     style={[
                       styles.crewAvatar,
@@ -710,17 +885,35 @@ export default function TripDetailScreen({
                     ]}
                   >
                     <Text style={styles.crewAvatarMoreText}>
-                      +{members.length - 4}
+                      +{crewPeople.length - 4}
                     </Text>
                   </View>
                 ) : null}
               </View>
             </View>
           </Pressable>
+
+          {/* Upcoming Countdown & Booking Timeline shortcut */}
+          {trip.status === 'upcoming' ? (
+            <Pressable
+              style={styles.heroBookingFooter}
+              onPress={() => navigation.navigate('TripBookingTimeline', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Booking dates and timeline"
+              testID="trip-detail-hero-booking-link"
+            >
+              <Text style={styles.heroCountdownText}>
+                {daysToGo !== null
+                  ? `⏳ ${daysToGo} ${daysToGo === 1 ? 'day' : 'days'} to go`
+                  : '⏳ Upcoming trip'}
+              </Text>
+              <Text style={styles.heroBookingLinkText}>Booking dates ›</Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* Live Glance Card (Active/Upcoming) vs Wrap-Up Hero (Past Trips) */}
-        {!isCompleted ? (
+        {/* Live Glance Card (Active only) vs Wrap-Up Hero (Past Trips) */}
+        {trip.status === 'active' ? (
           <View style={styles.glanceContainer} testID="trip-detail-glance-card">
             <View style={styles.glanceHeader}>
               <Text style={styles.glanceSectionLabel}>⚡ LIVE GLANCE</Text>
@@ -876,7 +1069,7 @@ export default function TripDetailScreen({
               </View>
             )}
           </View>
-        ) : (
+        ) : isCompleted ? (
           /* Past Trip: Celebratory Wrap-Up Hero (Summary section control) */
           <Pressable
             style={styles.pastHeroCard}
@@ -896,480 +1089,440 @@ export default function TripDetailScreen({
               Relive top moments, superlative awards, and park progress ›
             </Text>
           </Pressable>
-        )}
+        ) : null}
 
-        {/* 4 + 2 + 3 Tiered Command Hub: Vacation Tools */}
-        <View style={styles.toolsSection}>
-          <View style={styles.toolsHeaderRow}>
-            <Text style={styles.toolsSectionLabel}>
-              {isCompleted ? 'TRIP ARCHIVE' : 'VACATION TOOLS'}
-            </Text>
-            <Text style={styles.toolsSectionSubLabel}>Core Itinerary</Text>
+        {/* Unified Itinerary & Days Card */}
+        <View style={styles.sectionBlock} testID="trip-detail-itinerary-section">
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionEyebrow}>ITINERARY &amp; DAYS</Text>
+            {remainingTripDates.length > 0 ? (
+              <Text style={styles.sectionHeaderMeta}>
+                {assignedParksCount} of {remainingTripDates.length} parks set
+              </Text>
+            ) : null}
           </View>
-          <View style={styles.grid} testID="trip-detail-grid">
-            {/* Tier 1 (Core 2x2): Row 1 — Planned List & Schedule Builder */}
-            <View style={styles.gridRow}>
-              {/* Tile 1: Planned List */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripPlannedList', { tripId })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Planned List"
-                testID="trip-detail-section-planned"
-              >
-                <View style={styles.tileBadge}>
-                  <Text style={styles.tileBadgeText}>
-                    {plannedItems.length} Items
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primary}18` },
-                  ]}
-                >
-                  <Ionicons
-                    name="list-outline"
-                    size={20}
-                    color={t.color.primaryFg}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Planned List</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Group wishlist & park targets.
-                </Text>
-              </Pressable>
+          <View style={styles.groupedCard} testID="trip-detail-grid">
+            <TripDayParksSection
+              tripId={tripId}
+              startDate={trip.startDate}
+              endDate={trip.endDate}
+              dayTouringHours={trip.dayTouringHours}
+              embedded
+              plannedCountsByDate={plannedCountsByDate}
+              onOpenScheduleDate={(date) =>
+                navigation.navigate('TripSchedule', { tripId, initialDate: date })
+              }
+            />
 
-              {/* Tile 2: Schedule Builder */}
-              <Pressable
-                style={styles.hubTile}
-                onPress={() => navigation.navigate('TripSchedule', { tripId })}
-                accessibilityRole="button"
-                accessibilityLabel="Schedule Builder"
-                testID="trip-detail-section-schedule"
-              >
-                <View style={styles.tileBadge}>
-                  <Text style={styles.tileBadgeText}>Timeline</Text>
+            <Pressable
+              style={styles.groupedRow}
+              onPress={() => navigation.navigate('TripSchedule', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Schedule Builder"
+              testID="trip-detail-section-schedule"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: `${t.color.primaryLight}18` }]}>
+                  <Ionicons name="calendar-outline" size={17} color={t.color.primaryLight} />
                 </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: `${t.color.primaryLight}18` },
-                  ]}
-                >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={20}
-                    color={t.color.primaryLight}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Schedule Builder</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Day-by-day optimizer & timeline.
+                <Text style={styles.groupedRowTitle}>Schedule Builder</Text>
+              </View>
+              <View style={styles.groupedRowRight}>
+                <Text style={styles.groupedRowMeta}>
+                  {scheduledCount > 0 ? `${scheduledCount} scheduled` : 'Timeline'}
                 </Text>
-              </Pressable>
+                <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={styles.groupedRow}
+              onPress={() => navigation.navigate('TripPlannedList', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Planned List"
+              testID="trip-detail-section-planned"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: `${t.color.primary}18` }]}>
+                  <Ionicons name="list-outline" size={17} color={t.color.primaryFg} />
+                </View>
+                <Text style={styles.groupedRowTitle}>Planned List</Text>
+              </View>
+              <View style={styles.groupedRowRight}>
+                <Text style={styles.groupedRowMeta}>{plannedItems.length} items</Text>
+                <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={[styles.groupedRow, styles.groupedRowLast]}
+              onPress={() => navigation.navigate('TripReservations', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Reservations"
+              testID="trip-detail-section-reservations"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: withAlpha(t.color.accent, 0.2) }]}>
+                  <Ionicons name="ticket-outline" size={17} color={tile.reservationsIcon} />
+                </View>
+                <Text style={styles.groupedRowTitle}>Reservations</Text>
+              </View>
+              <View style={styles.groupedRowRight}>
+                <Text style={styles.groupedRowMeta}>{reservations.length} booked</Text>
+                <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Above-the-Fold Trip Activity Preview */}
+        <View style={styles.sectionBlock} testID="trip-detail-activity-preview">
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.activityHeaderLeft}>
+              <Text style={styles.sectionEyebrow}>TRIP ACTIVITY</Text>
+              <Text style={styles.sectionHeaderMeta}>
+                · {feedItems.length} {feedItems.length === 1 ? 'log' : 'logs'}
+              </Text>
             </View>
-
-            {/* Tier 1 (Core 2x2): Row 2 — Reservations & Trip Activity */}
-            <View style={styles.gridRow}>
-              {/* Tile 3: Reservations */}
+            <View style={styles.activityHeaderActions}>
               <Pressable
-                style={styles.hubTile}
-                onPress={() =>
-                  navigation.navigate('TripReservations', { tripId })
-                }
+                style={styles.logPillBtn}
+                onPress={() => navigation.navigate('TripFeed', { tripId, openLog: true })}
                 accessibilityRole="button"
-                accessibilityLabel="Reservations"
-                testID="trip-detail-section-reservations"
+                accessibilityLabel="Log a completion"
+                testID="trip-detail-activity-log-btn"
               >
-                <View style={styles.tileBadge}>
-                  <Text style={styles.tileBadgeText}>
-                    {reservations.length} Booked
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: withAlpha(t.color.accent, 0.2) },
-                  ]}
-                >
-                  <Ionicons
-                    name="ticket-outline"
-                    size={20}
-                    color={tile.reservationsIcon}
-                  />
-                </View>
-                <Text style={styles.tileTitle}>Reservations</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Dining, Lightning Lane & bookings.
-                </Text>
+                <Text style={styles.logPillBtnText}>+ Log</Text>
               </Pressable>
-
-              {/* Tile 4: Trip Activity */}
               <Pressable
-                style={styles.hubTile}
                 onPress={() => navigation.navigate('TripFeed', { tripId })}
                 accessibilityRole="button"
                 accessibilityLabel="Trip Activity"
                 testID="trip-detail-section-activity"
               >
-                <View style={styles.tileBadge}>
-                  <Text style={[styles.tileBadgeText, { color: tile.activityText }]}>
-                    {feedItems.length} Logs
+                <Text style={styles.allLinkText}>All ›</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {latestFeedItem && latestFeedHeadline ? (
+            <View style={styles.feedPreviewCard} testID="trip-detail-activity-card">
+              <Pressable
+                style={styles.feedPreviewTop}
+                onPress={() => navigation.navigate('TripFeed', { tripId })}
+                accessibilityRole="button"
+                accessibilityLabel={`View activity: ${latestFeedHeadline.title}`}
+              >
+                <View style={[styles.feedActorAvatar, { backgroundColor: t.color.primary, overflow: 'hidden' }]}>
+                  {isAvatarPresetId(latestFeedItem.actorAvatarPreset) ? (
+                    renderAvatarPreset(latestFeedItem.actorAvatarPreset, 30)
+                  ) : (
+                    <Text style={styles.feedActorAvatarText}>
+                      {(latestFeedItem.actorDisplayName || 'C').charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.feedPreviewTextWrap}>
+                  <Text style={styles.feedPreviewTitle} numberOfLines={1}>
+                    {latestFeedHeadline.title}
+                  </Text>
+                  <Text style={styles.feedPreviewMeta} numberOfLines={1}>
+                    {latestFeedHeadline.meta}
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.tileIconWrap,
-                    { backgroundColor: tile.activityBg },
-                  ]}
-                >
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={20}
-                    color={tile.activityIcon}
-                  />
+              </Pressable>
+
+              <View style={styles.feedPreviewFooter}>
+                <View style={styles.feedReactionRow}>
+                  {TRIP_REACTION_VALUES.map((reaction) => {
+                    const rxList: TripFeedItemDTO['reactions'] = Array.isArray(latestFeedItem.reactions)
+                      ? latestFeedItem.reactions
+                      : [];
+                    const existing = rxList.find((r) => r.reaction === reaction);
+                    const count = existing?.count ?? 0;
+                    const mine = existing?.mine ?? false;
+                    const meta = REACTION_EMOJI[reaction];
+                    return (
+                      <Pressable
+                        key={reaction}
+                        style={[
+                          styles.feedRxPill,
+                          mine && styles.feedRxPillActive,
+                        ]}
+                        onPress={() =>
+                          feedReactionMutation.mutate({
+                            itemId: latestFeedItem.id,
+                            reaction,
+                            remove: mine,
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`${meta.label} reaction${count > 0 ? `, ${count}` : ''}`}
+                        testID={`trip-detail-feed-rx-${reaction}`}
+                      >
+                        <Text style={styles.feedRxText}>
+                          {meta.emoji}{count > 0 ? ` ${count}` : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                <Text style={styles.tileTitle}>Trip Activity</Text>
-                <Text style={styles.tileDesc} numberOfLines={2}>
-                  Group completions & reactions.
+                <Pressable
+                  onPress={() => navigation.navigate('TripFeed', { tripId })}
+                  accessibilityRole="button"
+                  accessibilityLabel="View comments"
+                >
+                  <Text style={styles.feedCommentsText}>
+                    {(() => {
+                      const cCount = Array.isArray(latestFeedItem.comments)
+                        ? latestFeedItem.comments.length
+                        : 0;
+                      return `💬 ${cCount} ${cCount === 1 ? 'comment' : 'comments'}`;
+                    })()}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.feedEmptyCard}
+              onPress={() => navigation.navigate('TripFeed', { tripId, openLog: true })}
+              accessibilityRole="button"
+              accessibilityLabel="Log your first trip moment"
+              testID="trip-detail-activity-empty"
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color={tile.activityIcon} />
+              <Text style={styles.feedEmptyText}>
+                No moments logged yet — tap + Log to share a ride or snack!
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* 3-in-1 Saved Lists & Favorites Segmented Card */}
+        <View style={styles.sectionBlock} testID="trip-detail-saved-lists-card">
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionEyebrow}>SAVED LISTS &amp; FAVORITES</Text>
+            <Text style={styles.sectionHeaderMeta}>Shared with crew</Text>
+          </View>
+          <View style={styles.savedCard}>
+            <View style={styles.segmentedBar}>
+              <Pressable
+                style={[styles.segTab, savedListTab === 'favs' && styles.segTabActive]}
+                onPress={() => setSavedListTab('favs')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: savedListTab === 'favs' }}
+                testID="trip-detail-saved-tab-favs"
+              >
+                <Text style={[styles.segTabText, savedListTab === 'favs' && styles.segTabTextActive]}>
+                  ♥ Favs{favsCount > 0 ? ` (${favsCount})` : ''}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.segTab, savedListTab === 'food' && styles.segTabActive]}
+                onPress={() => setSavedListTab('food')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: savedListTab === 'food' }}
+                testID="trip-detail-saved-tab-food"
+              >
+                <Text style={[styles.segTabText, savedListTab === 'food' && styles.segTabTextActive]}>
+                  🍴 Food ({trip.foodLists.length})
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.segTab, savedListTab === 'exp' && styles.segTabActive]}
+                onPress={() => setSavedListTab('exp')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: savedListTab === 'exp' }}
+                testID="trip-detail-saved-tab-exp"
+              >
+                <Text style={[styles.segTabText, savedListTab === 'exp' && styles.segTabTextActive]}>
+                  🎢 Exp ({trip.experienceLists.length})
                 </Text>
               </Pressable>
             </View>
 
-            {/* Tier 2: Finances (2-up Compact Horizontal Row) */}
-            <View style={styles.tierGroup} testID="trip-detail-tier-finances">
-              <Text style={styles.tierLabel}>FINANCES</Text>
-              <View style={styles.financeRow} testID="trip-detail-finances-row">
-                {/* Tile 5: Budget */}
-                <Pressable
-                  style={styles.financeTile}
-                  onPress={() => navigation.navigate('TripBudget', { tripId })}
-                  accessibilityRole="button"
-                  accessibilityLabel="Budget"
-                  testID="trip-detail-section-budget"
-                >
-                  <View
-                    style={[
-                      styles.financeIconWrap,
-                      { backgroundColor: tile.financeBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="wallet-outline"
-                      size={18}
-                      color={tile.financeIcon}
-                    />
-                  </View>
-                  <View style={styles.financeTextWrap}>
-                    <View style={styles.financeTitleRow}>
-                      <Text style={styles.financeTitle} numberOfLines={1}>
-                        Budget
-                      </Text>
-                      <View
-                        style={[
-                          styles.compactBadge,
-                          { backgroundColor: tile.financeBg },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.tileBadgeText,
-                            { color: tile.financeIcon },
-                          ]}
-                        >
-                          Plan
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.financeDesc} numberOfLines={1}>
-                      Plan costs & save per week.
-                    </Text>
-                  </View>
-                </Pressable>
-
-                {/* Tile 6: Expenses */}
-                <Pressable
-                  style={styles.financeTile}
-                  onPress={() =>
-                    navigation.navigate('TripExpenses', { tripId })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Expenses"
-                  testID="trip-detail-section-expenses"
-                >
-                  <View
-                    style={[
-                      styles.financeIconWrap,
-                      { backgroundColor: tile.financeBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="cash-outline"
-                      size={18}
-                      color={tile.financeIcon}
-                    />
-                  </View>
-                  <View style={styles.financeTextWrap}>
-                    <View style={styles.financeTitleRow}>
-                      <Text style={styles.financeTitle} numberOfLines={1}>
-                        Expenses
-                      </Text>
-                      <View style={styles.compactBadge}>
-                        <Text
-                          style={[
-                            styles.tileBadgeText,
-                            { color: t.color.primaryFg },
-                          ]}
-                        >
-                          Ledger
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.financeDesc} numberOfLines={1}>
-                      Shared ledger & balances.
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
-              <View style={styles.financeRow} testID="trip-detail-finances-dining-row">
-                {/* Tile: Dining Plan (dining-plan-calculator R1.1) */}
-                <Pressable
-                  style={styles.financeTile}
-                  onPress={() =>
-                    navigation.navigate('TripDiningPlan', { tripId })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Dining Plan: is the dining plan worth it? Compare plans for your meals."
-                  testID="trip-detail-section-diningPlan"
-                >
-                  <View
-                    style={[
-                      styles.financeIconWrap,
-                      { backgroundColor: tile.financeBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="restaurant-outline"
-                      size={18}
-                      color={tile.financeIcon}
-                    />
-                  </View>
-                  <View style={styles.financeTextWrap}>
-                    <View style={styles.financeTitleRow}>
-                      <Text style={styles.financeTitle} numberOfLines={1}>
-                        Dining Plan
-                      </Text>
-                      <View style={styles.compactBadge}>
-                        <Text
-                          style={[
-                            styles.tileBadgeText,
-                            { color: t.color.primaryFg },
-                          ]}
-                        >
-                          Compare
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.financeDesc} numberOfLines={2}>
-                      Is the dining plan worth it? Compare plans for your meals.
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
+            <View style={savedListTab !== 'favs' ? styles.hiddenPanel : undefined}>
+              <GroupFavoritesSection
+                tripId={tripId}
+                embedded
+                onSelectExperience={(experienceId) => {
+                  (navigation as any).navigate('ExperienceDetail', { experienceId });
+                }}
+              />
             </View>
-
-            {/* Tier 3: Prep & Memories (3-up Compact Strip) */}
-            <View style={styles.tierGroup} testID="trip-detail-tier-prep">
-              <Text style={styles.tierLabel}>PREP & MEMORIES</Text>
-              <View style={styles.prepRow} testID="trip-detail-prep-row">
-                {/* Tile 7: Booking timeline */}
-                <Pressable
-                  style={styles.prepTile}
-                  onPress={() =>
-                    navigation.navigate('TripBookingTimeline', { tripId })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Booking timeline"
-                  testID="trip-detail-section-booking"
-                >
-                  <View
-                    style={[
-                      styles.prepIconWrap,
-                      { backgroundColor: tile.bookingBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="calendar-number-outline"
-                      size={18}
-                      color={tile.bookingIcon}
-                    />
-                  </View>
-                  <Text style={styles.prepTitle} numberOfLines={1}>
-                    Booking timeline
-                  </Text>
-                  <View
-                    style={[
-                      styles.prepBadge,
-                      { backgroundColor: tile.bookingBg },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tileBadgeText,
-                        { color: tile.bookingIcon },
-                      ]}
-                    >
-                      Timeline
-                    </Text>
-                  </View>
-                </Pressable>
-
-                {/* Tile 8: Packing list */}
-                <Pressable
-                  style={styles.prepTile}
-                  onPress={() =>
-                    navigation.navigate('TripPackingList', { tripId })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Packing list"
-                  testID="trip-detail-section-packing"
-                >
-                  <View
-                    style={[
-                      styles.prepIconWrap,
-                      { backgroundColor: tile.packingBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="bag-check-outline"
-                      size={18}
-                      color={tile.packingIcon}
-                    />
-                  </View>
-                  <Text style={styles.prepTitle} numberOfLines={1}>
-                    Packing list
-                  </Text>
-                  {packingBadgeText !== null ? (
-                    <View
-                      style={[
-                        styles.prepBadge,
-                        { backgroundColor: tile.packingBg },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.tileBadgeText,
-                          { color: tile.packingIcon },
-                        ]}
-                      >
-                        {packingBadgeText}
-                      </Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-
-                {/* Tile 9: Trip Album */}
-                <Pressable
-                  style={styles.prepTile}
-                  onPress={() =>
-                    navigation.navigate('TripAlbum', { tripId })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Trip Album"
-                  testID="trip-detail-section-album"
-                >
-                  <View
-                    style={[
-                      styles.prepIconWrap,
-                      { backgroundColor: tile.albumBg },
-                    ]}
-                  >
-                    <Ionicons
-                      name="images-outline"
-                      size={18}
-                      color={tile.albumIcon}
-                    />
-                  </View>
-                  <Text style={styles.prepTitle} numberOfLines={1}>
-                    Trip Album
-                  </Text>
-                  <View
-                    style={[
-                      styles.prepBadge,
-                      { backgroundColor: tile.albumBg },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tileBadgeText,
-                        { color: tile.albumIcon },
-                      ]}
-                    >
-                      Photos
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
+            <View style={savedListTab !== 'food' ? styles.hiddenPanel : undefined}>
+              <AttachedFoodListsSection
+                tripId={tripId}
+                foodLists={trip.foodLists}
+                isOrganizer={isOrganizer}
+                callerId={callerId}
+                callerDisplayName={
+                  members.find((m) => m.userId === callerId)?.displayName
+                }
+                navigation={navigation}
+                embedded
+                onOpenFoodList={(foodListId) => {
+                  (navigation as any).navigate('FoodListDetail', { foodListId });
+                }}
+              />
+            </View>
+            <View style={savedListTab !== 'exp' ? styles.hiddenPanel : undefined}>
+              <AttachedExperienceListsSection
+                tripId={tripId}
+                experienceLists={trip.experienceLists}
+                isOrganizer={isOrganizer}
+                callerId={callerId}
+                callerDisplayName={
+                  members.find((m) => m.userId === callerId)?.displayName
+                }
+                navigation={navigation}
+                embedded
+                onOpenExperienceList={(experienceListId) => {
+                  (navigation as any).navigate('ExperienceListDetail', { experienceListId });
+                }}
+              />
             </View>
           </View>
         </View>
 
-        {/* Days (Per-day park assignment) section (R24, Task 25.7) */}
-        <TripDayParksSection
-          tripId={tripId}
-          startDate={trip.startDate}
-          endDate={trip.endDate}
-          dayTouringHours={trip.dayTouringHours}
-        />
+        {/* 3-Up Finances Bento Strip */}
+        <View style={styles.sectionBlock} testID="trip-detail-tier-finances">
+          <Text style={styles.sectionEyebrow}>FINANCES</Text>
+          <View style={styles.financeRow} testID="trip-detail-finances-row">
+            <Pressable
+              style={styles.bentoTile}
+              onPress={() => navigation.navigate('TripBudget', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Budget"
+              testID="trip-detail-section-budget"
+            >
+              <View style={[styles.bentoIconWrap, { backgroundColor: tile.financeBg }]}>
+                <Ionicons name="wallet-outline" size={17} color={tile.financeIcon} />
+              </View>
+              <Text style={styles.bentoTitle} numberOfLines={1}>Budget</Text>
+              <Text style={styles.bentoSub} numberOfLines={1}>Plan costs</Text>
+            </Pressable>
 
-        {/* Hidden Mickeys tally section (R11.5, Task 10.8) */}
-        <TripMickeySection
-          tripId={tripId}
-          onSelectMickey={(mickeyId) => {
-            (navigation as any).navigate('HiddenMickeyDetail', { mickeyId });
-          }}
-        />
+            <Pressable
+              style={styles.bentoTile}
+              onPress={() => navigation.navigate('TripExpenses', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Expenses"
+              testID="trip-detail-section-expenses"
+            >
+              <View style={[styles.bentoIconWrap, { backgroundColor: tile.financeBg }]}>
+                <Ionicons name="cash-outline" size={17} color={tile.financeIcon} />
+              </View>
+              <Text style={styles.bentoTitle} numberOfLines={1}>Expenses</Text>
+              <Text style={styles.bentoSub} numberOfLines={1}>Ledger</Text>
+            </Pressable>
 
-        {/* Attached Food Lists section (R22, Task 24.6) */}
-        <AttachedFoodListsSection
-          tripId={tripId}
-          foodLists={trip.foodLists}
-          isOrganizer={isOrganizer}
-          callerId={callerId}
-          callerDisplayName={
-            members.find((m) => m.userId === callerId)?.displayName
-          }
-          navigation={navigation}
-          onOpenFoodList={(foodListId) => {
-            (navigation as any).navigate('FoodListDetail', { foodListId });
-          }}
-        />
+            <Pressable
+              style={styles.bentoTile}
+              onPress={() => navigation.navigate('TripDiningPlan', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Dining Plan: is the dining plan worth it? Compare plans for your meals."
+              testID="trip-detail-section-diningPlan"
+            >
+              <View style={[styles.bentoIconWrap, { backgroundColor: tile.financeBg }]}>
+                <Ionicons name="restaurant-outline" size={17} color={tile.financeIcon} />
+              </View>
+              <Text style={styles.bentoTitle} numberOfLines={1}>Dining Plan</Text>
+              <Text style={[styles.bentoSub, { color: t.color.primaryFg, fontWeight: '700' }]} numberOfLines={1}>
+                Worth it? ›
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
-        {/* Attached Experience Lists section (R14, Task 19.1) */}
-        <AttachedExperienceListsSection
-          tripId={tripId}
-          experienceLists={trip.experienceLists}
-          isOrganizer={isOrganizer}
-          callerId={callerId}
-          callerDisplayName={
-            members.find((m) => m.userId === callerId)?.displayName
-          }
-          navigation={navigation}
-          onOpenExperienceList={(experienceListId) => {
-            (navigation as any).navigate('ExperienceListDetail', { experienceListId });
-          }}
-        />
+        {/* Grouped Prep & Memories Card */}
+        <View style={styles.sectionBlock} testID="trip-detail-tier-prep">
+          <Text style={styles.sectionEyebrow}>PREP &amp; MEMORIES</Text>
+          <View style={styles.groupedCard} testID="trip-detail-prep-row">
+            <Pressable
+              style={styles.groupedRow}
+              onPress={() => navigation.navigate('TripPackingList', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Packing list"
+              testID="trip-detail-section-packing"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: tile.packingBg }]}>
+                  <Ionicons name="bag-check-outline" size={17} color={tile.packingIcon} />
+                </View>
+                <View>
+                  <Text style={styles.groupedRowTitle}>Packing list</Text>
+                  {packingBadgeText !== null ? (
+                    <Text style={styles.groupedRowSub}>{packingBadgeText} packed</Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.groupedRowRight}>
+                {packingBadgeText !== null ? (
+                  <View style={styles.miniProgressTrack}>
+                    <View
+                      style={[
+                        styles.miniProgressFill,
+                        { width: `${packingRatio}%`, backgroundColor: tile.packingIcon },
+                      ]}
+                    />
+                  </View>
+                ) : null}
+                <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+              </View>
+            </Pressable>
 
-        {/* Group Favorites section (R9, Task 11.2) */}
-        <GroupFavoritesSection
-          tripId={tripId}
-          onSelectExperience={(experienceId) => {
-            (navigation as any).navigate('ExperienceDetail', { experienceId });
-          }}
-        />
+            <Pressable
+              style={styles.groupedRow}
+              onPress={() => navigation.navigate('TripAlbum', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Trip Album"
+              testID="trip-detail-section-album"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: tile.albumBg }]}>
+                  <Ionicons name="images-outline" size={17} color={tile.albumIcon} />
+                </View>
+                <View>
+                  <Text style={styles.groupedRowTitle}>Trip Album</Text>
+                  <Text style={styles.groupedRowSub}>Photos &amp; shared memories</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.groupedRow, styles.groupedRowLast]}
+              onPress={() => navigation.navigate('TripBookingTimeline', { tripId })}
+              accessibilityRole="button"
+              accessibilityLabel="Booking timeline"
+              testID="trip-detail-section-booking"
+            >
+              <View style={styles.groupedRowLeft}>
+                <View style={[styles.groupedIconWrap, { backgroundColor: tile.bookingBg }]}>
+                  <Ionicons name="calendar-number-outline" size={17} color={tile.bookingIcon} />
+                </View>
+                <View>
+                  <Text style={styles.groupedRowTitle}>Booking timeline</Text>
+                  <Text style={styles.groupedRowSub}>Dining &amp; Lightning Lane windows</Text>
+                </View>
+              </View>
+              <View style={styles.groupedRowRight}>
+                <Text style={styles.groupedRowMeta}>Timeline</Text>
+                <Ionicons name="chevron-forward" size={15} color={t.color.textSecondary} />
+              </View>
+            </Pressable>
+
+            <TripMickeySection
+              tripId={tripId}
+              embedded
+              onSelectMickey={(mickeyId) => {
+                (navigation as any).navigate('HiddenMickeyDetail', { mickeyId });
+              }}
+            />
+          </View>
+        </View>
 
         {/* Vacation Progress Card (Active/Upcoming Summary section control) */}
         {!isCompleted ? (
@@ -1408,7 +1561,7 @@ export default function TripDetailScreen({
                       : `${feedItems.length} magical moment${feedItems.length === 1 ? '' : 's'} logged!`}
                   </Text>
                   <Text style={styles.summarySub}>
-                    Tap to see live group superlatives & top ratings ›
+                    Tap to see live group superlatives &amp; top ratings ›
                   </Text>
                 </View>
                 <Ionicons
@@ -1523,6 +1676,298 @@ const useStyles = makeStyles((t) => ({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
+  },
+  heroBookingFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: t.color.border,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  heroCountdownText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.accent,
+  },
+  heroBookingLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+
+  // Unified Section Blocks & Grouped Cards
+  sectionBlock: {
+    gap: 7,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+  },
+  sectionEyebrow: {
+    ...theme.typography.meta,
+    fontSize: 11,
+    fontWeight: '800',
+    color: t.color.textSecondary,
+    letterSpacing: 0.5,
+  },
+  sectionHeaderMeta: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  groupedCard: {
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    overflow: 'hidden',
+  },
+  groupedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: t.color.border,
+    gap: 10,
+  },
+  groupedRowLast: {
+    borderBottomWidth: 0,
+  },
+  groupedRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  groupedIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  groupedRowTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  groupedRowSub: {
+    fontSize: 11.5,
+    color: t.color.textSecondary,
+    marginTop: 1,
+  },
+  groupedRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  groupedRowMeta: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  miniProgressTrack: {
+    width: 56,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: t.color.surfaceAlt,
+    overflow: 'hidden',
+  },
+  miniProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+
+  // Inline Trip Activity Preview
+  activityHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  activityHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logPillBtn: {
+    backgroundColor: HUB_TILE[t.scheme].activityBg,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  logPillBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: HUB_TILE[t.scheme].activityText,
+  },
+  allLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  feedPreviewCard: {
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    padding: 12,
+    gap: 9,
+  },
+  feedPreviewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  feedActorAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  feedActorAvatarText: {
+    color: t.color.textOnPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  feedPreviewTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  feedPreviewTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  feedPreviewMeta: {
+    fontSize: 11.5,
+    color: t.color.textSecondary,
+    marginTop: 1,
+  },
+  feedPreviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  feedReactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  feedRxPill: {
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  feedRxPillActive: {
+    backgroundColor: HUB_TILE[t.scheme].activityBg,
+    borderColor: HUB_TILE[t.scheme].activityIcon,
+  },
+  feedRxText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  feedCommentsText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: t.color.textSecondary,
+  },
+  feedEmptyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    padding: 12,
+  },
+  feedEmptyText: {
+    flex: 1,
+    fontSize: 12,
+    color: t.color.textSecondary,
+  },
+
+  // Saved Lists & Favorites Segmented Card
+  savedCard: {
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: t.color.border,
+    padding: 10,
+    gap: 10,
+  },
+  segmentedBar: {
+    flexDirection: 'row',
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    gap: 4,
+  },
+  segTab: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segTabActive: {
+    backgroundColor: t.color.primary,
+  },
+  segTabText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: t.color.textSecondary,
+  },
+  segTabTextActive: {
+    color: t.color.textOnPrimary,
+  },
+  hiddenPanel: {
+    display: 'none',
+  },
+
+  // 3-Up Finances Bento Row
+  bentoTile: {
+    flex: 1,
+    backgroundColor: t.color.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: HUB_TILE[t.scheme].financeBorder,
+    padding: 10,
+    gap: 4,
+  },
+  bentoIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  bentoTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: t.color.textPrimary,
+  },
+  bentoSub: {
+    fontSize: 11,
+    color: t.color.textSecondary,
   },
   // Crew Row
   crewRow: {

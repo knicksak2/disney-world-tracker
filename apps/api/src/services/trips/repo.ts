@@ -598,6 +598,18 @@ export interface TripRepo {
   ): Promise<void>;
 
   /**
+   * Persist manual per-day ordering (`sort_order = 0..n-1`) for the given
+   * `orderedItemIds` on `(tripId, date)`, clearing stale optimization outputs
+   * and flexible `planned_time`s while preserving fixed `planned_time`s
+   * (day-planning-optimization R12.2).
+   */
+  reorderDayPlannedItems(
+    tripId: string,
+    date: string,
+    orderedItemIds: readonly string[],
+  ): Promise<PlannedItemDTO[]>;
+
+  /**
    * Remove the Planned_Item `itemId` from `tripId`'s Planned_List. Removal is
    * permitted for the Trip_Member who added the item (R9.6) or for any
    * Organizer (R9.7); a `member` who did not add the item is rejected with
@@ -1041,6 +1053,8 @@ export function createTripRepo(pool: DbPool, deps: TripRepoDeps): TripRepo {
       editPlannedItem(ctx, tripId, itemId, input),
     updatePlannedItemTimes: (tripId, updates) =>
       updatePlannedItemTimes(ctx, tripId, updates),
+    reorderDayPlannedItems: (tripId, date, orderedItemIds) =>
+      reorderDayPlannedItems(ctx, tripId, date, orderedItemIds),
     removePlannedItem: (tripId, itemId, callerId, callerRole) =>
       removePlannedItem(ctx, tripId, itemId, callerId, callerRole),
     listPlannedItems: (tripId) => listPlannedItems(ctx, tripId),
@@ -1155,6 +1169,7 @@ interface PlannedItemRow {
   reservation_kind: ReservationKind | null;
   confirmation_number: string | null;
   party_size: number | null;
+  sort_order: number | null;
 }
 
 /**
@@ -3588,15 +3603,93 @@ async function listPlannedItems(
             pi.optimized_at,
             pi.reservation_kind,
             pi.confirmation_number,
-            pi.party_size
+            pi.party_size,
+            pi.sort_order
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profile_identity p ON p.user_id = pi.added_by
       WHERE pi.trip_id = $1
-      ORDER BY pi.created_at ASC, pi.id ASC`,
+      ORDER BY COALESCE(pi.sort_order, 2147483647) ASC, pi.created_at ASC, pi.id ASC`,
     [tripId],
   );
   return result.rows.map(rowToPlannedItemDto);
+}
+
+async function reorderDayPlannedItems(
+  ctx: TripRepoContext,
+  tripId: string,
+  date: string,
+  orderedItemIds: readonly string[],
+): Promise<PlannedItemDTO[]> {
+  const seen = new Set<string>();
+  for (const id of orderedItemIds) {
+    if (seen.has(id)) {
+      throw new AppError(
+        'trip_validation_failed',
+        'Duplicate item IDs are not allowed when reordering.',
+        { field: 'orderedItemIds' },
+      );
+    }
+    seen.add(id);
+  }
+
+  const client = await ctx.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{ id: string; is_fixed: boolean }>(
+      `SELECT id, is_fixed
+         FROM planned_items
+        WHERE trip_id = $1 AND planned_date = $2
+        FOR UPDATE`,
+      [tripId, date],
+    );
+    const dayMap = new Map(existing.rows.map((r) => [r.id, r]));
+
+    for (const itemId of orderedItemIds) {
+      if (!dayMap.has(itemId)) {
+        await client.query('ROLLBACK');
+        throw new AppError(
+          'trip_validation_failed',
+          'All reordered items must belong to this trip and date.',
+          { field: 'orderedItemIds' },
+        );
+      }
+    }
+
+    const remainingIds = existing.rows
+      .map((r) => r.id)
+      .filter((id) => !seen.has(id));
+    const finalOrder = [...orderedItemIds, ...remainingIds];
+
+    for (let idx = 0; idx < finalOrder.length; idx++) {
+      const itemId = finalOrder[idx]!;
+      await client.query(
+        `UPDATE planned_items
+            SET sort_order = $1,
+                predicted_wait_minutes = NULL,
+                scheduled_showtime = NULL,
+                travel_from_prev_minutes = NULL,
+                travel_from_prev_kind = NULL,
+                optimized_at = NULL,
+                planned_time = CASE WHEN is_fixed THEN planned_time ELSE NULL END
+          WHERE id = $2 AND trip_id = $3`,
+        [idx, itemId, tripId],
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // ignore rollback error after prior rollback
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  return listPlannedItems(ctx, tripId);
 }
 
 // ---------------------------------------------------------------------------
@@ -5495,7 +5588,8 @@ async function selectPlannedItem(
             pi.optimized_at,
             pi.reservation_kind,
             pi.confirmation_number,
-            pi.party_size
+            pi.party_size,
+            pi.sort_order
        FROM planned_items pi
   LEFT JOIN experiences e ON e.id = pi.experience_id
        JOIN profile_identity p ON p.user_id = pi.added_by
@@ -5591,6 +5685,7 @@ function rowToPlannedItemDto(row: PlannedItemRow): PlannedItemDTO {
     reservationKind: row.reservation_kind ?? null,
     confirmationNumber: row.confirmation_number ?? null,
     partySize: row.party_size != null ? Number(row.party_size) : null,
+    sortOrder: row.sort_order != null ? Number(row.sort_order) : null,
   };
 }
 

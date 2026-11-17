@@ -53,6 +53,7 @@ export interface AttachedFoodListsSectionProps {
   readonly onOpenFoodList?: ((foodListId: string) => void) | undefined;
   /** Force-allow detach buttons for testing forbidden third-party server responses */
   readonly allowAllDetachForTesting?: boolean | undefined;
+  readonly embedded?: boolean | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,7 @@ export default function AttachedFoodListsSection({
   navigation,
   onOpenFoodList,
   allowAllDetachForTesting = false,
+  embedded = false,
 }: AttachedFoodListsSectionProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -239,23 +241,25 @@ export default function AttachedFoodListsSection({
   };
 
   return (
-    <View style={styles.sectionContainer} testID="trip-detail-food-lists-section">
+    <View style={[styles.sectionContainer, embedded && { marginTop: 0 }]} testID="trip-detail-food-lists-section">
       {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View style={styles.titleWrap}>
-          <Ionicons
-            name="restaurant-outline"
-            size={18}
-            color={t.color.primaryFg}
-          />
-          <Text style={styles.sectionTitle}>Attached Food Lists</Text>
-          {foodLists.length > 0 ? (
-            <Badge
-              label={String(foodLists.length)}
+      <View style={[styles.headerRow, embedded && { justifyContent: 'flex-end', marginBottom: 8 }]}>
+        {!embedded ? (
+          <View style={styles.titleWrap}>
+            <Ionicons
+              name="restaurant-outline"
+              size={18}
               color={t.color.primaryFg}
             />
-          ) : null}
-        </View>
+            <Text style={styles.sectionTitle}>Attached Food Lists</Text>
+            {foodLists.length > 0 ? (
+              <Badge
+                label={String(foodLists.length)}
+                color={t.color.primaryFg}
+              />
+            ) : null}
+          </View>
+        ) : null}
         <Pressable
           onPress={() => {
             setAttachError(null);

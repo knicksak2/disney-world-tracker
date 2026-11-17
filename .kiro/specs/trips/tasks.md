@@ -507,6 +507,20 @@ existing `RatingChanged` propagation path is reused unchanged.
     - Add mobile tests in `TripFeedScreen.test.tsx` verifying author and organizer delete button presence, pressing delete sends the DELETE request and removes the card, and non-author non-organizer has no delete button.
     - _Requirements: 20.10, 20.11, 20.12_
 
+- [x] 29. Trip Detail Hub Unified Layout and Inline Activity Preview (R28)
+  - [x] 29.1 Navigation & Target Screen Deep-Link Params (`TripsStack.tsx`, `TripScheduleScreen.tsx`, `TripFeedScreen.tsx`)
+    - Add optional `initialDate?: string` to `TripSchedule` and optional `openLog?: boolean` to `TripFeed`.
+    - _Requirements: 28.2, 28.3_
+  - [x] 29.2 Embedded Sub-Components (`TripDayParksSection.tsx`, `AttachedFoodListsSection.tsx`, `AttachedExperienceListsSection.tsx`, `GroupFavoritesSection.tsx`, `TripMickeySection.tsx`)
+    - Support compact `embedded` rendering inside `TripDetailScreen`'s unified cards, plus planned-item counts and "Open in Schedule Builder" in `DayParkPickerSheet`.
+    - _Requirements: 28.2, 28.4, 28.5_
+  - [x] 29.3 Trip Detail Hub Redesign & Palette (`TripDetailScreen.tsx`, `TripDetailScreen.palette.ts`)
+    - Implement the v5 layout: header description, tight Hero + phase-aware countdown/Up Next, unified `Itinerary & Days` card, inline `Trip Activity` preview with reactions & `+ Log`, segmented `Saved Lists & Favorites`, 3-up `Finances`, and grouped `Prep & Memories`.
+    - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
+  - [x] 29.4 Mobile Tests & Verification (`TripDetailScreen.test.tsx`, `TripDayParksSection.test.tsx`)
+    - Update and expand tests for all unified layout controls, Day sheet schedule jump, inline feed reactions, `+ Log`, and Saved Lists tabs; run `npm run verify:mobile`.
+    - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
+
 ## Notes
 
 - Tasks marked with `*` are optional (property, unit, integration, and mobile tests) and can be skipped for a faster MVP; core implementation tasks are never optional.

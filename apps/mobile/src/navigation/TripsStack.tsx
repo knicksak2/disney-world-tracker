@@ -61,7 +61,7 @@ export type TripsStackParamList = {
   /** Planned_List section of a Trip (R18.1, R18.6). */
   TripPlannedList: { tripId: string };
   /** Schedule Builder and Optimization section. */
-  TripSchedule: { tripId: string };
+  TripSchedule: { tripId: string; initialDate?: string };
   /**
    * Reservations section of a Trip: every booking the group holds — dining,
    * Lightning Lane, and other timed reservations — grouped by date
@@ -83,7 +83,7 @@ export type TripsStackParamList = {
   /** Collaborative packing list section of a Trip. */
   TripPackingList: { tripId: string };
   /** Trip_Activity section of a Trip — the consolidated feed + logging (R20). */
-  TripFeed: { tripId: string };
+  TripFeed: { tripId: string; openLog?: boolean };
   /** Trip_Members section of a Trip (R18.1, R18.6). */
   TripMembers: { tripId: string };
   /** Trip_Summary section of a Trip (R18.1, R18.6). */

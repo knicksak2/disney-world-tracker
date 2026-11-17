@@ -53,6 +53,7 @@ function pi(overrides: Partial<PlannedItemDTO> = {}): PlannedItemDTO {
     reservationKind: null,
     confirmationNumber: null,
     partySize: null,
+    sortOrder: null,
     ...overrides,
   };
 }
@@ -81,6 +82,7 @@ function makeRepo(overrides: Partial<TripRepo>): TripRepo {
     addPlannedItem: explode('addPlannedItem'),
     editPlannedItem: explode('editPlannedItem'),
     updatePlannedItemTimes: explode('updatePlannedItemTimes'),
+    reorderDayPlannedItems: explode('reorderDayPlannedItems'),
     removePlannedItem: explode('removePlannedItem'),
     listPlannedItems: explode('listPlannedItems'),
     logCompletion: explode('logCompletion'),
@@ -944,6 +946,102 @@ describe('Schedule optimization & planned item edit routes', () => {
       const body = res.json() as PlannedItemDTO;
       expect(body.priority).toBe(1);
       expect(body.isFixed).toBe(true);
+    });
+  });
+
+  describe('PATCH /trips/:id/schedule/reorder', () => {
+    it('rejects non-members with trip_forbidden', async () => {
+      mockRole = null;
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/trips/${TRIP_ID}/schedule/reorder`,
+        payload: { date: '2026-10-01', orderedItemIds: [ITEM_ID] },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('trip_forbidden');
+    });
+
+    it('rejects invalid payload (empty orderedItemIds) with validation error', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/trips/${TRIP_ID}/schedule/reorder`,
+        payload: { date: '2026-10-01', orderedItemIds: [] },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('trip_validation_failed');
+    });
+
+    it('persists manual order and returns updated items', async () => {
+      const item2Id = '55555555-5555-5555-8555-555555555555';
+      const reordered = [
+        pi({ id: item2Id, sortOrder: 0 }),
+        pi({ id: ITEM_ID, sortOrder: 1 }),
+      ];
+      const reorderMock = vi.fn(async () => reordered);
+      const reorderApp = Fastify();
+      registerErrorHandler(reorderApp);
+      await reorderApp.register(
+        tripRoutes({
+          pool: {
+            query: vi.fn(async () => ({ rows: [{ role: 'member' }], rowCount: 1 })),
+          } as unknown as DbPool,
+          repo: makeRepo({ reorderDayPlannedItems: reorderMock }),
+          requireSession: async (request) => {
+            (request as unknown as { userId: string }).userId = CALLER_ID;
+          },
+        }),
+      );
+
+      const res = await reorderApp.inject({
+        method: 'PATCH',
+        url: `/trips/${TRIP_ID}/schedule/reorder`,
+        payload: { date: '2026-10-01', orderedItemIds: [item2Id, ITEM_ID] },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(reorderMock).toHaveBeenCalledWith(
+        TRIP_ID,
+        '2026-10-01',
+        [item2Id, ITEM_ID],
+      );
+      const body = res.json() as { items: PlannedItemDTO[] };
+      expect(body.items.map((i) => i.id)).toEqual([item2Id, ITEM_ID]);
+    });
+  });
+
+  describe('POST /trips/:id/schedule/optimize with preserveOrder: true (R12.5)', () => {
+    it('simulates items in their exact listPlannedItems order without TSP reordering', async () => {
+      const itemA = pi({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', experienceId: EXP_ID, experienceName: 'Ride A' });
+      const itemB = pi({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', experienceId: EXP_ID, experienceName: 'Ride B' });
+      const simApp = Fastify();
+      registerErrorHandler(simApp);
+      await simApp.register(
+        tripRoutes({
+          pool: {
+            query: vi.fn(async (text: string) => {
+              if (text.includes('FROM trip_memberships')) return { rows: [{ role: 'member' }], rowCount: 1 };
+              if (text.includes('FROM trips WHERE id = $1')) return { rows: [{ walking_speed: 'moderate', early_entry_eligible: false }], rowCount: 1 };
+              if (text.includes('FROM experiences WHERE id = ANY')) return { rows: [{ id: EXP_ID, latitude: 28.4177, longitude: -81.5812 }], rowCount: 1 };
+              return { rows: [], rowCount: 0 };
+            }),
+          } as unknown as DbPool,
+          repo: makeRepo({
+            listPlannedItems: async () => [itemA, itemB],
+            updatePlannedItemTimes: async () => {},
+          }),
+          requireSession: async (request) => {
+            (request as unknown as { userId: string }).userId = CALLER_ID;
+          },
+        }),
+      );
+
+      const res = await simApp.inject({
+        method: 'POST',
+        url: `/trips/${TRIP_ID}/schedule/optimize`,
+        payload: { date: '2026-10-01', preserveOrder: true },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as TripOptimizationResult;
+      expect(body.items.map((i) => i.plannedItemId)).toEqual([itemA.id, itemB.id]);
     });
   });
 });

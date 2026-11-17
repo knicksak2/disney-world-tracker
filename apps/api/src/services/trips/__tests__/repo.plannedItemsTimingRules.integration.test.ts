@@ -130,6 +130,7 @@ describe('Planned_Item Timing Modes & Mutual Exclusion (integration, pg-mem)', (
   // Reads go through the 0064 visibility views (profile_identity needs profiles.avatar_preset from 0013).
   applyMigration(db, '0013_avatar_presets.sql');
   applyMigration(db, '0064_account_deletion.sql');
+  applyMigration(db, '0077_planned_items_sort_order.sql');
 
     const { Pool: PgMemPool } = db.adapters.createPg();
     const rawPool = new PgMemPool() as unknown as DbPool;

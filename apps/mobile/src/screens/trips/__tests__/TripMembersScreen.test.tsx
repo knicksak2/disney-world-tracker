@@ -526,4 +526,60 @@ describe('Trip_Members screen', () => {
 
     await flushPending();
   });
+
+  test('renders guest age bracket from budget traveler profiles (defaulting to Adult)', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === '/me') return { user: { id: OWN_ID } };
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return ORGANIZER_ROSTER;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/invites`) return [];
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/guests`) {
+        return [
+          { id: 'g-kid', tripId: TRIP_ID, sponsorMemberId: OWN_ID, name: 'Timmy', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 'g-adult', tripId: TRIP_ID, sponsorMemberId: OWN_ID, name: 'Pat', createdAt: '2026-01-01T00:00:00Z' },
+        ];
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/budget`) {
+        return {
+          tripId: TRIP_ID,
+          lines: [],
+          travelers: [
+            { id: 'tp-1', memberId: null, guestId: 'g-kid', label: 'Timmy', ageBracket: 'child', ticketOption: null, ticketDays: null, ticketStartDate: null },
+          ],
+        };
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+
+    renderMembers(makeNavigation());
+
+    expect(await screen.findByTestId('trip-guest-g-kid')).toBeTruthy();
+    expect(screen.getByText('Guest · Child (3–9) · Sponsored by Ariel')).toBeTruthy();
+    expect(screen.getByText('Guest · Adult (10+) · Sponsored by Ariel')).toBeTruthy();
+
+    await flushPending();
+  });
+
+  test('renders avatarPreset SVG for members when set instead of initial letter', async () => {
+    apiRequestMock.mockImplementation(async (method, path) => {
+      if (method === 'GET' && path === '/me') return { user: { id: OWN_ID } };
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) {
+        return [
+          { userId: OWN_ID, displayName: 'Ariel', avatarPreset: 'castle', role: 'organizer' },
+          { userId: MEMBER_ID, displayName: 'Eric', avatarPreset: null, role: 'member' },
+        ];
+      }
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/invites`) return [];
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/guests`) return [];
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+
+    renderMembers(makeNavigation());
+
+    await screen.findByTestId(`trip-member-${OWN_ID}`);
+    // 'A' initial is replaced by the 'castle' preset SVG; 'E' still falls back to initial
+    expect(screen.queryByText('A')).toBeNull();
+    expect(screen.getByText('E')).toBeTruthy();
+
+    await flushPending();
+  });
 });

@@ -65,6 +65,11 @@ export interface OptimizeInput {
    * always report the true unweighted minutes of the chosen sequence.
    */
   readonly walkWaitWeighting?: WalkWaitWeighting;
+  /**
+   * When true, evaluates `items` in their exact input sequence via
+   * `simulate(...)` without TSP reordering (day-planning-optimization R12.5).
+   */
+  readonly preserveOrder?: boolean;
 }
 
 export interface OptimizedItem {
@@ -645,6 +650,43 @@ export function optimize(input: OptimizeInput): OptimizeResult {
       totalWalkMinutes: 0,
       unfittedItemIds: [],
       warnings: [],
+    };
+  }
+
+  if (input.preserveOrder) {
+    const direct = simulate(input.items, input);
+    if (direct.result) {
+      return { ...direct.result, unfittedItemIds: [] };
+    }
+    const accepted: OptimizeInputItem[] = [];
+    const unfitted: string[] = [];
+    for (const item of input.items) {
+      const trial = simulate([...accepted, item], input);
+      if (trial.result) {
+        accepted.push(item);
+      } else {
+        unfitted.push(item.id);
+      }
+    }
+    if (accepted.length === 0) {
+      return {
+        items: [],
+        totalWaitMinutes: 0,
+        totalWalkMinutes: 0,
+        unfittedItemIds: unfitted,
+        warnings: [],
+      };
+    }
+    const finalSim = simulate(accepted, input);
+    return {
+      ...(finalSim.result ?? {
+        items: [],
+        totalWaitMinutes: 0,
+        totalWalkMinutes: 0,
+        unfittedItemIds: unfitted,
+        warnings: [],
+      }),
+      unfittedItemIds: unfitted,
     };
   }
 

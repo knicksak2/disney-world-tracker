@@ -215,11 +215,12 @@ describe('Attached Experience Lists UI (Task 19.1, 19.2)', () => {
       </QueryClientProvider>,
     );
 
-    // Header and section exist
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-exp'));
+
+    // Section exists inside Saved Lists & Favorites Exp tab
     expect(
       await screen.findByTestId('trip-detail-experience-lists-section'),
     ).toBeTruthy();
-    expect(screen.getByText('Attached Experience Lists')).toBeTruthy();
 
     // Available list item rendered with name, owner, and itemCount
     expect(
@@ -252,6 +253,7 @@ describe('Attached Experience Lists UI (Task 19.1, 19.2)', () => {
       </QueryClientProvider>,
     );
 
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-exp'));
     const card = await screen.findByTestId(
       `attached-experience-list-${LIST_1_ID}`,
     );
@@ -283,6 +285,7 @@ describe('Attached Experience Lists UI (Task 19.1, 19.2)', () => {
       </QueryClientProvider>,
     );
 
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-exp'));
     expect(
       await screen.findByTestId(
         `attached-experience-list-unavailable-${LIST_UNAVAIL_ID}`,

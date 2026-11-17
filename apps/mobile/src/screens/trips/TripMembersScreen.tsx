@@ -43,14 +43,19 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
-import type {
-  TripGuestDTO,
-  TripMemberDTO,
-  TripPendingInviteDTO,
-  TripRole,
+import {
+  isAvatarPresetId,
+  type AgeBracket,
+  type BudgetDTO,
+  type TripGuestDTO,
+  type TripMemberDTO,
+  type TripPendingInviteDTO,
+  type TripRole,
 } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
+import { budgetKeys, fetchBudget } from './budgetApi';
 import { fetchTripGuests, tripExpenseKeys } from './tripExpenseApi';
 import { TripGuestManagementModal } from './TripGuestManagementModal';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
@@ -139,6 +144,12 @@ function roleMetaFor(
 // Screen
 // ---------------------------------------------------------------------------
 
+const AGE_BRACKET_LABEL: Record<AgeBracket, string> = {
+  adult: 'Adult (10+)',
+  child: 'Child (3\u20139)',
+  under3: 'Infant (0\u20132)',
+};
+
 export default function TripMembersScreen({
   navigation,
   route,
@@ -164,13 +175,34 @@ export default function TripMembersScreen({
     queryFn: () => fetchTripGuests(tripId),
   });
 
+  const guests = guestsQuery.data ?? [];
+
+  const budgetQuery = useQuery<BudgetDTO, ApiError>({
+    queryKey: budgetKeys.detail(tripId),
+    queryFn: () => fetchBudget(tripId),
+    enabled: guests.length > 0,
+    retry: false,
+  });
+
+  const guestAgeMap = useMemo(() => {
+    const map = new Map<string, AgeBracket>();
+    const travelers = budgetQuery.data?.travelers;
+    if (Array.isArray(travelers)) {
+      for (const tr of travelers) {
+        if (tr.guestId) {
+          map.set(tr.guestId, tr.ageBracket);
+        }
+      }
+    }
+    return map;
+  }, [budgetQuery.data]);
+
   const [inviteVisible, setInviteVisible] = useState(false);
   const [guestsVisible, setGuestsVisible] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const ownUserId = meQuery.data?.user.id ?? null;
   const members = membersQuery.data ?? [];
-  const guests = guestsQuery.data ?? [];
   const memberNameMap = useMemo(() => new Map(members.map((m) => [m.userId, m.displayName])), [members]);
   const ownMember = members.find((m) => m.userId === ownUserId) ?? null;
   const isOrganizer = ownMember?.role === 'organizer';
@@ -404,7 +436,7 @@ export default function TripMembersScreen({
               testID={`trip-member-${member.userId}`}
             >
               <View style={styles.memberRow}>
-                <MemberAvatar displayName={member.displayName} />
+                <MemberAvatar displayName={member.displayName} avatarPreset={member.avatarPreset} />
                 <View style={styles.memberIdentity}>
                   <Text style={styles.memberName} numberOfLines={1}>
                     {member.displayName}
@@ -494,21 +526,25 @@ export default function TripMembersScreen({
               </Text>
             </Card>
           ) : (
-            guests.map((guest) => (
-              <Card key={guest.id} style={styles.memberCard} testID={`trip-guest-${guest.id}`}>
-                <View style={styles.memberRow}>
-                  <MemberAvatar displayName={guest.name} />
-                  <View style={styles.memberIdentity}>
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {guest.name}
-                    </Text>
-                    <Text style={styles.guestHint} numberOfLines={1}>
-                      {`Guest · Sponsored by ${memberNameMap.get(guest.sponsorMemberId) ?? 'Member'}`}
-                    </Text>
+            guests.map((guest) => {
+              const ageBracket = guestAgeMap.get(guest.id) ?? 'adult';
+              const ageLabel = AGE_BRACKET_LABEL[ageBracket];
+              return (
+                <Card key={guest.id} style={styles.memberCard} testID={`trip-guest-${guest.id}`}>
+                  <View style={styles.memberRow}>
+                    <MemberAvatar displayName={guest.name} />
+                    <View style={styles.memberIdentity}>
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {guest.name}
+                      </Text>
+                      <Text style={styles.guestHint} numberOfLines={1}>
+                        {`Guest · ${ageLabel} · Sponsored by ${memberNameMap.get(guest.sponsorMemberId) ?? 'Member'}`}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
         </View>
 
@@ -523,7 +559,7 @@ export default function TripMembersScreen({
                 testID={`trip-invite-${invite.inviteId}`}
               >
                 <View style={styles.memberRow}>
-                  <MemberAvatar displayName={invite.inviteeDisplayName} />
+                  <MemberAvatar displayName={invite.inviteeDisplayName} avatarPreset={invite.inviteeAvatarPreset} />
                   <View style={styles.memberIdentity}>
                     <Text style={styles.memberName} numberOfLines={1}>
                       {invite.inviteeDisplayName}
@@ -702,7 +738,7 @@ function InviteModal({
                     testID={`trip-members-invite-candidate-${friend.userId}`}
                   >
                     <View style={styles.memberRow}>
-                      <MemberAvatar displayName={friend.displayName} />
+                      <MemberAvatar displayName={friend.displayName} avatarPreset={friend.avatarPreset} />
                       <Text style={styles.memberName} numberOfLines={1}>
                         {friend.displayName}
                       </Text>
@@ -759,11 +795,24 @@ function getAvatarColor(
   return avatarColors[hash] ?? fallback;
 }
 
-/** A small circular avatar showing the first initial of a display name. */
-function MemberAvatar({ displayName }: { readonly displayName: string }): JSX.Element {
+/** A small circular avatar showing the user's preset illustration or first initial. */
+function MemberAvatar({
+  displayName,
+  avatarPreset,
+}: {
+  readonly displayName: string;
+  readonly avatarPreset?: string | null | undefined;
+}): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
   const avatarPal = usePalette(MEMBER_AVATAR);
+  if (isAvatarPresetId(avatarPreset)) {
+    return (
+      <View style={[styles.avatar, { overflow: 'hidden' }]}>
+        {renderAvatarPreset(avatarPreset, 40)}
+      </View>
+    );
+  }
   const initial = displayName.trim().charAt(0).toUpperCase() || '?';
   const bgColor = getAvatarColor(
     displayName,

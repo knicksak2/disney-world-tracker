@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ExperiencePicker } from '../ExperiencePicker';
 import { apiRequest } from '../../../api/client';
@@ -1082,12 +1082,12 @@ describe('ExperiencePicker dark mode', () => {
     setTestScheme('dark');
     renderPicker();
 
-    // (a) the picker's own surfaces: inactive tab chip on surfaceAlt, active on primary.
-    expect(flat(screen.getByTestId('picker-tab-attractions')).backgroundColor).toBe(
-      darkTheme.color.surfaceAlt,
+    // (a) the picker's own underline tabs: inactive borderBottomColor transparent, active primaryFg.
+    expect(flat(screen.getByTestId('picker-tab-attractions')).borderBottomColor).toBe(
+      'transparent',
     );
-    expect(flat(screen.getByTestId('picker-tab-all')).backgroundColor).toBe(
-      darkTheme.color.primary,
+    expect(flat(screen.getByTestId('picker-tab-all')).borderBottomColor).toBe(
+      darkTheme.color.primaryFg,
     );
 
     const search = screen.getByTestId('picker-search');
@@ -1130,12 +1130,29 @@ describe('ExperiencePicker dark mode', () => {
   it('keeps the pre-retrofit light values under light', async () => {
     renderPicker();
 
-    expect(flat(screen.getByTestId('picker-tab-all')).backgroundColor).toBe('#5b2a86');
+    expect(flat(screen.getByTestId('picker-tab-all')).borderBottomColor).toBe('#5b2a86');
     expect(screen.getByTestId('picker-search').props.placeholderTextColor).toBe('#6b6480');
     fireEvent.changeText(screen.getByTestId('picker-search'), 'Magic');
     await waitFor(() => {
       expect(screen.getByText('Space Mountain')).toBeTruthy();
     });
     expect(flat(screen.getAllByText('Magic Kingdom')[0]!).color).toBe('#5b2a86');
+  });
+
+  it('hides redundant park badge on rows when filtered to a specific park, and shows it under All Parks', async () => {
+    renderPicker({ showParkFilter: true, defaultPark: 'Magic Kingdom' });
+
+    fireEvent.changeText(screen.getByTestId('picker-search'), 'Space');
+    await waitFor(() => {
+      expect(screen.getByText('Space Mountain')).toBeTruthy();
+    });
+
+    const row = screen.getByTestId('picker-result-exp-ride-1');
+    expect(within(row).queryByText('Magic Kingdom')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('picker-park-chip-all'));
+    await waitFor(() => {
+      expect(within(screen.getByTestId('picker-result-exp-ride-1')).getByText('Magic Kingdom')).toBeTruthy();
+    });
   });
 });

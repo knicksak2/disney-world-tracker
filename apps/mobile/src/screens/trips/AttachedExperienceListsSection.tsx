@@ -56,6 +56,7 @@ export interface AttachedExperienceListsSectionProps {
   readonly onOpenExperienceList?: ((experienceListId: string) => void) | undefined;
   /** Force-allow detach buttons for testing forbidden third-party server responses */
   readonly allowAllDetachForTesting?: boolean | undefined;
+  readonly embedded?: boolean | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +72,7 @@ export default function AttachedExperienceListsSection({
   navigation,
   onOpenExperienceList,
   allowAllDetachForTesting = false,
+  embedded = false,
 }: AttachedExperienceListsSectionProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
@@ -243,23 +245,25 @@ export default function AttachedExperienceListsSection({
   };
 
   return (
-    <View style={styles.sectionContainer} testID="trip-detail-experience-lists-section">
+    <View style={[styles.sectionContainer, embedded && { marginTop: 0 }]} testID="trip-detail-experience-lists-section">
       {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View style={styles.titleWrap}>
-          <Ionicons
-            name="list-outline"
-            size={18}
-            color={t.color.primaryFg}
-          />
-          <Text style={styles.sectionTitle}>Attached Experience Lists</Text>
-          {experienceLists.length > 0 ? (
-            <Badge
-              label={String(experienceLists.length)}
+      <View style={[styles.headerRow, embedded && { justifyContent: 'flex-end', marginBottom: 8 }]}>
+        {!embedded ? (
+          <View style={styles.titleWrap}>
+            <Ionicons
+              name="list-outline"
+              size={18}
               color={t.color.primaryFg}
             />
-          ) : null}
-        </View>
+            <Text style={styles.sectionTitle}>Attached Experience Lists</Text>
+            {experienceLists.length > 0 ? (
+              <Badge
+                label={String(experienceLists.length)}
+                color={t.color.primaryFg}
+              />
+            ) : null}
+          </View>
+        ) : null}
         <Pressable
           onPress={() => {
             setAttachError(null);

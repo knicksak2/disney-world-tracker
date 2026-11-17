@@ -90,6 +90,7 @@ import {
   plannedItemAddSchema,
   plannedItemEditSchema,
   tripOptimizationInputSchema,
+  scheduleReorderInputSchema,
   rodeWithConfirmSchema,
   tripCommentInputSchema,
   tripCreateSchema,
@@ -1460,6 +1461,29 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
     );
 
     // -------------------------------------------------------------------
+    // PATCH /trips/:id/schedule/reorder — persist manual per-day order
+    // -------------------------------------------------------------------
+    app.patch<{ Params: { id: string } }>(
+      '/trips/:id/schedule/reorder',
+      { preHandler: requireSession },
+      async (request) => {
+        const userId = requireUser(request);
+        const { id } = parseOrAppError(
+          z.object({ id: z.string().uuid() }),
+          request.params
+        );
+        await assertTripMember(pool, userId, id);
+
+        const { date, orderedItemIds } = parseOrAppError(
+          scheduleReorderInputSchema,
+          request.body
+        );
+        const items = await repo.reorderDayPlannedItems(id, date, orderedItemIds);
+        return { items };
+      }
+    );
+
+    // -------------------------------------------------------------------
     // POST /trips/:id/schedule/optimize — run optimizer
     // -------------------------------------------------------------------
     app.post<{ Params: { id: string } }>(
@@ -1473,7 +1497,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
         );
         await assertTripMember(pool, userId, id);
         
-        const { date, startHour, endHour, startMinutes, startMode } = parseOrAppError(tripOptimizationInputSchema, request.body);
+        const { date, startHour, endHour, startMinutes, startMode, preserveOrder } = parseOrAppError(tripOptimizationInputSchema, request.body);
         
         const allItems = await repo.listPlannedItems(id);
         const dayItems = allItems.filter((i) => i.plannedDate === date);
@@ -1610,6 +1634,7 @@ export function tripRoutes(options: TripRoutesOptions): FastifyPluginAsync {
           ...(resolvedStartHour !== undefined ? { startHour: resolvedStartHour } : {}),
           ...(resolvedEndHour !== undefined ? { endHour: resolvedEndHour } : {}),
           ...(effectiveStartMinutes !== undefined ? { startMinutes: effectiveStartMinutes } : {}),
+          ...(preserveOrder !== undefined ? { preserveOrder } : {}),
         };
         
         const result = optimize(optInput);

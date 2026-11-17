@@ -421,6 +421,39 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
   - 26.2 `TripScheduleScreen.tsx`: `unfitted-items-notice` naming unfitted items, an explicit "Nothing could be scheduled" line for an empty result, and a `fixed_past_close:<id>` message. Tests in `TripScheduleScreen.test.tsx` (two cases).
     - _Requirements: 4.17_
 
+- [x] 27. Manual Schedule Ordering (Property 26)
+  - [x] 27.1 Migration `0077_planned_items_sort_order.sql` + `migration0077.test.ts`
+    - Add nullable `sort_order INTEGER` column to `planned_items`.
+    - _Requirements: 12.1_
+  - [x] 27.2 Shared contract in `packages/shared` (`trips.ts`, `index.ts`) + schema test
+    - Add `sortOrder: number | null` to `PlannedItemDTO` and `scheduleReorderInputSchema` / `ScheduleReorderInput`.
+    - _Requirements: 12.1, 12.2_
+  - [x] 27.3 Backend repo & route (`repo.ts`, `routes.ts`) + pg-mem & `server.inject` tests
+    - Update `listPlannedItems` ordering (`sort_order ASC NULLS LAST, created_at ASC, id ASC`) and DTO mapping for `sortOrder`.
+    - Implement `reorderDayPlannedItems` and `PATCH /trips/:id/schedule/reorder` (Member-gated), validating item ownership/date/uniqueness, persisting `sort_order`, clearing stale optimization fields and flexible `planned_time`s while preserving fixed `planned_time`s.
+    - _Requirements: 12.1, 12.2_
+  - [x] 27.4 Schedule Builder UI (`TripScheduleScreen.tsx`) + mobile component tests (`TripScheduleScreen.test.tsx`)
+    - Sort unscheduled day items by `sortOrder`, add accessible Move Up / Move Down buttons with step numbers, wire `PATCH /trips/:id/schedule/reorder`, clear `optResult` on manual reorder, and update the manual-schedule notice.
+    - _Requirements: 12.3, 12.4_
+  - [x] 27.5 Verification Gate
+    - Run `npm run verify` across all workspaces.
+    - _Requirements: 12.1, 12.2, 12.3, 12.4_
+
+- [x] 28. Simulate My Order & Drag-and-Drop Reordering (Property 27)
+  - [x] 28.1 Shared contract (`packages/shared/src/trips.ts`) + schema test
+    - Add `preserveOrder: z.boolean().optional()` to `tripOptimizationInputSchema`.
+    - _Requirements: 12.5_
+  - [x] 28.2 Optimizer `preserveOrder` & route pass-through (`optimizer.ts`, `routes.ts`) + property/integration tests
+    - Implement `preserveOrder` branch in `optimize(input)` and pass `preserveOrder` in `POST /trips/:id/schedule/optimize`.
+    - Add `optimizer.preserveOrder.test.ts` (≥100 fast-check runs, Property 27) and `routes.schedule.test.ts` case.
+    - _Requirements: 12.5_
+  - [x] 28.3 Drag-and-drop & Estimate Order UI (`TripScheduleScreen.tsx`) + mobile tests (`TripScheduleScreen.test.tsx`)
+    - Replace external `↑`/`↓` boxes with `NestableScrollContainer` + `NestableDraggableFlatList` and an in-card drag handle (`reorder-three-outline`), and add "Estimate Order" button (`preserveOrder: true`).
+    - _Requirements: 12.3, 12.5_
+  - [x] 28.4 Verification Gate
+    - Run `npm run verify` across all workspaces.
+    - _Requirements: 12.3, 12.5_
+
 ## Notes
 
 - Test tasks are **required, not optional** — a feature task is not complete until its tests exist and pass.
@@ -455,7 +488,11 @@ Implementation is **TypeScript**. It reuses `experiences.latitude/longitude` for
     { "id": 18, "tasks": ["23.4", "23.5", "23.6"] },
     { "id": 19, "tasks": ["24"] },
     { "id": 20, "tasks": ["26.1"] },
-    { "id": 21, "tasks": ["26.2"] }
+    { "id": 21, "tasks": ["26.2"] },
+    { "id": 22, "tasks": ["27.1", "27.2"] },
+    { "id": 23, "tasks": ["27.3"] },
+    { "id": 24, "tasks": ["27.4"] },
+    { "id": 25, "tasks": ["27.5"] }
   ]
 }
 ```

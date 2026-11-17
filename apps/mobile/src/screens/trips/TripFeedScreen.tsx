@@ -354,7 +354,13 @@ export default function TripFeedScreen({
   const canUpload = config?.enabled !== false && config?.tripEnabled !== false;
 
   const [filter, setFilter] = useState<ActivityFilter>('all');
-  const [composerVisible, setComposerVisible] = useState(false);
+  const [composerVisible, setComposerVisible] = useState(Boolean(route.params.openLog));
+
+  useEffect(() => {
+    if (route.params.openLog) {
+      setComposerVisible(true);
+    }
+  }, [route.params.openLog]);
   const [postComposerVisible, setPostComposerVisible] = useState(false);
   const [quickPostDraft, setQuickPostDraft] = useState('');
   const [quickPostError, setQuickPostError] = useState<string | null>(null);

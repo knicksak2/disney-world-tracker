@@ -266,6 +266,18 @@ graph TD
 
 **Validates: Requirements 3.20, 4.17**
 
+### Property 26: Manual reordering persists per-day order and clears stale optimization state
+
+*For any* valid `orderedItemIds` permutation of a day's planned items, `reorderDayPlannedItems(tripId, date, orderedItemIds)` persists `sort_order = 0..n-1` so `listPlannedItems(tripId)` returns that day's items in the exact requested order, clears `optimized_at` and derived wait/showtime/travel columns on those items, clears `planned_time` on flexible items (`is_fixed = false`), and leaves `planned_time` untouched on fixed items (`is_fixed = true`). Any duplicate ID or ID belonging to a different trip or date is rejected with `trip_validation_failed` without mutating any row.
+
+**Validates: Requirements 12.1, 12.2**
+
+### Property 27: `preserveOrder` simulates the user's exact sequence without TSP reordering
+
+*For any* non-empty `OptimizeInput` with `preserveOrder: true`, `optimize(input)` returns `items` whose `plannedItemId` sequence is a strict subsequence of `input.items` in the exact input order (preserving the user's sequence without reordering), and every excluded item is listed in `unfittedItemIds`. When all items fit within operating hours, `items.map(i => i.plannedItemId)` equals `input.items.map(i => i.id)` and `unfittedItemIds` is empty.
+
+**Validates: Requirements 12.5**
+
 ## Error Handling
 
 - **Prediction_Service fallback/failure:** the optimizer uses whatever snapshot is returned (including a model-only fallback for far-future dates) and never fails for want of live data (R1.3).

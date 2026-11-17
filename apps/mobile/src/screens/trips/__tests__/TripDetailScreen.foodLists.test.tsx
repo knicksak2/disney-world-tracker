@@ -219,11 +219,12 @@ describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
       </QueryClientProvider>,
     );
 
-    // Header and section exist
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-food'));
+
+    // Section exists inside Saved Lists & Favorites Food tab
     expect(
       await screen.findByTestId('trip-detail-food-lists-section'),
     ).toBeTruthy();
-    expect(screen.getByText('Attached Food Lists')).toBeTruthy();
 
     // Available list item rendered with name, owner, and itemCount
     expect(screen.getByTestId(`attached-food-list-${LIST_1_ID}`)).toBeTruthy();
@@ -254,6 +255,7 @@ describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
       </QueryClientProvider>,
     );
 
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-food'));
     const card = await screen.findByTestId(`attached-food-list-${LIST_1_ID}`);
     fireEvent.press(card);
 
@@ -283,6 +285,7 @@ describe('Attached Food Lists UI (Task 24.6, 24.7)', () => {
       </QueryClientProvider>,
     );
 
+    fireEvent.press(await screen.findByTestId('trip-detail-saved-tab-food'));
     expect(
       await screen.findByTestId(
         `attached-food-list-unavailable-${LIST_UNAVAIL_ID}`,
