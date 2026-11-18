@@ -272,7 +272,12 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   if (friendsQuery.isLoading && friendsQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Friends" icon="people" />
+        <GradientHeader
+          title="Friends"
+          icon="people"
+          onBack={() => navigation.goBack()}
+          backTestID="friends-back"
+        />
         <View style={styles.center} testID="friends-loading">
           <ActivityIndicator color={t.color.primaryFg} />
         </View>
@@ -283,7 +288,12 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
   if (friendsQuery.isError && friendsQuery.data === undefined) {
     return (
       <ScreenContainer>
-        <GradientHeader title="Friends" icon="people" />
+        <GradientHeader
+          title="Friends"
+          icon="people"
+          onBack={() => navigation.goBack()}
+          backTestID="friends-back"
+        />
         <View style={styles.center}>
           <EmptyState
             icon="cloud-offline-outline"
@@ -319,6 +329,8 @@ export default function FriendsListScreen({ navigation }: Props): JSX.Element {
         title="Friends"
         subtitle="Share the magic with your crew."
         icon="people"
+        onBack={() => navigation.goBack()}
+        backTestID="friends-back"
         right={
           <PrimaryButton
             label="Find"

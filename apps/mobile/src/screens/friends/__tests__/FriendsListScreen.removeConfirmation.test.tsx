@@ -170,4 +170,17 @@ describe('FriendsListScreen — dark mode', () => {
     expect(flat(screen.root).backgroundColor).toBe(darkTheme.color.background);
     expect(flat(screen.getByText('Minnie Mouse')).color).toBe(darkTheme.color.textPrimary);
   });
+
+  test('renders header back button and calls navigation.goBack on press', async () => {
+    const mockGoBack = jest.fn();
+    renderWithClient(
+      <FriendsListScreen
+        navigation={{ navigate: jest.fn(), goBack: mockGoBack } as never}
+        route={{} as never}
+      />,
+    );
+    const backBtn = await screen.findByTestId('friends-back');
+    fireEvent.press(backBtn);
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
 });

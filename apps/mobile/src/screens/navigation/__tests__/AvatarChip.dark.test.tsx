@@ -72,7 +72,10 @@ describe('AvatarChip pill (dark)', () => {
     expect(flat(screen.getByText('You & Crew')).color).toBe(darkTheme.color.textOnPrimary);
 
     fireEvent.press(screen.getByTestId('avatar-chip'));
-    expect(mockNavigate).toHaveBeenCalledWith('YouAndCrew');
+    expect(mockNavigate).toHaveBeenCalledWith('Collection', {
+      screen: 'CollectionHome',
+      params: { initialTab: 'crew' },
+    });
   });
 
   it('avatar artwork renders identically in light and dark', async () => {

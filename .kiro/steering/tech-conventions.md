@@ -73,3 +73,25 @@ A broadly worded existing requirement (e.g. "a settings modal") does NOT already
 ## Editing an existing spec — additive by default
 
 When you revise a spec that already exists, **add or amend; do not delete or renumber existing requirements, acceptance criteria, or design sections** unless you were explicitly asked to remove them. Requirements are referenced by number across the spec (design Correctness Properties' `Validates:` lines, tasks' `_Requirements:_` lines), so silently dropping or renumbering one orphans every reference to it. If a requirement is genuinely obsolete, call it out and confirm before removing. After any spec edit, re-run the spec validator (the Kiro Spec Format diagnostics) and confirm every file is clean — this also catches malformed checkboxes (`- [ ]`/`- [x]` only; never `- [/]` or other markers).
+
+## Keep `docs/features.md` current
+
+`docs/features.md` is the one-page inventory of what the app does (feature, status, where it lives, owning spec). Update it **in the same change** whenever you:
+
+- ship, remove, or rename a user-facing feature, screen, tab, admin page, or `/internal/*` cron endpoint,
+- finish or newly leave open a task that changes a feature's status (Shipped / Partial / Not built), or complete a spec's last open task,
+- add a new spec under `.kiro/specs/` (add its row, or note why it has no user-visible surface).
+
+Ordinary bug fixes and refactors inside an existing feature do not need an edit. Check status against the code (screen registered, route exists), not only `tasks.md` checkboxes; a stale checkbox is not evidence either way. Bump the snapshot line (commit and date) at the top when you edit. In your completion report, say which rows you changed, or state that none apply.
+
+## Keep `README.md` current
+
+`README.md` is the setup and operations guide. Update it **in the same change** whenever you:
+
+- add, remove, or rename an npm script (root, `apps/api`, or `apps/mobile`),
+- add an env var that is **required at startup** or required when a feature flag is on (also update `apps/api/.env.example` and `render.yaml`; the README only names startup-blocking keys and points to those files),
+- add or remove an `/admin` section or an `/internal/*` cron endpoint (also update the Admin Panel section or the hosting table),
+- add a third-party service, a native Expo module that Expo Go lacks, or a hosting dependency,
+- change the local setup steps, the deploy steps, or the branch Render deploys.
+
+Feature descriptions belong in `docs/features.md`, not the README. In your completion report, say which README sections you changed, or state that none apply.

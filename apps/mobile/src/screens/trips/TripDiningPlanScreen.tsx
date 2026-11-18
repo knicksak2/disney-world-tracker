@@ -133,8 +133,12 @@ export default function TripDiningPlanScreen({ navigation, route }: Props): JSX.
     membersQuery.data.some((m) => m.userId === callerId && m.role === 'organizer');
 
   const handleBack = useCallback(() => {
-    if (navigation.canGoBack()) navigation.goBack();
-  }, [navigation]);
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('TripDetail', { tripId });
+    }
+  }, [navigation, tripId]);
 
   const plan = query.data;
   const headerSubtitle = plan !== undefined ? headerMetaSummary(plan.party.length, plan.stay) : undefined;

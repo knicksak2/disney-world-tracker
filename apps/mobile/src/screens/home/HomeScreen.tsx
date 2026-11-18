@@ -77,6 +77,7 @@ import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import ExplorationPromptCard from './ExplorationPromptCard';
 import HomeFavoritesSection from './HomeFavoritesSection';
+import { HomeSearchBar } from './HomeSearchBar';
 import HomeThemeParksSection from './HomeThemeParksSection';
 import UpcomingTripHero from './UpcomingTripHero';
 import { buildOperatingContextSubtitle } from './operatingContext';
@@ -343,6 +344,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
       {/* Main Scrollable Body */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -352,6 +354,8 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
         }
         showsVerticalScrollIndicator={false}
       >
+        <HomeSearchBar />
+
         {/* 2. Vacation Context: Active Vacation, Upcoming Countdown Hero, or Exploration Prompt */}
         <ActiveTripShortcut />
         {!activeTrip && <UpcomingTripHero />}

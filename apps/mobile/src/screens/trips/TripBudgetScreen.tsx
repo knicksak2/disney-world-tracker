@@ -171,7 +171,11 @@ export function formatLineQuantitySummary(line: BudgetLineDTO): string | null {
 
 export interface TripBudgetScreenProps {
   readonly route?: { params: { tripId: string } };
-  readonly navigation?: { canGoBack?: () => boolean; goBack?: () => void } | unknown;
+  readonly navigation?: {
+    canGoBack?: () => boolean;
+    goBack?: () => void;
+    navigate?: (screen: string, params?: unknown) => void;
+  } | unknown;
   readonly tripId?: string;
   readonly isOrganizer?: boolean;
 }
@@ -392,9 +396,25 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
   };
 
   const navObj = props.navigation as
-    | { canGoBack?: () => boolean; goBack?: () => void }
+    | {
+        canGoBack?: () => boolean;
+        goBack?: () => void;
+        navigate?: (screen: string, params?: unknown) => void;
+      }
     | undefined;
   const canGoBack = typeof navObj?.canGoBack === 'function' ? navObj.canGoBack() : false;
+  const handleBack =
+    navObj && (typeof navObj.goBack === 'function' || typeof navObj.navigate === 'function')
+      ? () => {
+          if (canGoBack && navObj.goBack) {
+            navObj.goBack();
+          } else if (navObj.navigate) {
+            navObj.navigate('TripDetail', { tripId });
+          } else {
+            navObj.goBack?.();
+          }
+        }
+      : undefined;
 
   if (budgetQuery.isLoading) {
     return (
@@ -576,7 +596,7 @@ export function TripBudgetScreen(props: TripBudgetScreenProps) {
             </Pressable>
           ) : undefined
         }
-        onBack={canGoBack && navObj?.goBack ? () => navObj.goBack?.() : undefined}
+        onBack={handleBack}
       />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Header with totals & actions */}

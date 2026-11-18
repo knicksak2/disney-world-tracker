@@ -128,7 +128,7 @@ describe('Claimable-Pin and Notification badge locations (Requirement 6.4, 8.1, 
     expect(screen.queryAllByTestId('profile-tab-badge')).toHaveLength(0);
 
     // Navigate to Vault/Collection tab
-    fireEvent.press(await screen.findByText(/Vault|Collection/));
+    fireEvent.press(await screen.findByText('You'));
 
     const badge = await screen.findByTestId('claimable-pins-badge');
     expect(badge).toBeTruthy();
@@ -139,7 +139,7 @@ describe('Claimable-Pin and Notification badge locations (Requirement 6.4, 8.1, 
     renderApp(boardOf([]));
 
     // Navigate to Vault/Collection tab
-    fireEvent.press(await screen.findByText(/Vault|Collection/));
+    fireEvent.press(await screen.findByText('You'));
 
     await screen.findByTestId('collection-screen');
     expect(screen.queryByTestId('claimable-pins-badge')).toBeNull();

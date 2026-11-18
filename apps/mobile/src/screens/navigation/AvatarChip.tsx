@@ -57,7 +57,10 @@ export function AvatarChip({
   const initial = (profile?.displayName?.trim()?.[0] || 'Y').toUpperCase();
 
   const handlePress = () => {
-    navigation.navigate('YouAndCrew');
+    navigation.navigate('Collection', {
+      screen: 'CollectionHome',
+      params: { initialTab: 'crew' },
+    });
   };
 
   if (variant === 'pill') {

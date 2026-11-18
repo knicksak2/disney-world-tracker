@@ -1,6 +1,6 @@
 # Disney World Tracker
 
-A mobile app for tracking Walt Disney World experiences (attractions, shows, restaurants, parades, character meets, and more) and checking live wait times, show times, Lightning Lane state, and boarding groups, backed by a Fastify API and a shared TypeScript package.
+A mobile app for tracking Walt Disney World experiences (attractions, shows, restaurants, parades, character meets, and more) and checking live wait times, show times, Lightning Lane state, and boarding groups, backed by a Fastify API and a shared TypeScript package. Beyond tracking, it covers shared group trips (day planning, reservations, budget, expenses, dining-plan calculator), friends and sharing, a collectible pin system, Hidden Mickeys, a crowd calendar with wait forecasts, and photo uploads. For the full list with status and owning specs, see [`docs/features.md`](./docs/features.md).
 
 Data is sourced along a **data-by-change-rate** split:
 
@@ -15,7 +15,7 @@ This repository is an npm workspaces monorepo with three packages:
 
 | Path | Description |
 | --- | --- |
-| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts the eight service modules — Auth, Catalog, Live, Tracking, Stats, Friends, Sharing, Aggregate Ratings — plus BullMQ background workers. Talks to PostgreSQL and Redis. |
+| `apps/api` | Node.js + Fastify backend (TypeScript). Hosts about 30 service modules under `src/services/` (auth, catalog, live, tracking, stats, friends, sharing, trips and trip planning, pins, photos, intelligence/forecasting, admin, and more; see [`docs/features.md`](./docs/features.md)), plus BullMQ workers for aggregate ratings and the catalog scheduler. Talks to PostgreSQL and Redis. |
 | `apps/mobile` | React Native + TypeScript client built with Expo. Targets iOS and Android. |
 | `packages/shared` | Shared DTOs, Zod validation schemas, error code catalog, and enums consumed by both `apps/api` and `apps/mobile`. Imported as `@dwt/shared`. |
 
@@ -125,9 +125,19 @@ docker compose down -v       # stop and wipe data — clean slate
 
 The API never reads `process.env` directly outside its config loader, so every backend setting lives in an env file. The `.env.example` template ships with values that match `docker-compose.yml` — just copy it to `.env` (see [Quickstart](#quickstart--run-everything-locally)). The real `.env` is gitignored.
 
-Required keys: `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (32+ chars), and the Disney Sync Gateway `Static_Credentials` `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (startup fails fast if either is blank). Also required, because the config loader fails fast without them: `SAMPLING_CRON_SECRET`, `PIN_RECONCILE_CRON_SECRET`, and `TRIP_BOOKING_CRON_SECRET` (shared secrets for internal cron endpoints; use a distinct value for each) and `ADMIN_PANEL_USERNAME` / `ADMIN_PANEL_PASSWORD` (see [Admin Panel](#admin-panel)). `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog source), and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus, from Disney's public website dining-menu API — anonymous, no credentials) all default to the documented public endpoints. See `apps/api/.env.example` for descriptions.
+The authoritative lists are `apps/api/.env.example` (every key, with descriptions and defaults), `apps/api/src/config.ts` (what is required and how keys are validated), and `render.yaml` (what production needs). This README names only the keys that stop the API from starting.
 
-Optional Disney resilience-tuning keys (all have sane defaults): `DISNEY_MAX_RPS`, `DISNEY_MAX_CONCURRENCY` (shared Request_Budget), `DISNEY_BACKOFF_*` (bounded backoff), `MENU_FRESHNESS_MS` (lazy-menu cache window), and `CATALOG_SYNC_INTERVAL_MS` (scheduled cadence, floored at 24h). Optional Trip Booking Reminders tuning keys: `BOOKING_REMINDER_LEADS`, `BOOKING_REMINDER_CATCHUP_MINUTES`, `BOOKING_REMINDER_MIN_PASS_INTERVAL_SECONDS`, `BOOKING_REMINDER_SEND_START`, `BOOKING_REMINDER_SEND_END`, and `BOOKING_REMINDER_RETENTION_DAYS`. Override only if you have a reason to.
+**Required at startup** (the config loader fails fast without them):
+
+- `DATABASE_URL`, `REDIS_URL`, and `SESSION_SECRET` (32+ chars).
+- `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (see [Disney credentials](#disney-credentials)).
+- Four cron secrets: `SAMPLING_CRON_SECRET`, `PIN_RECONCILE_CRON_SECRET`, `TRIP_BOOKING_CRON_SECRET`, and `ACCOUNT_DELETION_CRON_SECRET`. Each guards one `/internal/*` endpoint and each must be a distinct value.
+- `ADMIN_PANEL_USERNAME` / `ADMIN_PANEL_PASSWORD` (see [Admin Panel](#admin-panel)).
+- `SUPPORT_EMAIL`, a valid address shown on the public `/privacy` page.
+
+**Required only when a feature is on:** with `PHOTOS_ENABLED=true`, the API also needs `PHOTOS_CRON_SECRET`, `PHOTO_STORE_ENDPOINT` / `_BUCKET` / `_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` (Cloudflare R2), and `PHOTO_HARM_API_KEY`. Food photos (`PHOTOS_FOOD_ENABLED`) also need `PHOTO_VISION_API_KEY`. Hidden Mickeys submissions in publish mode need `PHOTO_HARM_API_KEY` too. See [`docs/photos-runbook.md`](./docs/photos-runbook.md).
+
+**Defaulted:** `THEMEPARKS_BASE_URL` (live source), `DISNEY_SYNC_GATEWAY_BASE_URL` (static catalog) and `DISNEY_DINING_MENU_BASE_URL` (restaurant menus; anonymous, no credentials) default to the public endpoints. The Disney resilience, trip-reminder, photo, account-deletion and ticket-price tuning keys all have defaults in `config.ts`; override them only with a reason.
 
 #### Disney credentials
 
@@ -344,7 +354,7 @@ If you'd rather keep the **LAN** URL (e.g. to also test on a physical phone over
 
 ### Testing on a Physical iPhone
 
-You do **not** need an Apple Developer account, Xcode, or a Mac to run this app on your own iPhone — use **Expo Go**. This project has no custom native modules outside what Expo Go already supports (`expo-secure-store`, `expo-image-picker`, `expo-status-bar`, `expo-notifications`), so the dev server path works as-is.
+You do **not** need an Apple Developer account, Xcode, or a Mac to run this app on your own iPhone — use **Expo Go**. Almost everything the app uses ships with Expo Go. The one exception is `expo-ocr-kit` (on-device receipt scanning for trip expenses). When that native module is missing, as in Expo Go, receipt scanning returns a built-in sample receipt instead of reading your photo, and everything else works. Real receipt OCR needs a dev-client or EAS build.
 
 1. Install **Expo Go** from the iOS App Store on your iPhone.
 2. Make sure your iPhone and your dev machine are on the **same Wi-Fi network**.
@@ -384,17 +394,22 @@ All from the repo root.
 | `npm run lint` | Runs ESLint across the entire repo using the shared `eslint.config.mjs`. |
 | `npm run typecheck` | Runs `tsc --noEmit` in every workspace. |
 | `npm test` | Runs the test suite in every workspace (vitest for API + shared, jest for mobile). |
+| `npm run verify` | The full gate: typecheck plus tests in every workspace. Run it before a commit or deploy, and whenever a change touches `packages/shared` or more than one workspace. |
+| `npm run verify:api` / `verify:mobile` / `verify:shared` | Typecheck (all workspaces) plus the tests of one workspace. Enough for a change confined to that workspace. |
 | `npm run build` | Builds every workspace's `build` script. |
 | `npm run build:shared` | Builds just the shared package. |
 
 ### Catalog operational scripts (`apps/api`)
 
-Run these from `apps/api` (they read `apps/api/.env`):
+Run these from `apps/api` (they read `apps/api/.env`). Each has a `:cloud` variant that reads `apps/api/.env.dev` instead:
 
 | Command | What it does |
 | --- | --- |
 | `npm run sync` | Triggers one immediate Catalog_Sync now (bootstrap on first run, incremental thereafter), reconciling the result into the cache. Coordinated by the same Redis lock as the scheduled/on-read syncs, so concurrent runs are safe. Use it to seed a fresh DB or force a refresh. |
 | `npm run sync:cloud` | Same as `sync`, but against your **hosted** services (reads `apps/api/.env.dev`). Use it to seed or refresh the catalog in the hosted Neon database from your machine — the hosted API has no unattended seed step (see [Updating a running deployment](#updating-a-running-deployment)). |
+| `npm run backfill-facets` | Recomputes facet enrichment onto existing catalog rows from the stored Disney documents. Idempotent. See [Updating a running deployment](#updating-a-running-deployment). |
+| `npm run tag-festival-booth` | Interactive: tags the currently active EPCOT festival booths with their festival and year. See [Tagging festival booths](#tagging-festival-booths). |
+| `npm run seed-dining-links` | Writes each restaurant's Disney dining-page URL from `apps/api/seed-data/dining/dining-links.json` onto its catalog row (matched by `upstreamEntityId`). Skips quietly if the file is absent. |
 | `npm run build-bridge` | One-time identity Bridge_Map build: maps each Disney `Enterprise_Id` to the internal id derived during the ThemeParks.wiki era, preserving id continuity across the source migration. Only needed when migrating an existing catalog. |
 
 ## Admin Panel
@@ -403,11 +418,15 @@ An internal, server-rendered operator dashboard lives in the API itself under `/
 
 **Authentication.** Every `/admin` route sits behind HTTP Basic auth, using `ADMIN_PANEL_USERNAME` and `ADMIN_PANEL_PASSWORD`. Both are required and must be non-empty, or the API refuses to start. `apps/api/.env.example` ships `change-me` placeholders and the local `.env` uses throwaway values; **set strong, unique credentials in the Render dashboard for production** (they are `sync: false` secrets in `render.yaml`, so they are never in git). Only expose `/admin` over HTTPS, since Basic auth sends credentials on every request.
 
-**Sections** (linked from the `/admin` index): Catalog & Disney Sync, Disney Transport & Rate Limiter, Sampling Pass Health, Forecast Accuracy (park and per-Experience), Intelligence Model Internals, Derived Stats Health, Infrastructure Budget (Postgres size, Upstash command budget), Push Delivery Visibility, Configuration (non-secret resolved values), User & Support Lookup, Account Lockouts, and Growth & Activity.
+**Sections** (reached from the `/admin` navigation):
 
-**Read vs. write.** Almost everything is read-only. The only mutating actions are operator triggers that call existing code: run a catalog sync (`POST /admin/catalog/sync`, refused with `409` while a sync lock is held), unlock a locked-out account, revoke a user's sessions, and re-reconcile a user's pins.
+- *Operations and health:* Catalog & Disney Sync, Disney Transport & Limits, Sampling Pass Health, Forecast Accuracy (park and per-Experience), Model Internals & Baselines, Derived Stats Health, Infrastructure Budget (Postgres size, Upstash command budget), Push Delivery Visibility, System Configuration (non-secret resolved values), and Growth & Activity.
+- *Users and support:* User & Support Lookup (including a per-user pin diagnostic) and Account Lockouts.
+- *Content and moderation:* Pins & Achievements (with a visual catalogue), Hidden Mickeys (operator queue and full directory), Photos (moderation queue), User Feedback, Dining Plan data, and Ticket Prices.
 
-**Backing data.** The panel adds two small tables, `sampling_runs` and `push_delivery_log` (migration `0056_admin_panel.sql`), each pruned to a trailing 30-day window to stay within the Neon free tier. Design and requirements: `.kiro/specs/admin-panel/`.
+**Read vs. write.** The health and lookup pages are read-only. Pages that manage content have write actions, each of which calls existing code: run a catalog sync (`POST /admin/catalog/sync`, refused with `409` while a sync lock is held), unlock a locked-out account, revoke a user's sessions, re-reconcile pins, moderate photos, set feedback status or delete feedback, review, ban or retire Hidden Mickeys, edit and seed Dining Plan prices and locations, and refresh, block or diagnose ticket-price sources.
+
+**Backing data.** The first version of the panel added two small tables, `sampling_runs` and `push_delivery_log` (migration `0056_admin_panel.sql`), each pruned to a trailing 30-day window to stay within the Neon free tier. Later sections use their own feature tables. Design and requirements: `.kiro/specs/admin-panel/`, plus the spec of each feature that added a section.
 
 ## Experience images
 
@@ -435,7 +454,7 @@ The catalog and live paths are deliberately split (see the intro) and Disney acc
 
 ## Hosting
 
-The backend runs entirely on free tiers, one managed service per concern, chosen so a side-project can run at **$0/month** with no expiring trials. The design is hosting-agnostic (plain Postgres / Redis interfaces), so any single provider can be swapped without touching application code.
+The backend runs entirely on free tiers, one managed service per concern, chosen so a side-project can run at **$0/month** with no expiring trials (photo screening by third-party AI providers is the one usage-priced part, and is off by default). The design is hosting-agnostic (plain Postgres / Redis interfaces), so any single provider can be swapped without touching application code.
 
 | Concern | Service | Why this one | Free-tier limit |
 | --- | --- | --- | --- |
@@ -443,6 +462,10 @@ The backend runs entirely on free tiers, one managed service per concern, chosen
 | PostgreSQL | [**Neon**](https://neon.tech) | Real Postgres (not a clone) with the `citext` / `pg_trgm` / `pgcrypto` extensions the schema needs, plus built-in connection pooling and scale-to-zero | 1 GB storage per project, pauses when idle (1–3s wake) |
 | Redis | [**Upstash**](https://upstash.com) | Pay-per-command with no idle cost — a good fit for our low, bursty usage (cache reads, lockout counters, sync lock, BullMQ) | 500,000 commands/month, 256 MB |
 | Live data | [ThemeParks.wiki](https://api.themeparks.wiki/v1) | Already free, public, no key required | — |
+| Photo storage | [**Cloudflare R2**](https://www.cloudflare.com/developer-platform/products/r2/) | S3-compatible private bucket; the app uploads straight to it with presigned URLs, so the API never carries image bytes | 10 GB, 1M writes and 10M reads/month, no egress fees |
+| Scheduled jobs | [**cron-job.org**](https://cron-job.org) | Render has no free background worker, so an external cron calls authenticated `/internal/*` endpoints that answer `202` and work asynchronously. One job keeps the API awake; the rest drive wait sampling, pin reconciliation, trip booking reminders, photo cleanup and account purges | Free plan |
+| Photo screening | OpenAI (harm check) and Google (food check) | Called by the API for each upload; keys are `PHOTO_HARM_API_KEY` and `PHOTO_VISION_API_KEY` | Check each provider's current pricing. Photos stay off until `PHOTOS_ENABLED=true`. |
+| Push delivery | Expo push service | No backend credentials needed (see [Push notification credentials](#push-notification-credentials-fcm--apns)) | — |
 
 Everything except the mobile app is reached server-side; the app only ever knows the Render URL. The main free-tier trade-off is Render's cold start (first request after idle is slow) — a $7/mo upgrade makes it always-on when you have real users.
 
@@ -461,7 +484,10 @@ The API deploys to [Render](https://render.com) as a free Web Service, defined a
 
 1. Push to the `develop` branch (the branch `render.yaml` auto-deploys).
 2. In Render: **New +** → **Blueprint** → select this repo. Render reads `render.yaml`.
-3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint): `DATABASE_URL`, `REDIS_URL`, and the Disney Sync Gateway `DISNEY_SYNC_GATEWAY_USERNAME` / `DISNEY_SYNC_GATEWAY_PASSWORD` (the API won't boot without the Disney credentials — obtain them locally with `node tools/pull-disney-creds.mjs` and paste the values). `SESSION_SECRET` is auto-generated; `NODE_ENV` and `THEMEPARKS_BASE_URL` are preset.
+3. Fill in the secret env vars it prompts for (these are `sync: false` in the blueprint). The API will not boot until every one of the first group is set:
+   - **Always required:** `DATABASE_URL`, `REDIS_URL`, `DISNEY_SYNC_GATEWAY_USERNAME` / `_PASSWORD` (get them locally with `node tools/pull-disney-creds.mjs` and paste the values), the four cron secrets (`SAMPLING_CRON_SECRET`, `PIN_RECONCILE_CRON_SECRET`, `TRIP_BOOKING_CRON_SECRET`, `ACCOUNT_DELETION_CRON_SECRET`, each a different value), `ADMIN_PANEL_USERNAME` / `_PASSWORD`, and `SUPPORT_EMAIL`.
+   - **Photo keys** (`PHOTOS_CRON_SECRET`, `PHOTO_STORE_*`, `PHOTO_HARM_API_KEY`, `PHOTO_VISION_API_KEY`): needed only when `PHOTOS_ENABLED` is `true`. The blueprint presets it to `"false"`. See [`docs/photos-runbook.md`](./docs/photos-runbook.md).
+   - `SESSION_SECRET` is auto-generated. `NODE_ENV`, `THEMEPARKS_BASE_URL` and the `PHOTOS_*` toggles are preset. `render.yaml` is the source of truth if this list and the file ever differ.
 4. Render runs the build (`npm ci` → build shared → build API → apply migrations), then starts the server. The health check is `GET /health`. (Migrations run in the build step because Render's free tier doesn't support a separate pre-deploy command; they're idempotent, so they're skipped when already applied.)
 
 The deployed URL looks like `https://dwt-api.onrender.com` — this is also the default the mobile app targets in production builds (see [How the API base URL is chosen](#how-the-api-base-url-is-chosen)). If you rename the Render service, set `PROD_API_BASE_URL` in the mobile app to match.
@@ -560,6 +586,13 @@ These are one-time per project (re-done only if the keys rotate). They're a mobi
 - [`.kiro/specs/disney-world-tracker/requirements.md`](./.kiro/specs/disney-world-tracker/requirements.md) — feature requirements
 - [`.kiro/specs/disney-world-tracker/design.md`](./.kiro/specs/disney-world-tracker/design.md) — architecture and design decisions
 - [`.kiro/specs/disney-world-tracker/tasks.md`](./.kiro/specs/disney-world-tracker/tasks.md) — implementation plan
+- [`docs/features.md`](./docs/features.md) — inventory of everything the app does, by area, with status and the owning spec
 - [`docs/hosting.md`](./docs/hosting.md) — production hosting and deployment details
 - [`.kiro/specs/disney-facilities-catalog-source/`](./.kiro/specs/disney-facilities-catalog-source/) — migration of catalog sourcing from ThemeParks.wiki to the Disney sources (facilities, resorts, menus, imagery, identity continuity)
 - [`.kiro/specs/disney-source-resilience/`](./.kiro/specs/disney-source-resilience/) — the data-by-change-rate split (static from Disney, live from ThemeParks.wiki), the hardened Disney transport, incremental checkpoint-driven sync, lazy menus, graceful degradation, and the ThemeParks.wiki live path (Lightning Lane + boarding groups)
+- [`.kiro/specs/`](./.kiro/specs/) — one folder per feature (50 as of this writing), each with `requirements.md`, `design.md` and `tasks.md`. [`docs/features.md`](./docs/features.md) maps features to specs.
+- [`.kiro/steering/`](./.kiro/steering/) — repo conventions, verification rules and test stack. [`AGENTS.md`](./AGENTS.md) is the entry point for AI coding agents.
+- [`docs/photos-runbook.md`](./docs/photos-runbook.md) — operating the photo pipeline (storage, moderation, launch gates)
+- [`docs/runbooks/`](./docs/runbooks/README.md) — dated, self-contained tasks for measuring wait-time and crowd-calendar accuracy
+- [`docs/pin-art-direction.md`](./docs/pin-art-direction.md) — contract for pin and badge artwork
+- [`docs/privacy-policy.md`](./docs/privacy-policy.md) and [`docs/terms-of-service.md`](./docs/terms-of-service.md) — legal text (the privacy policy also exists as HTML rendered by the API; keep them in sync)

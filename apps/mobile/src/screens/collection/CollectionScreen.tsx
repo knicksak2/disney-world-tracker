@@ -24,7 +24,7 @@
  *      - Primary CTA navigating to StatsStack
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   ImageBackground,
@@ -38,7 +38,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -83,13 +83,14 @@ import CreateFoodListModal from '../foodLists/CreateFoodListModal';
 import CreateExperienceListModal from '../experienceLists/CreateExperienceListModal';
 import { MyPhotosEntry } from './MyPhotosEntry';
 import { useMickeyConfig, useMickeySummary } from '../mickeys/api';
+import { YouAndCrewContent } from '../youAndCrew/YouAndCrewContent';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
 
 type NavigationProp = NativeStackNavigationProp<CollectionStackParamList, 'CollectionHome'>;
 
-export type VaultSubTab = 'pins' | 'food' | 'lists' | 'stats';
+export type VaultSubTab = 'pins' | 'food' | 'lists' | 'stats' | 'crew';
 
 const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
 
@@ -120,13 +121,20 @@ export default function CollectionScreen(): JSX.Element {
     'animal-kingdom': { name: 'Animal Kingdom', color: pal.parkAnimal },
   };
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp<CollectionStackParamList, 'CollectionHome'>>();
   const queryClient = useQueryClient();
   const { count: claimableCount } = useClaimablePinsBadge();
   const { data: mickeyConfig } = useMickeyConfig();
   const isMickeysEnabled = Boolean(mickeyConfig?.enabled);
   const { data: mickeySummary } = useMickeySummary(undefined, isMickeysEnabled);
 
-  const [activeTab, setActiveTab] = useState<VaultSubTab>('pins');
+  const [activeTab, setActiveTab] = useState<VaultSubTab>(route.params?.initialTab ?? 'pins');
+
+  useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab);
+    }
+  }, [route.params?.initialTab]);
   const [detailPinId, setDetailPinId] = useState<string | null>(null);
 
   // Requirement 6.8a: "Log a food item" flow, composed here rather than
@@ -342,9 +350,9 @@ export default function CollectionScreen(): JSX.Element {
   return (
     <ScreenContainer style={styles.container} testID="collection-screen">
       <GradientHeader
-        eyebrow="📌 DISNEY VAULT"
-        title="My Disney Collection"
-        subtitle="Your personal scrapbook of pins, treats, and progress stats"
+        eyebrow="👤 YOU & YOUR VAULT"
+        title="You"
+        subtitle="Crew, inbox, pins, lists, stats & settings"
         right={<MyPhotosEntry onPress={() => navigation.navigate('MyPhotos')} />}
       />
 
@@ -417,7 +425,23 @@ export default function CollectionScreen(): JSX.Element {
             style={[styles.segBtnText, activeTab === 'stats' && styles.segBtnTextActive]}
             numberOfLines={1}
           >
-            📊 Park Stats
+            📊 Stats
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.segBtn, activeTab === 'crew' && styles.segBtnActive]}
+          onPress={() => setActiveTab('crew')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'crew' }}
+          accessibilityLabel="Crew and Settings"
+          testID="vault-seg-crew"
+        >
+          <Text
+            style={[styles.segBtnText, activeTab === 'crew' && styles.segBtnTextActive]}
+            numberOfLines={1}
+          >
+            👥 Crew
           </Text>
         </Pressable>
       </View>
@@ -1283,6 +1307,15 @@ export default function CollectionScreen(): JSX.Element {
               <Ionicons name="stats-chart-outline" size={18} color={t.color.textOnPrimary} />
               <Text style={styles.primaryActionButtonText}>View Full Stats & Insights</Text>
             </Pressable>
+          </View>
+        )}
+
+        {/* =================================================================== */}
+        {/* SUB-VIEW 5: CREW, INBOX, PROFILE & SETTINGS                        */}
+        {/* =================================================================== */}
+        {activeTab === 'crew' && (
+          <View style={styles.subViewWrap} testID="collection-crew-view">
+            <YouAndCrewContent embedded />
           </View>
         )}
       </ScrollView>

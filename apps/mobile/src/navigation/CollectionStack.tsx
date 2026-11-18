@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
-import CollectionScreen from '../screens/collection/CollectionScreen';
+import CollectionScreen, { type VaultSubTab } from '../screens/collection/CollectionScreen';
 import PinBoardScreen from '../screens/profile/PinBoardScreen';
 import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import AttributionScreen from '../screens/profile/AttributionScreen';
@@ -22,7 +22,7 @@ import StatsStack, { type StatsStackParamList } from './StatsStack';
  *   - Stats (nesting the existing StatsStack unchanged, exactly as ProfileStack did)
  */
 export type CollectionStackParamList = {
-  CollectionHome: undefined;
+  CollectionHome: { initialTab?: VaultSubTab } | undefined;
   PinBoard: { celebratePinIds?: string[] } | undefined;
   PinAttribution: undefined;
   PinShowcase: { userId?: string; readOnly?: boolean } | undefined;

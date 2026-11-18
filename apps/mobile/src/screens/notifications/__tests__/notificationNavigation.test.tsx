@@ -221,7 +221,7 @@ describe('Notification_Center navigation / tab entry (R10.1, R10.2, R10.3, R10.4
     });
     expect(screen.getAllByText('Explore').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trips').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Vault').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('You').length).toBeGreaterThan(0);
 
     // There is NO dedicated Notifications tab in the bottom bar (R10.1).
     expect(screen.queryByText('Notifications')).toBeNull();

@@ -127,7 +127,11 @@ export default function DiningPlanCalculatorScreen({ navigation }: Props): JSX.E
   );
 
   const handleBack = useCallback(() => {
-    if (navigation.canGoBack()) navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('TripsList');
+    }
   }, [navigation]);
 
   const setCount = (kind: keyof CalculatorCounts) => (value: number) => setCounts((c) => ({ ...c, [kind]: value }));

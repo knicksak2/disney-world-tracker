@@ -259,14 +259,14 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     );
   }
 
-  it('renders header with Disney Vault eyebrow pill and title', () => {
+  it('renders header with You & Your Vault eyebrow pill and title', () => {
     renderCollection();
 
     expect(screen.getByTestId('header-eyebrow-pill')).toBeTruthy();
-    expect(screen.getByText('📌 DISNEY VAULT')).toBeTruthy();
-    expect(screen.getByText('My Disney Collection')).toBeTruthy();
+    expect(screen.getByText('👤 YOU & YOUR VAULT')).toBeTruthy();
+    expect(screen.getByText('You')).toBeTruthy();
     expect(
-      screen.getByText('Your personal scrapbook of pins, treats, and progress stats'),
+      screen.getByText('Crew, inbox, pins, lists, stats & settings'),
     ).toBeTruthy();
   });
 
@@ -1191,6 +1191,21 @@ describe('CollectionScreen — Disney Vault Hub', () => {
       const card = await screen.findByTestId('park-coverage-card');
       expect(flat(within(card).getByText('Magic Kingdom')).color).toBe('#7e57c2');
       expect(flat(within(card).getByText('EPCOT')).color).toBe('#0288d1');
+    });
+  });
+
+  describe('Crew & Profile segment in You tab', () => {
+    it('switches to Crew segment and renders the embedded You & Crew sections', () => {
+      renderCollection();
+
+      fireEvent.press(screen.getByTestId('vault-seg-crew'));
+      expect(screen.getByTestId('collection-crew-view')).toBeTruthy();
+      expect(screen.getByTestId('you-and-crew-identity-section')).toBeTruthy();
+      expect(screen.getByTestId('you-and-crew-friends-section')).toBeTruthy();
+      expect(screen.getByTestId('inbox-entry-button')).toBeTruthy();
+      expect(screen.getByTestId('sent-entry-button')).toBeTruthy();
+      expect(screen.getByTestId('you-and-crew-settings-section')).toBeTruthy();
+      expect(screen.getByTestId('you-and-crew-logout')).toBeTruthy();
     });
   });
 });

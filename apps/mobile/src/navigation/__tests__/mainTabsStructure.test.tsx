@@ -252,10 +252,10 @@ describe('MainTabs structure (Requirements 1.1, 1.5, 6.5)', () => {
     const screenTabs = tabNames.filter((name) => name !== 'MagicFab');
     expect(screenTabs).toEqual([...EXPECTED_TAB_ORDER]);
 
-    // Collection tab displays label "Vault" (Requirement 6.5)
+    // Collection tab displays label "You"
     const collectionScreen = mainTabs.screens.find((s) => s.name === 'Collection');
     expect(collectionScreen).toBeDefined();
-    expect((collectionScreen?.options as any)?.tabBarLabel).toBe('Vault');
+    expect((collectionScreen?.options as any)?.tabBarLabel).toBe('You');
   });
 
   it('configures Explore tab tabPress listener to navigate to CatalogList (Experience Catalogue)', () => {

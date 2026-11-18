@@ -154,7 +154,7 @@ async function expectTabChrome(s: Scheme): Promise<void> {
     return flat(node!).color;
   };
   expect(labelColor('Home')).toBe(t.tabBar.activeTint);
-  for (const label of ['Explore', 'Trips', 'Vault']) {
+  for (const label of ['Explore', 'Trips', 'You']) {
     expect(labelColor(label)).toBe(t.tabBar.inactiveTint);
   }
 

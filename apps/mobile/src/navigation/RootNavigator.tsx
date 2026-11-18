@@ -142,7 +142,7 @@ const TAB_ICONS: Record<
   Home: { focused: 'home', unfocused: 'home-outline' },
   Explore: { focused: 'compass', unfocused: 'compass-outline' },
   Trips: { focused: 'map', unfocused: 'map-outline' },
-  Collection: { focused: 'albums', unfocused: 'albums-outline' },
+  Collection: { focused: 'person', unfocused: 'person-outline' },
 };
 
 function EmptySlot(): JSX.Element {
@@ -217,7 +217,7 @@ export function MainTabsNavigator(): JSX.Element {
           component={CollectionStack}
           options={{
             headerShown: false,
-            tabBarLabel: 'Vault',
+            tabBarLabel: 'You',
             ...(claimableCount > 0
               ? {
                   tabBarBadge: claimableCount > 99 ? '99+' : claimableCount,
