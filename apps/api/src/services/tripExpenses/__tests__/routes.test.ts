@@ -80,6 +80,7 @@ function dummySettlement(overrides: Partial<SettlementDTO> = {}): SettlementDTO 
     createdByUserId: CALLER_ID,
     amountCents: 1500,
     date: '2026-10-05',
+    note: null,
     createdAt: '2026-10-05T10:00:00.000Z',
     ...overrides,
   };
@@ -956,5 +957,135 @@ describe('Requirement 10.3: Trip feed and summary do not contain expense/settlem
 
     expect(res.statusCode).toBe(200);
     expect(res.payload).not.toMatch(/splitMode|amountCents|chargeLines|netCents|settlement/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Settlement Notes (Req 7.8)
+// ---------------------------------------------------------------------------
+
+describe('Settlement notes routes (Req 7.8)', () => {
+  it('POST /trips/:id/settlements trims and forwards valid note, normalizes whitespace to null, and rejects > 300 chars', async () => {
+    const createSpy = vi
+      .fn()
+      .mockImplementation(async (_tripId, _userId, input) => dummySettlement({ note: input.note ?? null }));
+    const h = await buildApp({ createSettlement: createSpy });
+
+    const resTrimmed = await h.app.inject({
+      method: 'POST',
+      url: `/trips/${TRIP_ID}/settlements`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2500,
+        date: '2026-10-05',
+        note: '  Venmo @bob  ',
+      },
+    });
+    expect(resTrimmed.statusCode).toBe(201);
+    expect(createSpy).toHaveBeenLastCalledWith(
+      TRIP_ID,
+      CALLER_ID,
+      expect.objectContaining({ note: 'Venmo @bob' }),
+    );
+    expect(resTrimmed.json().note).toBe('Venmo @bob');
+
+    const resWhitespace = await h.app.inject({
+      method: 'POST',
+      url: `/trips/${TRIP_ID}/settlements`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2500,
+        date: '2026-10-05',
+        note: '   \t ',
+      },
+    });
+    expect(resWhitespace.statusCode).toBe(201);
+    expect(createSpy).toHaveBeenLastCalledWith(
+      TRIP_ID,
+      CALLER_ID,
+      expect.objectContaining({ note: null }),
+    );
+
+    const resTooLong = await h.app.inject({
+      method: 'POST',
+      url: `/trips/${TRIP_ID}/settlements`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2500,
+        date: '2026-10-05',
+        note: 'x'.repeat(301),
+      },
+    });
+    expect(resTooLong.statusCode).toBe(400);
+    expect(resTooLong.json()).toMatchObject({ error: { code: 'trip_validation_failed' } });
+    expect(createSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('PATCH /trips/:id/settlements/:settlementId forwards updated and cleared note and rejects > 300 chars', async () => {
+    const editSpy = vi
+      .fn()
+      .mockImplementation(async (_tripId, _settlementId, _userId, _role, input) =>
+        dummySettlement({ note: input.note ?? null }),
+      );
+    const h = await buildApp({ editSettlement: editSpy });
+    h.setRole('organizer');
+
+    const resUpdated = await h.app.inject({
+      method: 'PATCH',
+      url: `/trips/${TRIP_ID}/settlements/${SETTLEMENT_ID}`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2000,
+        date: '2026-10-05',
+        note: 'Updated via Zelle',
+      },
+    });
+    expect(resUpdated.statusCode).toBe(200);
+    expect(editSpy).toHaveBeenLastCalledWith(
+      TRIP_ID,
+      SETTLEMENT_ID,
+      CALLER_ID,
+      'organizer',
+      expect.objectContaining({ note: 'Updated via Zelle' }),
+    );
+
+    const resCleared = await h.app.inject({
+      method: 'PATCH',
+      url: `/trips/${TRIP_ID}/settlements/${SETTLEMENT_ID}`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2000,
+        date: '2026-10-05',
+        note: null,
+      },
+    });
+    expect(resCleared.statusCode).toBe(200);
+    expect(editSpy).toHaveBeenLastCalledWith(
+      TRIP_ID,
+      SETTLEMENT_ID,
+      CALLER_ID,
+      'organizer',
+      expect.objectContaining({ note: null }),
+    );
+
+    const resTooLong = await h.app.inject({
+      method: 'PATCH',
+      url: `/trips/${TRIP_ID}/settlements/${SETTLEMENT_ID}`,
+      payload: {
+        payerId: CALLER_ID,
+        recipientId: OTHER_USER_ID,
+        amountCents: 2000,
+        date: '2026-10-05',
+        note: 'x'.repeat(301),
+      },
+    });
+    expect(resTooLong.statusCode).toBe(400);
+    expect(resTooLong.json()).toMatchObject({ error: { code: 'trip_validation_failed' } });
+    expect(editSpy).toHaveBeenCalledTimes(2);
   });
 });

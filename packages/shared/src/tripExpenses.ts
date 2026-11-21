@@ -33,6 +33,7 @@ export const GUEST_NAME_MAX = 100; // (Req 2.2)
 export const EXPENSE_DESCRIPTION_MAX = 200; // (Req 1.5)
 export const EXPENSE_TIER_NAME_MAX = 40; // (Req 4.1)
 export const EXPENSE_ITEM_NAME_MAX = 100; // (Req 5.1)
+export const SETTLEMENT_NOTE_MAX = 300; // (Req 7.8)
 
 // ---------------------------------------------------------------------------
 // Input Schemas
@@ -402,6 +403,13 @@ export const settlementCreateSchema = z
       .positive({ message: 'trip_validation_failed' })
       .max(EXPENSE_AMOUNT_MAX_CENTS, { message: 'trip_validation_failed' }),
     date: tripCalendarDateSchema,
+    note: z
+      .string()
+      .trim()
+      .max(SETTLEMENT_NOTE_MAX, { message: 'trip_validation_failed' })
+      .transform((val) => (val.length > 0 ? val : null))
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((v) => v.payerId !== v.recipientId, { message: 'trip_validation_failed' });
@@ -539,6 +547,7 @@ export interface SettlementDTO {
   readonly createdByUserId: string;
   readonly amountCents: number;
   readonly date: string;
+  readonly note: string | null;
   readonly createdAt: string;
 }
 
@@ -574,5 +583,6 @@ export interface BalanceDrillDownEntryDTO {
   readonly contributionCents: number;
   readonly payerId?: string | undefined;
   readonly recipientId?: string | undefined;
+  readonly note?: string | null | undefined;
 }
 

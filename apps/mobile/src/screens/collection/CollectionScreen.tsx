@@ -81,16 +81,18 @@ import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
 import LogFoodItemModal from '../catalog/LogFoodItemModal';
 import CreateFoodListModal from '../foodLists/CreateFoodListModal';
 import CreateExperienceListModal from '../experienceLists/CreateExperienceListModal';
+import LogVisitModal from '../catalog/LogVisitModal';
+import ZeroPinsStarterCard from './ZeroPinsStarterCard';
 import { MyPhotosEntry } from './MyPhotosEntry';
 import { useMickeyConfig, useMickeySummary } from '../mickeys/api';
-import { YouAndCrewContent } from '../youAndCrew/YouAndCrewContent';
+import { AvatarChip } from '../navigation/AvatarChip';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const corkTexture: ImageSourcePropType = require('../../../assets/cork.png');
 
 type NavigationProp = NativeStackNavigationProp<CollectionStackParamList, 'CollectionHome'>;
 
-export type VaultSubTab = 'pins' | 'food' | 'lists' | 'stats' | 'crew';
+export type VaultSubTab = 'pins' | 'food' | 'lists' | 'stats';
 
 const CATALOG: ReadonlyMap<string, PinDTO> = new Map(PINS.map((p) => [p.id, p]));
 
@@ -142,6 +144,9 @@ export default function CollectionScreen(): JSX.Element {
   // (ExperiencePicker scoped to dining → FoodItemPickerModal →
   // LogFoodItemModal), same mutation/invalidation behavior as MagicFab.tsx's
   // existing "Log Snack" quick action, just invoked from this screen.
+  const [logPickerVisible, setLogPickerVisible] = useState(false);
+  const [selectedRideExperience, setSelectedRideExperience] = useState<ExperienceDTO | null>(null);
+
   const [foodLogPickerVisible, setFoodLogPickerVisible] = useState(false);
   const [foodLogDiningExperience, setFoodLogDiningExperience] = useState<ExperienceDTO | null>(null);
   const [foodItemPickerVisible, setFoodItemPickerVisible] = useState(false);
@@ -271,6 +276,8 @@ export default function CollectionScreen(): JSX.Element {
   const totalUnlocked = boardQuery.data?.totalUnlocked ?? 0;
   const totalPins = boardQuery.data?.totalPins || PINS.length;
   const collectedPercent = Math.round((totalUnlocked / totalPins) * 100);
+  const showZeroPinsStarter =
+    boardQuery.isSuccess && totalUnlocked === 0 && claimableCount === 0;
 
   // Placements for corkboard
   const placements = Array.isArray(showcaseQuery.data?.placements)
@@ -352,8 +359,17 @@ export default function CollectionScreen(): JSX.Element {
       <GradientHeader
         eyebrow="👤 YOU & YOUR VAULT"
         title="You"
-        subtitle="Crew, inbox, pins, lists, stats & settings"
-        right={<MyPhotosEntry onPress={() => navigation.navigate('MyPhotos')} />}
+        subtitle="Pins, food, lists & stats"
+        right={
+          <View style={styles.headerRight}>
+            <MyPhotosEntry onPress={() => navigation.navigate('MyPhotos')} />
+            <AvatarChip
+              variant="pill"
+              tintColor={t.color.textOnPrimary}
+              testID="collection-crew-settings-btn"
+            />
+          </View>
+        }
       />
 
       {/* Four-Way Segmented Control (Requirement 6.6a — "Food & Lists" split
@@ -428,22 +444,6 @@ export default function CollectionScreen(): JSX.Element {
             📊 Stats
           </Text>
         </Pressable>
-
-        <Pressable
-          style={[styles.segBtn, activeTab === 'crew' && styles.segBtnActive]}
-          onPress={() => setActiveTab('crew')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'crew' }}
-          accessibilityLabel="Crew and Settings"
-          testID="vault-seg-crew"
-        >
-          <Text
-            style={[styles.segBtnText, activeTab === 'crew' && styles.segBtnTextActive]}
-            numberOfLines={1}
-          >
-            👥 Crew
-          </Text>
-        </Pressable>
       </View>
 
       <ScrollView
@@ -508,99 +508,106 @@ export default function CollectionScreen(): JSX.Element {
               </View>
             )}
 
-            {/* Display Corkboard Canvas Widget (Requirement 6.7b) */}
-            <View style={styles.corkboardCard} testID="showcase-corkboard-canvas">
-              <View style={styles.corkboardHeader}>
-                <Text style={styles.corkboardTitle}>📌 PIN SHOWCASE BOARD</Text>
-                <Pressable
-                  style={styles.openCanvasBtn}
-                  onPress={() => navigation.navigate('PinShowcase')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Customize Pin Showcase"
-                  testID="showcase-customize-button"
-                >
-                  <Text style={styles.openCanvasText}>Customize ✏️</Text>
-                </Pressable>
-              </View>
-
-              {/* Wooden Frame & Cork Board */}
-              <View style={styles.boardFrame}>
-                <ImageBackground
-                  source={corkTexture}
-                  resizeMode="repeat"
-                  style={styles.corkBackground}
-                >
-                  <View
-                    style={styles.canvasContent}
-                    onLayout={onCanvasLayout}
-                    testID="corkboard-canvas-content"
+            {/* Cold-start 0-pin starter card OR Display Corkboard Canvas Widget */}
+            {showZeroPinsStarter ? (
+              <ZeroPinsStarterCard
+                onLogFirstRide={() => setLogPickerVisible(true)}
+                onBrowseBoard={() => navigation.navigate('PinBoard')}
+              />
+            ) : (
+              <View style={styles.corkboardCard} testID="showcase-corkboard-canvas">
+                <View style={styles.corkboardHeader}>
+                  <Text style={styles.corkboardTitle}>📌 PIN SHOWCASE BOARD</Text>
+                  <Pressable
+                    style={styles.openCanvasBtn}
+                    onPress={() => navigation.navigate('PinShowcase')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Customize Pin Showcase"
+                    testID="showcase-customize-button"
                   >
-                    {placements.length === 0 ? (
-                      <View style={styles.canvasEmptyState}>
-                        <Text style={styles.canvasEmptyTitle}>Your canvas is waiting!</Text>
-                        <Text style={styles.canvasEmptySub}>
-                          Tap Customize to pin your favorite achievements to your board.
-                        </Text>
-                        <Pressable
-                          style={styles.canvasEmptyBtn}
-                          onPress={() => navigation.navigate('PinShowcase')}
-                          accessibilityRole="button"
-                          testID="pins-showcase-link"
-                        >
-                          <Text style={styles.canvasEmptyBtnText}>Pin First Badge</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      placements.map((p) => {
-                        const pin = CATALOG.get(p.pinId);
-                        const minLeft = CANVAS_MARGIN;
-                        const maxLeft = Math.max(
-                          minLeft,
-                          canvasSize.width - PIN_CANVAS_SIZE - CANVAS_MARGIN,
-                        );
-                        const minTop = CANVAS_MARGIN;
-                        const maxTop = Math.max(
-                          minTop,
-                          canvasSize.height - PIN_CANVAS_SIZE - CANVAS_MARGIN,
-                        );
+                    <Text style={styles.openCanvasText}>Customize ✏️</Text>
+                  </Pressable>
+                </View>
 
-                        const left = Math.max(
-                          minLeft,
-                          Math.min(maxLeft, p.posX * canvasSize.width - PIN_CANVAS_SIZE / 2),
-                        );
-                        const top = Math.max(
-                          minTop,
-                          Math.min(maxTop, p.posY * canvasSize.height - PIN_CANVAS_SIZE / 2),
-                        );
-
-                        return (
+                {/* Wooden Frame & Cork Board */}
+                <View style={styles.boardFrame}>
+                  <ImageBackground
+                    source={corkTexture}
+                    resizeMode="repeat"
+                    style={styles.corkBackground}
+                  >
+                    <View
+                      style={styles.canvasContent}
+                      onLayout={onCanvasLayout}
+                      testID="corkboard-canvas-content"
+                    >
+                      {placements.length === 0 ? (
+                        <View style={styles.canvasEmptyState}>
+                          <Text style={styles.canvasEmptyTitle}>Your canvas is waiting!</Text>
+                          <Text style={styles.canvasEmptySub}>
+                            Tap Customize to pin your favorite achievements to your board.
+                          </Text>
                           <Pressable
-                            key={p.pinId}
-                            style={[
-                              styles.canvasPlacedPin,
-                              { left, top, zIndex: p.zIndex ?? 1 },
-                            ]}
-                            onPress={() => setDetailPinId(p.pinId)}
+                            style={styles.canvasEmptyBtn}
+                            onPress={() => navigation.navigate('PinShowcase')}
                             accessibilityRole="button"
-                            accessibilityLabel={`View ${pin?.name ?? p.pinId} pin`}
-                            testID={`corkboard-pin-${p.pinId}`}
+                            testID="pins-showcase-link"
                           >
-                            <View style={styles.pinShadowWrapper}>
-                              <PinView
-                                pinId={p.pinId}
-                                tier={pin?.tier ?? 'bronze'}
-                                unlocked={true}
-                                size={PIN_CANVAS_SIZE}
-                              />
-                            </View>
+                            <Text style={styles.canvasEmptyBtnText}>Pin First Badge</Text>
                           </Pressable>
-                        );
-                      })
-                    )}
-                  </View>
-                </ImageBackground>
+                        </View>
+                      ) : (
+                        placements.map((p) => {
+                          const pin = CATALOG.get(p.pinId);
+                          const minLeft = CANVAS_MARGIN;
+                          const maxLeft = Math.max(
+                            minLeft,
+                            canvasSize.width - PIN_CANVAS_SIZE - CANVAS_MARGIN,
+                          );
+                          const minTop = CANVAS_MARGIN;
+                          const maxTop = Math.max(
+                            minTop,
+                            canvasSize.height - PIN_CANVAS_SIZE - CANVAS_MARGIN,
+                          );
+
+                          const left = Math.max(
+                            minLeft,
+                            Math.min(maxLeft, p.posX * canvasSize.width - PIN_CANVAS_SIZE / 2),
+                          );
+                          const top = Math.max(
+                            minTop,
+                            Math.min(maxTop, p.posY * canvasSize.height - PIN_CANVAS_SIZE / 2),
+                          );
+
+                          return (
+                            <Pressable
+                              key={p.pinId}
+                              style={[
+                                styles.canvasPlacedPin,
+                                { left, top, zIndex: p.zIndex ?? 1 },
+                              ]}
+                              onPress={() => setDetailPinId(p.pinId)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`View ${pin?.name ?? p.pinId} pin`}
+                              testID={`corkboard-pin-${p.pinId}`}
+                            >
+                              <View style={styles.pinShadowWrapper}>
+                                <PinView
+                                  pinId={p.pinId}
+                                  tier={pin?.tier ?? 'bronze'}
+                                  unlocked={true}
+                                  size={PIN_CANVAS_SIZE}
+                                />
+                              </View>
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </View>
+                  </ImageBackground>
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Pin Directory & Rarity Tiers Card (Requirement 6.7c) */}
             <Card style={styles.directoryCard} testID="pin-directory-card">
@@ -1313,11 +1320,6 @@ export default function CollectionScreen(): JSX.Element {
         {/* =================================================================== */}
         {/* SUB-VIEW 5: CREW, INBOX, PROFILE & SETTINGS                        */}
         {/* =================================================================== */}
-        {activeTab === 'crew' && (
-          <View style={styles.subViewWrap} testID="collection-crew-view">
-            <YouAndCrewContent embedded />
-          </View>
-        )}
       </ScrollView>
 
       {/* Pin Detail Full-Size Modal */}
@@ -1414,6 +1416,62 @@ export default function CollectionScreen(): JSX.Element {
       {/* "+ New" create-list modals (Requirement 6 amendment 8c) — the same
           shared modal components MyFoodListsScreen.tsx/MyExperienceListsScreen.tsx
           render, opened here without navigating away from this screen. */}
+      <Modal
+        visible={logPickerVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLogPickerVisible(false)}
+        testID="collection-experience-picker-modal"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.foodLogModalBackdrop}
+        >
+          <View style={styles.foodLogModalContent}>
+            <View style={styles.foodLogModalHeader}>
+              <Text style={styles.foodLogModalTitle} testID="collection-picker-title">
+                Select Attraction to Log
+              </Text>
+              <Pressable
+                onPress={() => setLogPickerVisible(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close picker"
+                testID="collection-picker-close-btn"
+              >
+                <Ionicons name="close" size={24} color={t.color.textSecondary} />
+              </Pressable>
+            </View>
+            <ExperiencePicker
+              enabled={logPickerVisible}
+              defaultTab="attractions"
+              showTabs={true}
+              showParkFilter={true}
+              fillContainer={true}
+              testIDPrefix="collection-ride-picker"
+              onSelect={(exp) => {
+                setLogPickerVisible(false);
+                setSelectedRideExperience(exp);
+              }}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {selectedRideExperience && (
+        <LogVisitModal
+          experienceId={selectedRideExperience.id}
+          visible={selectedRideExperience !== null}
+          onClose={() => setSelectedRideExperience(null)}
+          onLogged={() => {
+            setSelectedRideExperience(null);
+            void queryClient.invalidateQueries({ queryKey: pinBoardKey });
+            void queryClient.invalidateQueries({ queryKey: ['me', 'onboarding'] });
+            void queryClient.invalidateQueries({ queryKey: ['home'] });
+          }}
+        />
+      )}
+
       <CreateFoodListModal
         visible={createFoodListModalVisible}
         onClose={() => setCreateFoodListModalVisible(false)}

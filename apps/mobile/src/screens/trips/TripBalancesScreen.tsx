@@ -427,6 +427,11 @@ export default function TripBalancesScreen({
                             <Text style={styles.drillDownItemMeta}>
                               📅 {entry.date} · {entry.kind === 'expense' ? 'Expense' : 'Settlement'}
                             </Text>
+                            {entry.note ? (
+                              <Text style={styles.drillDownItemNote} testID={`drilldown-entry-note-${idx}`}>
+                                {entry.note}
+                              </Text>
+                            ) : null}
                           </View>
                           <Text
                             style={[
@@ -570,6 +575,11 @@ export default function TripBalancesScreen({
                               <Text style={styles.pairwiseEntryMeta}>
                                 📅 {entry.date} · Direct repayment · Reduced balance
                               </Text>
+                              {entry.note ? (
+                                <Text style={styles.pairwiseEntryNote} testID={`pairwise-entry-note-${idx}`}>
+                                  {entry.note}
+                                </Text>
+                              ) : null}
                             </View>
                             <View style={styles.pairwiseAmountCol}>
                               <Text
@@ -922,6 +932,12 @@ const useStyles = makeStyles((t) => ({
     color: t.color.textSecondary,
     marginTop: 2,
   },
+  drillDownItemNote: {
+    fontSize: 12,
+    color: t.color.textSecondary,
+    marginTop: 3,
+    lineHeight: 16,
+  },
   drillDownItemAmount: {
     fontSize: 14,
     fontWeight: '700',
@@ -1033,6 +1049,12 @@ const useStyles = makeStyles((t) => ({
     fontSize: 11,
     color: t.color.textSecondary,
     marginTop: 3,
+  },
+  pairwiseEntryNote: {
+    fontSize: 12,
+    color: t.color.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
   },
   pairwiseAmountCol: {
     alignItems: 'flex-end',

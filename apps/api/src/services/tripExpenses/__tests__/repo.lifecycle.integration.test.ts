@@ -163,12 +163,19 @@ describe('TripExpenseRepo - Lifecycle & Export', () => {
         ],
       });
 
-      // Bob creates a settlement
+      // Bob creates a settlement without note and one with note (including quotes, comma, newline)
       await repo.createSettlement(seed.tripId, seed.user2Id, {
         payerId: seed.user2Id,
         recipientId: seed.user1Id,
         amountCents: 1000,
         date: '2026-10-03',
+      });
+      await repo.createSettlement(seed.tripId, seed.user2Id, {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 2500,
+        date: '2026-10-04',
+        note: 'Venmo "hotel, meals"\npart 1',
       });
 
       const csv = await repo.exportLedgerCsv(seed.tripId);
@@ -179,8 +186,9 @@ describe('TripExpenseRepo - Lifecycle & Export', () => {
       // Check Guest resolved to "Alice — Little Timmy"
       expect(csv).toContain('Alice — Little Timmy: $40.00');
 
-      // Check Settlement line
+      // Check Settlement lines (without note and with note)
       expect(csv).toContain('Settlement,2026-10-03,"Payment to Alice",Bob,10.00,,Settlement');
+      expect(csv).toContain('Settlement,2026-10-04,"Payment to Alice",Bob,25.00,,"Settlement: Venmo ""hotel, meals"" part 1"');
     });
   });
 });

@@ -167,6 +167,7 @@ export interface BalanceEvent {
   readonly date: string; // YYYY-MM-DD
   readonly payerId?: string;
   readonly recipientId?: string;
+  readonly note?: string | null | undefined;
 }
 
 /**
@@ -220,6 +221,7 @@ export const GUEST_NAME_MAX = 100; // (Req 2.2)
 export const EXPENSE_DESCRIPTION_MAX = 200; // (Req 1.5)
 export const EXPENSE_TIER_NAME_MAX = 40; // (Req 4.1)
 export const EXPENSE_ITEM_NAME_MAX = 100; // (Req 5.1)
+export const SETTLEMENT_NOTE_MAX = 300; // (Req 7.8)
 
 export const expenseCreateSchema = z.object({
   payerId: uuidSchema,
@@ -250,6 +252,13 @@ export const settlementCreateSchema = z.object({
   recipientId: uuidSchema,
   amountCents: z.number().int().positive().max(EXPENSE_AMOUNT_MAX_CENTS),
   date: tripCalendarDateSchema,
+  note: z
+    .string()
+    .trim()
+    .max(SETTLEMENT_NOTE_MAX)
+    .transform((val) => (val.length > 0 ? val : null))
+    .nullable()
+    .optional(),
 }).strict().refine((v) => v.payerId !== v.recipientId, { message: 'trip_validation_failed' });
 
 export const tripGuestAddSchema = z.object({
@@ -293,7 +302,18 @@ export interface ExpenseShareDTO {
   readonly guestId: string | null;  // null when attributed to a Trip_Member directly
   readonly amountCents: number;
 }
-// ExpenseTierDTO, ExpenseItemDTO, ChargeLineDTO, RefundDTO, SettlementDTO, TripGuestDTO: analogous plain shapes.
+// ExpenseTierDTO, ExpenseItemDTO, ChargeLineDTO, RefundDTO, TripGuestDTO: analogous plain shapes.
+export interface SettlementDTO {
+  readonly id: string;
+  readonly tripId: string;
+  readonly payerId: string;
+  readonly recipientId: string;
+  readonly createdByUserId: string;
+  readonly amountCents: number;
+  readonly date: string;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
 
 export interface NetBalanceDTO {
   readonly memberId: string;
@@ -312,6 +332,7 @@ export interface BalanceDrillDownEntryDTO {
   readonly contributionCents: number; // signed: from Member's net balance perspective; or pairwise debt perspective when counterpartyId is filtered
   readonly payerId?: string;
   readonly recipientId?: string;
+  readonly note?: string | null | undefined;
 }
 ```
 
@@ -530,6 +551,22 @@ Every table's path back to `trips(id)` is via `ON DELETE CASCADE` either directl
 - `expense_shares`/`expense_tier_counts`/`expense_item_assignees` all use the same `member_id XOR guest_id` pattern via a `CHECK`, so a single recipient-resolution helper (`resolveRecipientIds(row)`) in the repo handles all three without duplicated branching logic.
 - `charge_line_scopes` has no `CHECK` enforcing non-empty scope per row (Postgres can't express "at least one row exists for this parent" declaratively); the zero-scope rejection (Req 5.11) is enforced in the repo at write time, same as the existing `chk_planned_items_reservation_anchored` pattern of "constraint is the backstop, not the primary path."
 
+### Migration `0079_settlement_notes.sql`
+
+```sql
+BEGIN;
+
+ALTER TABLE settlements ADD COLUMN IF NOT EXISTS note VARCHAR(300);
+
+ALTER TABLE settlements DROP CONSTRAINT IF EXISTS chk_settlements_note;
+ALTER TABLE settlements ADD CONSTRAINT chk_settlements_note
+  CHECK (note IS NULL OR (char_length(btrim(note)) >= 1 AND char_length(note) <= 300));
+
+COMMIT;
+```
+
+Additive and idempotent: existing `settlements` rows receive `note = NULL`. Empty or whitespace-only values are normalized to `null` at the schema and repo boundary before writing.
+
 ## Correctness Properties
 
 ### Property 1: Every Split_Mode's shares plus the Payer's implicit portion sum to exactly the Amount
@@ -662,6 +699,12 @@ For any itemized expense, when a discount charge line is set via percentage $P$,
 
 **Validates: Requirements 14.5**
 
+### Property 23: Settlement notes round-trip, normalize whitespace, clear, and enforce length bounds
+
+For any Settlement created or edited with an omitted, `null`, or whitespace-only `note`, the stored and returned `note` is `null`; for any non-empty `note` up to 300 trimmed characters, the trimmed string persists and appears in `listExpensesAndSettlements`, `getBalanceDrillDown` (both member and pairwise), and `exportLedgerCsv`; editing a Settlement can add, update, or clear its `note`; and any `note` exceeding 300 trimmed characters is rejected with `trip_validation_failed` without mutating the database.
+
+**Validates: Requirements 7.8, 7.9**
+
 ## Error Handling
 
 | Condition | Code | Behavior |
@@ -678,6 +721,7 @@ For any itemized expense, when a discount charge line is set via percentage $P$,
 | Trip_Guest removal while still referenced by any share/assignment/tier-count | `trip_validation_failed` | Rejected by an `EXISTS` check in `removeTripGuest`, inside the transaction. |
 | Non-sponsor, non-organizer renames/removes a Trip_Guest | `trip_forbidden` | Existing adder-or-organizer-style check, applied to the sponsor. |
 | Settlement with `payerId === recipientId`, a Trip_Guest named, or either not a Trip_Member | `trip_validation_failed` | Rejected at the Zod edge (`.refine`) and the repo; `chk_settlements_distinct_parties` is the backstop. |
+| Settlement `note` longer than 300 characters after trimming | `trip_validation_failed` | Rejected at the Zod edge and repo `normalizeSettlementNote`; `chk_settlements_note` is the backstop. |
 | Refund would exceed the Expense's original Amount combined with prior Refunds | `trip_validation_failed` | Rejected in `createRefund`/`editRefund` after a `SELECT ... FOR UPDATE` sum check. |
 | Non-creator, non-organizer edits/removes an Expense, Settlement, or Refund | `trip_forbidden` | Adder-or-organizer rule, mirroring `trips`' Planned_Item rule. |
 | Non-member reads or writes any Expense/Settlement/Guest/balance data | `trip_forbidden` | `assertTripMember`, reused directly from `services/trips/authz.ts`; identical for an unknown Trip id. |
@@ -710,6 +754,7 @@ No new environment variables, secrets, base URLs, or cadences: the feature adds 
 | `EXPENSE_DESCRIPTION_MAX` | `200` | `packages/shared/src/tripExpenses.ts` | Max Description length (Req 1.5). |
 | `EXPENSE_TIER_NAME_MAX` | `40` | `packages/shared/src/tripExpenses.ts` | Max Tier_Name length (Req 4.1). |
 | `EXPENSE_ITEM_NAME_MAX` | `100` | `packages/shared/src/tripExpenses.ts` | Max Expense_Item name length (Req 5.1). |
+| `SETTLEMENT_NOTE_MAX` | `300` | `packages/shared/src/tripExpenses.ts` | Max Settlement note length (Req 7.8). |
 | Alcohol term list | maintained array of common beverage terms + known Disney bar/lounge drink names | `apps/mobile/src/screens/trips/receiptScan.ts` | Client-side suggestion list for `flagAlcoholCandidate` (Req 9.8); never authoritative. |
 | Gratuity percentage presets | `[0.18, 0.20, 0.22]` + custom | `apps/mobile/src/screens/trips/TripExpensesScreen.tsx` | UI presets for the gratuity-as-percentage entry mode (Req 5.9); not a server-side constant since only the resulting cents amount is ever transmitted. |
 | Discount percentage presets | `[0.10, 0.20]` + custom | `apps/mobile/src/screens/trips/ExpenseFormModal.tsx` | UI presets for the discount-as-percentage entry mode (Req 14.5); not a server-side constant since only the resulting cents amount is ever transmitted. |

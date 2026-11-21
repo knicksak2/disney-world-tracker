@@ -662,6 +662,7 @@ export {
   EXPENSE_DESCRIPTION_MAX,
   EXPENSE_TIER_NAME_MAX,
   EXPENSE_ITEM_NAME_MAX,
+  SETTLEMENT_NOTE_MAX,
   expenseShareInputSchema,
   expenseTierInputSchema,
   expenseTierCountInputSchema,
@@ -1205,6 +1206,31 @@ export type {
   FeedbackSubmitInput,
   FeedbackSubmitResponse,
 } from './feedback.js';
+
+// First-run onboarding (.kiro/specs/first-run-onboarding)
+export {
+  ONBOARDING_INTENTS,
+  ONBOARDING_PARKS,
+  QUICK_COMPLETIONS_MIN,
+  QUICK_COMPLETIONS_MAX,
+} from './constants/onboarding.js';
+export type {
+  OnboardingIntent,
+  OnboardingPark,
+  StarterChecklistDTO,
+  OnboardingStateDTO,
+  QuickCompletionsResponseDTO,
+} from './dto/index.js';
+export {
+  onboardingIntentSchema,
+  onboardingParkSchema,
+  onboardingPatchSchema,
+  quickCompletionsInputSchema,
+} from './schemas/index.js';
+export type {
+  OnboardingPatchInput,
+  QuickCompletionsInput,
+} from './schemas/index.js';
 
 
 

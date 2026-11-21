@@ -28,7 +28,7 @@ import type {
   TripGuestDTO,
   TripGuestRenameInput,
 } from '@dwt/shared';
-import { EXPENSE_LIMIT, isDeletedUserId } from '@dwt/shared';
+import { EXPENSE_LIMIT, SETTLEMENT_NOTE_MAX, isDeletedUserId } from '@dwt/shared';
 
 import type { DbPool } from '../../db/pool.js';
 import { AppError } from '../../errors/AppError.js';
@@ -149,6 +149,19 @@ function formatTimestamp(val: Date | string): string {
     return val;
   }
   return val.toISOString();
+}
+
+function normalizeSettlementNote(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length > SETTLEMENT_NOTE_MAX) {
+    throw new AppError(
+      'trip_validation_failed',
+      `Settlement note must be at most ${SETTLEMENT_NOTE_MAX} characters`,
+    );
+  }
+  return trimmed;
 }
 
 /** People an entry names: user ids (members) and guest ids. An ambiguous id may be listed in both. */
@@ -1551,6 +1564,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
       if (input.payerId === input.recipientId) {
         throw new AppError('trip_validation_failed', 'Payer and recipient must be distinct');
       }
+      const note = normalizeSettlementNote(input.note);
 
       // A settlement naming a party who is not visible is rejected before the membership check (R12.10).
       await assertPartiesVisible(pool, tripId, {
@@ -1575,13 +1589,14 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         created_by: string;
         amount_cents: string;
         settled_date: Date | string;
+        note: string | null;
         created_at: Date | string;
       }>(
         `INSERT INTO settlements (
-           trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date
-         ) VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, created_at`,
-        [tripId, input.payerId, input.recipientId, submittedByUserId, input.amountCents, input.date],
+           trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, note
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, note, created_at`,
+        [tripId, input.payerId, input.recipientId, submittedByUserId, input.amountCents, input.date, note],
       );
       const row = res.rows[0]!;
       return {
@@ -1592,6 +1607,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         createdByUserId: row.created_by,
         amountCents: parseInt(row.amount_cents, 10),
         date: formatDate(row.settled_date),
+        note: row.note,
         createdAt: formatTimestamp(row.created_at),
       };
     },
@@ -1600,6 +1616,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
       if (input.payerId === input.recipientId) {
         throw new AppError('trip_validation_failed', 'Payer and recipient must be distinct');
       }
+      const note = normalizeSettlementNote(input.note);
 
       const check = await pool.query<{
         id: string;
@@ -1640,13 +1657,14 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         created_by: string;
         amount_cents: string;
         settled_date: Date | string;
+        note: string | null;
         created_at: Date | string;
       }>(
         `UPDATE settlements
-         SET payer_id = $1, recipient_id = $2, amount_cents = $3, settled_date = $4
-         WHERE id = $5 AND trip_id = $6
-         RETURNING id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, created_at`,
-        [input.payerId, input.recipientId, input.amountCents, input.date, settlementId, tripId],
+         SET payer_id = $1, recipient_id = $2, amount_cents = $3, settled_date = $4, note = $5
+         WHERE id = $6 AND trip_id = $7
+         RETURNING id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, note, created_at`,
+        [input.payerId, input.recipientId, input.amountCents, input.date, note, settlementId, tripId],
       );
       const row = res.rows[0]!;
       return {
@@ -1657,6 +1675,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         createdByUserId: row.created_by,
         amountCents: parseInt(row.amount_cents, 10),
         date: formatDate(row.settled_date),
+        note: row.note,
         createdAt: formatTimestamp(row.created_at),
       };
     },
@@ -1836,7 +1855,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
       }
 
       // 2. Fetch settlements
-      let settlementQuery = `SELECT id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, created_at
+      let settlementQuery = `SELECT id, trip_id, payer_id, recipient_id, created_by, amount_cents, settled_date, note, created_at
                              FROM settlements WHERE trip_id = $1`;
       const setParams: any[] = [tripId];
       if (filters?.payerId) {
@@ -1853,6 +1872,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
         created_by: string;
         amount_cents: string;
         settled_date: Date | string;
+        note: string | null;
         created_at: Date | string;
       }>(settlementQuery, setParams);
 
@@ -1869,6 +1889,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
             createdByUserId: settlementPub(r.created_by),
             amountCents: parseInt(r.amount_cents, 10),
             date: formatDate(r.settled_date),
+            note: r.note,
             createdAt: formatTimestamp(r.created_at),
           }));
 
@@ -1946,6 +1967,7 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
               contributionCents: sign * e.amountCents,
               payerId: e.payerId,
               recipientId: e.recipientId,
+              ...(e.note !== undefined ? { note: e.note } : {}),
             });
           }
         }
@@ -1998,7 +2020,10 @@ export function createTripExpenseRepo(pool: DbPool): TripExpenseRepo {
           const payer = memberNames.get(item.payerId) ?? item.payerId;
           const recipient = memberNames.get(item.recipientId) ?? item.recipientId;
           const amount = (item.amountCents / 100).toFixed(2);
-          lines.push(`Settlement,${item.date},"Payment to ${recipient}",${payer},${amount},,Settlement`);
+          const details = item.note
+            ? `"Settlement: ${item.note.replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`
+            : 'Settlement';
+          lines.push(`Settlement,${item.date},"Payment to ${recipient}",${payer},${amount},,${details}`);
         } else {
           // Expense
           const payer = memberNames.get(item.payerId) ?? item.payerId;
@@ -2155,8 +2180,9 @@ async function buildBalanceEvents(pool: DbPool, tripId: string): Promise<Balance
     recipient_id: string;
     amount_cents: string;
     settled_date: Date | string;
+    note: string | null;
   }>(
-    `SELECT id, payer_id, recipient_id, amount_cents, settled_date
+    `SELECT id, payer_id, recipient_id, amount_cents, settled_date, note
      FROM settlements WHERE trip_id = $1`,
     [tripId],
   );
@@ -2175,6 +2201,7 @@ async function buildBalanceEvents(pool: DbPool, tripId: string): Promise<Balance
       date,
       payerId: s.payer_id,
       recipientId: s.recipient_id,
+      note: s.note,
     });
 
     events.push({
@@ -2187,6 +2214,7 @@ async function buildBalanceEvents(pool: DbPool, tripId: string): Promise<Balance
       date,
       payerId: s.payer_id,
       recipientId: s.recipient_id,
+      note: s.note,
     });
   }
 

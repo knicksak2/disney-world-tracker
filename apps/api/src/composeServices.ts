@@ -136,6 +136,8 @@ import {
 
 import { createPinRepo } from './services/pins/repo.js';
 import { createPinShowcaseRepo } from './services/pins/showcaseRepo.js';
+import { createOnboardingRepo } from './services/onboarding/repo.js';
+import { createOnboardingService } from './services/onboarding/service.js';
 
 import { createFoodItemRepo, createFoodItemLogRepo } from './services/foodLog/repo.js';
 import { createUserSubmittedLocationRepo } from './services/foodLog/locations.js';
@@ -313,6 +315,12 @@ export async function buildApp(
    */
   const awardPins = (userId: string): Promise<string[]> =>
     pinRepo.awardNewly(userId);
+
+  const onboardingRepo = createOnboardingRepo(pool);
+  const onboardingService = createOnboardingService({
+    repo: onboardingRepo,
+    awardPins,
+  });
 
   // The Trip_Service never holds Trip-local copies of Completions or Ratings:
   // it delegates those canonical writes to the existing Tracking_Service repos
@@ -1202,6 +1210,10 @@ export async function buildApp(
       repo: feedbackRepo,
       caps: { perHour: feedbackConfig.perHour, perDay: feedbackConfig.perDay },
       retentionDays: feedbackConfig.retentionDays,
+      requireSession: sessionMiddleware,
+    },
+    onboarding: {
+      service: onboardingService,
       requireSession: sessionMiddleware,
     },
     diningPlan: {

@@ -246,4 +246,12 @@ export type {
   MickeyClientConfigDTO,
 } from './Mickeys.js';
 
+export type {
+  OnboardingIntent,
+  OnboardingPark,
+  StarterChecklistDTO,
+  OnboardingStateDTO,
+  QuickCompletionsResponseDTO,
+} from './Onboarding.js';
+
 

@@ -15,6 +15,7 @@ export interface BalanceEvent {
   readonly date: string; // YYYY-MM-DD
   readonly payerId?: string | undefined;
   readonly recipientId?: string | undefined;
+  readonly note?: string | null | undefined;
 }
 
 

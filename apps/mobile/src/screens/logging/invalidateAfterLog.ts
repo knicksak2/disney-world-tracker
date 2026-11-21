@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { onboardingKeys } from '../onboarding/onboardingApi';
 import { tripFeedKeys } from '../trips/tripFeedQueryKeys';
 import { tripsListKeys } from '../trips/TripsListScreen';
 
@@ -11,8 +12,8 @@ import { tripsListKeys } from '../trips/TripsListScreen';
  *      ['experience-logs', experienceId], ['experience-completion', experienceId],
  *      ['experience-rating', experienceId], ['experience-aggregate', experienceId],
  *      ['scoped-food-item-logs', experienceId]
- *  - Global user stats and trip picker queries:
- *      ['me-stats'], ['me', 'trips', 'active'], tripsListKeys.list()
+ *  - Global user stats, trip picker, and onboarding checklist queries:
+ *      ['me-stats'], ['me', 'trips', 'active'], tripsListKeys.list(), onboardingKeys.me
  *  - When tripId !== null:
  *      tripFeedKeys.feed(tripId), ['trips', tripId, 'summary'], ['trips', tripId, 'planned-items']
  */
@@ -46,6 +47,9 @@ export function invalidateAfterLog(
   });
   void qc.invalidateQueries({
     queryKey: tripsListKeys.list(),
+  });
+  void qc.invalidateQueries({
+    queryKey: onboardingKeys.me,
   });
 
   // Trip-scoped queries (when linked to a Trip)

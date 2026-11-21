@@ -12,6 +12,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { FavoritesResponseDTO } from '@dwt/shared';
 
 import { apiRequest } from '../../../api/client';
+import { onboardingKeys } from '../../onboarding/onboardingApi';
 import FavoriteToggle from '../FavoriteToggle';
 import { FAVORITES_QUERY_KEY } from '../useFavoritedExperiences';
 import { HEART } from '../FavoriteToggle.palette';
@@ -159,6 +160,26 @@ describe('FavoriteToggle (Requirements 2.2, 2.3, 2.4, 3.3)', () => {
       // Cache rolled back
       const cached = queryClient.getQueryData<FavoritesResponseDTO>(FAVORITES_QUERY_KEY);
       expect(cached?.experienceIds).not.toContain(expId);
+    });
+
+    it('invalidates onboardingKeys.me on settled favorite toggle so Start Here updates', async () => {
+      mockedApiRequest.mockResolvedValueOnce(null);
+
+      const expId = 'exp-onboard-1';
+      const { getByTestId, queryClient } = renderFavoriteToggle({
+        experienceId: expId,
+        favorited: false,
+      });
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      await act(async () => {
+        fireEvent.press(getByTestId(`favorite-toggle-${expId}`));
+      });
+
+      await waitFor(() => {
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: FAVORITES_QUERY_KEY });
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: onboardingKeys.me });
+      });
     });
   });
 

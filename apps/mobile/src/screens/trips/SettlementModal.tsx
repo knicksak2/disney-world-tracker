@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { SettlementDTO, TripMemberDTO } from '@dwt/shared';
+import { SETTLEMENT_NOTE_MAX, type SettlementDTO, type TripMemberDTO } from '@dwt/shared';
 
 import {
   PrimaryButton,
@@ -77,6 +77,7 @@ export function SettlementModal({
   const [date, setDate] = useState(
     initialSettlement?.date ?? new Date().toISOString().slice(0, 10),
   );
+  const [note, setNote] = useState(initialSettlement?.note ?? '');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,11 +87,13 @@ export function SettlementModal({
       setRecipientId(initialSettlement.recipientId);
       setAmountDollars((initialSettlement.amountCents / 100).toFixed(2));
       setDate(initialSettlement.date);
+      setNote(initialSettlement.note ?? '');
     } else {
       if (prefillPayerId) setPayerId(prefillPayerId);
       if (prefillRecipientId) setRecipientId(prefillRecipientId);
       if (prefillAmountCents) setAmountDollars((prefillAmountCents / 100).toFixed(2));
       setDate(new Date().toISOString().slice(0, 10));
+      setNote('');
     }
     setErrorMessage(null);
   }, [visible, initialSettlement, prefillPayerId, prefillRecipientId, prefillAmountCents]);
@@ -105,11 +108,17 @@ export function SettlementModal({
         throw new Error('Payer and recipient must be distinct members');
       }
 
+      const trimmedNote = note.trim();
       const input = {
         payerId,
         recipientId,
         amountCents: cents,
         date,
+        ...(isEditing
+          ? { note: trimmedNote.length > 0 ? trimmedNote : null }
+          : trimmedNote.length > 0
+          ? { note: trimmedNote }
+          : {}),
       };
 
       return isEditing
@@ -158,78 +167,96 @@ export function SettlementModal({
             </Pressable>
           </View>
 
-          <Text style={styles.subtitle}>
-            Record payment directly between two members (e.g. via Venmo, Zelle, cash).
-          </Text>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.subtitle}>
+              Record payment directly between two members (e.g. via Venmo, Zelle, cash).
+            </Text>
 
-          {errorMessage ? (
-            <View style={styles.errorBox} testID="settlement-error-box">
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
+            {errorMessage ? (
+              <View style={styles.errorBox} testID="settlement-error-box">
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
-          {/* Who Paid */}
-          <SectionLabel>WHO PAID (PAYER)?</SectionLabel>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
-            {members.map((m) => {
-              const isSelected = m.userId === payerId;
-              return (
-                <Pressable
-                  key={m.userId}
-                  style={[styles.memberChip, isSelected && styles.memberChipSelected]}
-                  onPress={() => setPayerId(m.userId)}
-                  testID={`settlement-payer-chip-${m.userId}`}
-                >
-                  <Text style={[styles.memberChipText, isSelected && styles.memberChipTextSelected]}>
-                    {m.displayName}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {/* Who Paid */}
+            <SectionLabel>WHO PAID (PAYER)?</SectionLabel>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
+              {members.map((m) => {
+                const isSelected = m.userId === payerId;
+                return (
+                  <Pressable
+                    key={m.userId}
+                    style={[styles.memberChip, isSelected && styles.memberChipSelected]}
+                    onPress={() => setPayerId(m.userId)}
+                    testID={`settlement-payer-chip-${m.userId}`}
+                  >
+                    <Text style={[styles.memberChipText, isSelected && styles.memberChipTextSelected]}>
+                      {m.displayName}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Who Received */}
+            <SectionLabel>WHO RECEIVED (RECIPIENT)?</SectionLabel>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
+              {members.map((m) => {
+                const isSelected = m.userId === recipientId;
+                return (
+                  <Pressable
+                    key={m.userId}
+                    style={[styles.memberChip, isSelected && styles.memberChipSelected]}
+                    onPress={() => setRecipientId(m.userId)}
+                    testID={`settlement-recipient-chip-${m.userId}`}
+                  >
+                    <Text style={[styles.memberChipText, isSelected && styles.memberChipTextSelected]}>
+                      {m.displayName}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <SectionLabel>AMOUNT ($)</SectionLabel>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              keyboardType="decimal-pad"
+              value={amountDollars}
+              onChangeText={setAmountDollars}
+              testID="settlement-amount-input"
+            />
+
+            <SectionLabel>SETTLED DATE (YYYY-MM-DD)</SectionLabel>
+            <TextInput
+              style={styles.input}
+              placeholder="2026-10-04"
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              value={date}
+              onChangeText={setDate}
+              testID="settlement-date-input"
+            />
+
+            <SectionLabel>NOTES (OPTIONAL)</SectionLabel>
+            <TextInput
+              style={[styles.input, styles.noteInput]}
+              placeholder="e.g. Venmo, cash, hotel deposit"
+              placeholderTextColor={t.color.textSecondary}
+              keyboardAppearance={t.scheme}
+              value={note}
+              onChangeText={setNote}
+              maxLength={SETTLEMENT_NOTE_MAX}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              accessibilityLabel="Settlement notes"
+              testID="settlement-note-input"
+            />
           </ScrollView>
-
-          {/* Who Received */}
-          <SectionLabel>WHO RECEIVED (RECIPIENT)?</SectionLabel>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} keyboardShouldPersistTaps="handled">
-            {members.map((m) => {
-              const isSelected = m.userId === recipientId;
-              return (
-                <Pressable
-                  key={m.userId}
-                  style={[styles.memberChip, isSelected && styles.memberChipSelected]}
-                  onPress={() => setRecipientId(m.userId)}
-                  testID={`settlement-recipient-chip-${m.userId}`}
-                >
-                  <Text style={[styles.memberChipText, isSelected && styles.memberChipTextSelected]}>
-                    {m.displayName}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <SectionLabel>AMOUNT ($)</SectionLabel>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            keyboardType="decimal-pad"
-            value={amountDollars}
-            onChangeText={setAmountDollars}
-            testID="settlement-amount-input"
-          />
-
-          <SectionLabel>SETTLED DATE (YYYY-MM-DD)</SectionLabel>
-          <TextInput
-            style={styles.input}
-            placeholder="2026-10-04"
-            placeholderTextColor={t.color.textSecondary}
-            keyboardAppearance={t.scheme}
-            value={date}
-            onChangeText={setDate}
-            testID="settlement-date-input"
-          />
 
           <View style={styles.footerRow}>
             <SecondaryButton label="Cancel" onPress={onClose} />
@@ -257,6 +284,7 @@ const useStyles = makeStyles((t) => ({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
+    maxHeight: '90%',
   },
   headerRow: {
     flexDirection: 'row',
@@ -319,6 +347,10 @@ const useStyles = makeStyles((t) => ({
     fontSize: 15,
     color: t.color.textPrimary,
     marginBottom: 12,
+  },
+  noteInput: {
+    minHeight: 72,
+    paddingTop: 10,
   },
   footerRow: {
     flexDirection: 'row',

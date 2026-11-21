@@ -42,6 +42,7 @@ import type { TripInviteDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import type { TripsStackParamList } from '../../navigation/TripsStack';
+import { onboardingKeys } from '../onboarding/onboardingApi';
 import { theme } from '../../theme/theme';
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -112,6 +113,7 @@ export default function TripInviteScreen({
       ),
     onSuccess: (result) => {
       refreshLists();
+      void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
       // R7.6 hand-off: drop the User straight into the Trip they just joined,
       // replacing this deep-link target so Back does not return to the invite.
       navigation.replace('TripDetail', { tripId: result.tripId });

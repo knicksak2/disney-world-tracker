@@ -113,6 +113,10 @@ import {
   feedbackRoutes,
   type FeedbackRoutesOptions,
 } from './services/feedback/routes.js';
+import {
+  onboardingRoutes,
+  type OnboardingRoutesOptions,
+} from './services/onboarding/routes.js';
 import { legalRoutes } from './services/legal/routes.js';
 import {
   pinRoutes,
@@ -300,6 +304,8 @@ export interface BuildServerServices {
   readonly accountDeletion?: AccountDeletionRoutesOptions;
   /** In-app feedback: `POST /me/feedback` (Feature: in-app-feedback). */
   readonly feedback?: FeedbackRoutesOptions;
+  /** First-run onboarding routes (Feature: first-run-onboarding). */
+  readonly onboarding?: OnboardingRoutesOptions;
   /**
    * Intelligence_Service routes (task 5). Wires the crowd calendar reads and 
    * the internal sampling cron endpoint (R3, R6, R11).
@@ -699,6 +705,10 @@ export function buildServer(
   }
   if (services.feedback !== undefined) {
     void app.register(feedbackRoutes(services.feedback));
+  }
+
+  if (services.onboarding !== undefined) {
+    void app.register(onboardingRoutes(services.onboarding));
   }
 
   if (services.friendFoodRatings !== undefined) {

@@ -1,0 +1,3074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      const saved = localStorage.getItem('dwt-mockup-color-scheme');
+      if (saved === 'light' || saved === 'dark') {
+        document.querySelector('meta[name="color-scheme"]').content = saved;
+      }
+    } catch {}
+  </script>
+  <title>Disney World Tracker — First-Run Onboarding & App Clarity Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* =========================================================================
+       Theme & Color Scheme (follows modern-web-guidance: dark-mode-toggle)
+       Exact tokens from apps/mobile/src/theme/theme.ts (Light & Twilight Dark)
+       ========================================================================= */
+    :root {
+      color-scheme: light dark;
+
+      /* Page shell tokens */
+      --page-bg: light-dark(#f4f0fa, #0d0718);
+      --page-surface: light-dark(#ffffff, #170f28);
+      --page-surface-2: light-dark(#efe9f8, #22163a);
+      --page-text: light-dark(#1f1235, #f3eefc);
+      --page-muted: light-dark(#5e5574, #b3a8c9);
+      --page-border: light-dark(#dfd4f0, #31234d);
+      --page-shadow: light-dark(0 12px 32px rgba(61, 28, 92, 0.08), 0 18px 44px rgba(0, 0, 0, 0.45));
+
+      /* App tokens (light / Twilight dark) */
+      --primary: light-dark(#5b2a86, #7e57c2);
+      --primary-dark: light-dark(#3d1c5c, #2a1450);
+      --primary-light: light-dark(#7e57c2, #b28dff);
+      --primary-fg: light-dark(#5b2a86, #c4a3ff);
+      --accent: #f6c343;
+      --accent-dark: #d4a017;
+      --app-bg: light-dark(#f5f2fb, #120a1f);
+      --surface: light-dark(#ffffff, #1e1430);
+      --surface-alt: light-dark(#efe9f7, #2a1d42);
+      --text-primary: light-dark(#1f1235, #f3eefc);
+      --text-secondary: light-dark(#6b6480, #b3a8c9);
+      --text-on-primary: #ffffff;
+      --text-on-accent: #3d1c5c;
+      --success: light-dark(#2e9e6b, #4cc38a);
+      --success-bg: light-dark(#e6f7ef, rgba(76, 195, 138, 0.16));
+      --danger: light-dark(#d6336c, #ff6b9a);
+      --danger-bg: light-dark(#fdebf1, rgba(255, 107, 154, 0.16));
+      --warning: light-dark(#e8a317, #f5b83d);
+      --warning-bg: light-dark(#fff4d6, #3a2c0e);
+      --warning-text: light-dark(#8a5a00, #ffd27a);
+      --border: light-dark(#e2d9f0, #33264d);
+      --border-strong: light-dark(#cdbce6, #4a3a6b);
+
+      --grad-header: linear-gradient(135deg, light-dark(#7e57c2, #5b2a86) 0%, light-dark(#5b2a86, #3b1d6e) 55%, light-dark(#3d1c5c, #1a0d33) 100%);
+      --grad-btn: linear-gradient(135deg, light-dark(#6e3ca0, #8a63d2) 0%, light-dark(#4e2275, #6941b0) 100%);
+      --grad-gold: linear-gradient(135deg, #f6c343 0%, #d4a017 100%);
+
+      /* Park gradients */
+      --park-mk: linear-gradient(135deg, #6f42c1 0%, #4b2482 100%);
+      --park-ep: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      --park-hs: linear-gradient(135deg, #e11d48 0%, #9f1239 100%);
+      --park-ak: linear-gradient(135deg, #15803d 0%, #166534 100%);
+    }
+
+    :root:has(> head > meta[name="color-scheme"][content="dark"]) {
+      color-scheme: dark;
+    }
+    :root:has(> head > meta[name="color-scheme"][content="light"]) {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--page-bg);
+      color: var(--page-text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    button, input {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    /* =========================================================================
+       Compact Top Bar (content-first-noise-reduction: single row, <12% vh)
+       ========================================================================= */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: color-mix(in srgb, var(--page-surface) 88%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--page-border);
+      padding: 10px 20px;
+    }
+
+    .topbar-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: var(--grad-header);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .jump-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .jump-nav::-webkit-scrollbar { display: none; }
+
+    .jump-nav a {
+      text-decoration: none;
+      color: var(--page-muted);
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 6px 11px;
+      border-radius: 999px;
+      white-space: nowrap;
+      border: 1px solid transparent;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .jump-nav a:hover,
+    .jump-nav a:focus-visible {
+      background: var(--page-surface-2);
+      color: var(--primary-fg);
+      border-color: var(--page-border);
+      outline: none;
+    }
+
+    /* 3-state theme control (developer/designer review workbench) */
+    .scheme-control {
+      display: inline-flex;
+      background: var(--page-surface-2);
+      border: 1px solid var(--page-border);
+      border-radius: 999px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .scheme-btn {
+      border: none;
+      background: transparent;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--page-muted);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .scheme-btn[aria-pressed="true"] {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* =========================================================================
+       Page Layout & Sections
+       ========================================================================= */
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 28px 20px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 56px;
+    }
+
+    .hero-banner {
+      background: var(--grad-header);
+      color: #fff;
+      border-radius: 24px;
+      padding: 28px 30px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--page-shadow);
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(246, 195, 67, 0.18);
+      border: 1px solid rgba(246, 195, 67, 0.45);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+
+    .hero-banner h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+
+    .hero-banner p {
+      max-width: 760px;
+      font-size: 14.5px;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .hero-pill {
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      padding: 5px 11px;
+      border-radius: 999px;
+      color: #fff;
+    }
+
+    .section-block {
+      scroll-margin-top: 72px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--page-border);
+      padding-bottom: 14px;
+    }
+
+    .section-num {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--primary-fg);
+      margin-bottom: 4px;
+    }
+
+    .section-head h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .section-desc {
+      color: var(--page-muted);
+      font-size: 14px;
+      max-width: 720px;
+      margin-top: 4px;
+    }
+
+    .workbench-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(365px, 1fr));
+      gap: 28px;
+      align-items: start;
+      justify-items: center;
+    }
+
+    @media (max-width: 920px) {
+      .workbench-grid {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+      .notes-col {
+        width: 100%;
+      }
+    }
+
+    /* =========================================================================
+       Phone Frame
+       ========================================================================= */
+    .phone-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .phone-caption {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--page-border);
+      background: var(--page-surface);
+    }
+
+    .phone-caption.before {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    }
+
+    .phone-caption.after {
+      color: var(--success);
+      background: var(--success-bg);
+      border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    }
+
+    .phone-caption.interactive {
+      color: var(--primary-fg);
+      background: var(--page-surface-2);
+    }
+
+    .phone {
+      width: 375px;
+      height: 760px;
+      border-radius: 42px;
+      background: var(--app-bg);
+      border: 9px solid light-dark(#241738, #2b1f44);
+      box-shadow: var(--page-shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .phone.tall {
+      height: 800px;
+    }
+
+    .status-bar {
+      height: 30px;
+      padding: 8px 22px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .status-bar.on-dark {
+      background: transparent;
+      color: #fff;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+    }
+
+    .phone-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      position: relative;
+    }
+
+    /* =========================================================================
+       Shared Mobile UI Primitives (mirroring apps/mobile/src/theme)
+       ========================================================================= */
+    .app-header {
+      background: var(--grad-header);
+      color: #fff;
+      padding: 36px 16px 18px;
+      border-bottom-left-radius: 24px;
+      border-bottom-right-radius: 24px;
+      position: relative;
+    }
+
+    .app-header.compact {
+      padding: 36px 16px 14px;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .eyebrow-gold {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-pill {
+      height: 30px;
+      min-width: 30px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    .header-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .header-sub {
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.84);
+      margin-top: 3px;
+    }
+
+    .app-pad {
+      padding: 12px 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(31, 18, 53, 0.04);
+    }
+
+    .card-soft {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .sec-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .sec-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .sec-link {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--primary-fg);
+      background: none;
+      border: none;
+    }
+
+    .btn-primary {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      background: var(--grad-btn);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 12px 16px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(91, 42, 134, 0.28);
+      transition: transform 0.1s, opacity 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.94; }
+    .btn-primary:active { transform: scale(0.985); }
+
+    .btn-secondary {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--primary-fg);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 9px 14px;
+      text-align: center;
+    }
+
+    .btn-ghost {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 800;
+      background: var(--surface-alt);
+      color: var(--primary-fg);
+      border: 1px solid var(--border);
+    }
+
+    .chip.gold {
+      background: var(--warning-bg);
+      color: var(--warning-text);
+      border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+    }
+
+    .chip.green {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    }
+
+    .chip.red {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    }
+
+    /* Search Bar */
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .search-box:focus-within {
+      border-color: var(--primary-light);
+    }
+
+    .search-box input {
+      border: none;
+      background: transparent;
+      outline: none;
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    /* Bottom Tab Bar + MagicFab */
+    .tab-bar {
+      height: 62px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr 64px 1fr 1fr;
+      align-items: center;
+      padding: 0 4px 4px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 5;
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      border: none;
+      background: transparent;
+      padding: 4px 0;
+    }
+
+    .tab-item .tab-ico { font-size: 17px; line-height: 1; }
+    .tab-item.active { color: var(--primary-fg); }
+
+    .fab-slot {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .magic-fab {
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      border: 3px solid var(--surface);
+      background: var(--grad-header);
+      color: #fff;
+      font-size: 20px;
+      display: grid;
+      place-items: center;
+      transform: translateY(-10px);
+      box-shadow: 0 6px 16px rgba(91, 42, 134, 0.38);
+      transition: transform 0.15s;
+    }
+    .magic-fab:hover { transform: translateY(-12px) scale(1.04); }
+
+    /* Callout annotations on "Before" phone */
+    .issue-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9.5px;
+      font-weight: 800;
+      background: var(--danger);
+      color: #fff;
+      padding: 2px 7px;
+      border-radius: 999px;
+      margin-bottom: 5px;
+      letter-spacing: 0.2px;
+    }
+
+    .clutter-outline {
+      outline: 1.5px dashed color-mix(in srgb, var(--danger) 65%, transparent);
+      outline-offset: 3px;
+      border-radius: 14px;
+    }
+
+    /* =========================================================================
+       Section 1: Onboarding Interactive Prototype
+       ========================================================================= */
+    .ob-shell {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--app-bg);
+    }
+
+    .ob-top {
+      padding: 36px 18px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ob-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .ob-dot {
+      height: 6px;
+      width: 18px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      transition: width 0.2s, background 0.2s;
+    }
+
+    .ob-dot.active {
+      width: 34px;
+      background: var(--primary);
+    }
+
+    .ob-dot.done {
+      background: var(--success);
+    }
+
+    .ob-content {
+      flex: 1;
+      padding: 8px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ob-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.18;
+      color: var(--text-primary);
+    }
+
+    .ob-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .intent-card {
+      width: 100%;
+      text-align: left;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    }
+
+    .intent-card:hover {
+      border-color: var(--primary-light);
+    }
+
+    .intent-card.selected {
+      border-color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+    }
+
+    .intent-ico {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: var(--surface-alt);
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .intent-card.selected .intent-ico {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .intent-name {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .intent-desc {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    .ob-footer {
+      padding: 12px 18px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Ride quick-pick grid in Step 2 */
+    .ride-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .ride-pill {
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      border-radius: 13px;
+      padding: 9px 10px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: all 0.12s;
+    }
+
+    .ride-pill.picked {
+      border-color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+    }
+
+    .ride-pill-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .ride-pill-park {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+    }
+
+    .pin-toast {
+      background: var(--warning-bg);
+      border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+      color: var(--warning-text);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ob-map-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .ob-map-ico {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: var(--surface-alt);
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+
+    .ob-map-ico.fab {
+      background: var(--grad-header);
+      color: #fff;
+      border-radius: 999px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .text-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    /* =========================================================================
+       Section 2: Home Before vs After + Start Here Checklist + Sheet
+       ========================================================================= */
+    .parks-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .park-tile {
+      border-radius: 14px;
+      padding: 10px;
+      color: #fff;
+      min-height: 82px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .park-tile-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .wait-pill {
+      font-size: 9.5px;
+      font-weight: 800;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+
+    .park-tile-name {
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .park-tile-count {
+      font-size: 10px;
+      opacity: 0.85;
+    }
+
+    .quick-log-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .quick-log-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Compact Park Pulse Strip (After Home) */
+    .pulse-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .pulse-chip {
+      border-radius: 12px;
+      padding: 8px 6px;
+      color: #fff;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .pulse-chip strong {
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .pulse-chip span {
+      font-size: 9.5px;
+      opacity: 0.9;
+    }
+
+    /* Start Here Checklist Card */
+    .starter-card {
+      background: var(--surface);
+      border: 1.5px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+      border-radius: 18px;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 14px rgba(91, 42, 134, 0.08);
+    }
+
+    .progress-track {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--grad-btn);
+      border-radius: 999px;
+      transition: width 0.25s ease;
+    }
+
+    .check-item {
+      width: 100%;
+      text-align: left;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .check-item.done {
+      background: var(--success-bg);
+      border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    }
+
+    .check-circle {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid var(--border-strong);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+
+    .check-item.done .check-circle {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
+
+    .check-label {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .check-item.done .check-label {
+      text-decoration: line-through;
+      opacity: 0.78;
+    }
+
+    .check-sub {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+    }
+
+    /* MagicFab Sheet inside phone */
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(12, 6, 24, 0.52);
+      display: none;
+      align-items: flex-end;
+      z-index: 20;
+    }
+
+    .sheet-backdrop.open {
+      display: flex;
+    }
+
+    .sheet-panel {
+      width: 100%;
+      background: var(--surface);
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      padding: 12px 16px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sheet-handle {
+      width: 38px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      margin: 0 auto 4px;
+    }
+
+    .sheet-action {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* =========================================================================
+       Section 3: Universal Tool Search
+       ========================================================================= */
+    .try-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .try-chip {
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--primary-fg);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    .try-chip:hover {
+      background: var(--surface-alt);
+    }
+
+    .search-result-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+    }
+
+    .search-ico {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--surface-alt);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .search-path {
+      font-size: 10.5px;
+      color: var(--primary-fg);
+      font-weight: 700;
+    }
+
+    /* =========================================================================
+       Section 4: Phase-Aware Trip Hub + Native <details> Accordion
+       (follows modern-web-guidance: accordion)
+       ========================================================================= */
+    .phase-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .phase-btn {
+      border: 1.5px solid var(--page-border);
+      background: var(--page-surface);
+      color: var(--page-muted);
+      border-radius: 12px;
+      padding: 8px 13px;
+      font-size: 12.5px;
+      font-weight: 700;
+      transition: all 0.15s;
+    }
+
+    .phase-btn[aria-pressed="true"] {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(91, 42, 134, 0.25);
+    }
+
+    .tool-grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .tool-tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      text-align: left;
+    }
+
+    .tool-tile-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .tool-tile-ico {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface-alt);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+    }
+
+    .tool-tile-title {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .tool-tile-sub {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+
+    /* Native <details> Accordion — modern-web-guidance compliant */
+    .tool-accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tool-accordion details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      overflow: hidden;
+    }
+
+    .tool-accordion summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--text-primary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tool-accordion summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .tool-accordion summary::before {
+      content: "";
+      inline-size: 0.9em;
+      block-size: 0.9em;
+      flex-shrink: 0;
+      background-color: var(--primary-fg);
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 5.2a.75.75 0 0 1 1.06 0L8 8.94l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L3.2 6.26a.75.75 0 0 1 0-1.06Z'/%3E%3C/svg%3E") no-repeat center / contain;
+      rotate: -90deg;
+    }
+
+    .tool-accordion details[open] > summary::before {
+      rotate: 0deg;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .tool-accordion summary::before {
+        transition: rotate 0.2s ease;
+      }
+      .tool-accordion details::details-content {
+        transition: block-size 0.28s ease-in-out, content-visibility 0.28s allow-discrete;
+      }
+    }
+
+    .tool-accordion details::details-content {
+      interpolate-size: allow-keywords;
+      overflow: clip;
+      contain: layout;
+    }
+
+    .tool-accordion details:not([open])::details-content {
+      block-size: 0;
+    }
+
+    .acc-body {
+      padding: 0 12px 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .mini-tool-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 9px;
+      border-radius: 10px;
+      background: var(--surface-alt);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .mini-tool-row span.sub {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    /* =========================================================================
+       Section 5: "You" Tab Cleanup & IA Ownership
+       ========================================================================= */
+    .seg-bar {
+      display: flex;
+      background: var(--surface-alt);
+      border-radius: 12px;
+      padding: 3px;
+      gap: 2px;
+      margin: 10px 14px 0;
+    }
+
+    .seg-pill {
+      flex: 1;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 6px 2px;
+      border-radius: 9px;
+      color: var(--text-secondary);
+      border: none;
+      background: transparent;
+      white-space: nowrap;
+    }
+
+    .seg-pill.active {
+      background: var(--surface);
+      color: var(--primary-fg);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .cork-mock {
+      height: 132px;
+      border-radius: 12px;
+      background: repeating-linear-gradient(45deg, #c69c6d, #c69c6d 8px, #bc8f5f 8px, #bc8f5f 16px);
+      border: 4px solid #7c5229;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 12px;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    /* =========================================================================
+       Design Rationale Cards & Tables
+       ========================================================================= */
+    .notes-col {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .note-card {
+      background: var(--page-surface);
+      border: 1px solid var(--page-border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 16px rgba(31, 18, 53, 0.04);
+    }
+
+    .note-card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .note-card p, .note-card li {
+      font-size: 13.5px;
+      color: var(--page-muted);
+    }
+
+    .note-card ul {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .note-card strong {
+      color: var(--page-text);
+    }
+
+    .ia-table-wrap {
+      background: var(--page-surface);
+      border: 1px solid var(--page-border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    table.ia-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    table.ia-table th, table.ia-table td {
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--page-border);
+      vertical-align: top;
+    }
+
+    table.ia-table th {
+      background: var(--page-surface-2);
+      font-size: 11.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--primary-fg);
+    }
+
+    table.ia-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+
+    .lb-rank {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+
+    .stat-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat-mini {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .stat-mini strong {
+      display: block;
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--primary-fg);
+    }
+
+    .stat-mini span {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .step-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .mini-tab {
+      border: 1px solid var(--page-border);
+      background: var(--page-surface);
+      color: var(--page-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 999px;
+    }
+
+    .mini-tab[aria-pressed="true"] {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <!-- Compact single-row workbench topbar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">✨</span>
+        <span>DWT · Clarity &amp; Onboarding Mockup</span>
+      </div>
+
+      <nav class="jump-nav" aria-label="Mockup sections">
+        <a href="#sec-onboarding">1. Onboarding</a>
+        <a href="#sec-home">2. Home &amp; Start Here</a>
+        <a href="#sec-search">3. Tool Search</a>
+        <a href="#sec-trips">4. Trip Phases</a>
+        <a href="#sec-you">5. "You" &amp; IA Map</a>
+      </nav>
+
+      <div class="scheme-control" role="group" aria-label="Color scheme">
+        <button type="button" class="scheme-btn" data-scheme="system" aria-pressed="true">System</button>
+        <button type="button" class="scheme-btn" data-scheme="light" aria-pressed="false">Light</button>
+        <button type="button" class="scheme-btn" data-scheme="dark" aria-pressed="false">Twilight</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Overview -->
+    <section class="hero-banner">
+      <div class="hero-eyebrow">Interactive UX Prototype · 5 Solutions</div>
+      <h1>Turning 50 Features Into an Effortless First 60 Seconds</h1>
+      <p>
+        Every screen below is interactive — click through the 3-step onboarding, check off items in the new-user Home checklist, tap the center MagicFab, search for hidden tools like "budget" or "crowd", and toggle Trip Phases to see how progressive disclosure replaces wall-to-wall complexity.
+      </p>
+      <div class="hero-pills">
+        <span class="hero-pill">1. Intent-Based Onboarding</span>
+        <span class="hero-pill">2. Cold-Start Home &amp; Declutter</span>
+        <span class="hero-pill">3. Universal Tool Search</span>
+        <span class="hero-pill">4. Phase-Aware Trip Hub</span>
+        <span class="hero-pill">5. Clean "You" Hub &amp; Tab Roles</span>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION 1: INTERACTIVE 3-STEP ONBOARDING
+         ======================================================================= -->
+    <section id="sec-onboarding" class="section-block">
+      <div class="section-head">
+        <div>
+          <div class="section-num">Proposal 01 · First-Run Flow</div>
+          <h2>Intent-Based 3-Step Onboarding (Learn by Doing)</h2>
+          <p class="section-desc">
+            Runs once right after <code>RegisterScreen</code> (skippable, re-openable from Settings). Instead of a boring tooltip tour, it asks why they're here, lets them complete one rewarding action in 20 seconds, and gives a 4-line map of the tabs.
+          </p>
+        </div>
+        <div class="step-controls" role="group" aria-label="Jump to onboarding step">
+          <button type="button" class="mini-tab" data-ob-jump="1" aria-pressed="true">Step 1: Intent</button>
+          <button type="button" class="mini-tab" data-ob-jump="2" aria-pressed="false">Step 2: Quick Action</button>
+          <button type="button" class="mini-tab" data-ob-jump="3" aria-pressed="false">Step 3: Tab Map</button>
+        </div>
+      </div>
+
+      <div class="workbench-grid">
+        <div class="phone-wrap">
+          <div class="phone-caption interactive">Interactive · Try all 4 intents</div>
+          <div class="phone" id="onboarding-phone">
+            <div class="status-bar">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body" id="ob-body">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <div class="notes-col">
+          <div class="note-card">
+            <h3>Why this works better than a coach-mark tour</h3>
+            <ul>
+              <li><strong>Routes to the right mode immediately:</strong> Disney guests are either <em>planning a trip</em>, <em>in the parks today</em>, or <em>logging past memories</em>. Asking upfront lets Step 2 and the landing screen match their real goal.</li>
+              <li><strong>Instant "aha" moment in Step 2:</strong> If they pick <em>Tracking history</em> and tap 3 rides they've been on, they immediately see a <strong>Bronze Pin unlock preview</strong> and populate their stats — teaching the core loop (Log → Stats + Pins) without a single paragraph of instructions.</li>
+              <li><strong>Always skippable, zero trap:</strong> Top-right <code>Skip</code> drops them straight onto Home with the dismissible Start Here card still available.</li>
+            </ul>
+          </div>
+
+          <div class="note-card">
+            <h3>What each Step 1 choice triggers in Step 2</h3>
+            <ul>
+              <li><strong>🗓️ Planning an upcoming trip:</strong> Minimal 2-field Quick Trip Starter (name + optional dates) — skips lodging, guests, and budgets until they're inside the trip.</li>
+              <li><strong>🎢 In the parks right now:</strong> Pick today's park (with live wait averages) → lands directly on that park's Live Waits &amp; Today view.</li>
+              <li><strong>⭐ Tracking past rides &amp; food:</strong> 12-ride "Tap what you've ridden" starter grid → bulk-logs completions &amp; unlocks their first pin.</li>
+              <li><strong>✨ Just looking around:</strong> Same quick-pick grid (optional) or jumps straight to the 4-tab map.</li>
+            </ul>
+          </div>
+
+          <div class="note-card">
+            <h3>Persistence &amp; Re-entry</h3>
+            <p>
+              Store a tiny <code>onboardingCompletedAt</code> + <code>initialIntent</code> flag (user profile or local storage). Add a <strong>"App Tour &amp; Guide"</strong> row in Settings so anyone can replay Step 3's tab map anytime.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION 2: HOME SCREEN BEFORE VS AFTER
+         ======================================================================= -->
+    <section id="sec-home" class="section-block">
+      <div class="section-head">
+        <div>
+          <div class="section-num">Proposal 02 · Cold-Start Home &amp; Declutter</div>
+          <h2>Home Screen: Before vs. After (With "Start Here" Checklist)</h2>
+          <p class="section-desc">
+            Today, Home duplicates Explore's 2×2 Park grid, MagicFab's Log Ride/Log Food/Hidden Mickeys buttons, and You's Crew entry. On the right, Home focuses on <strong>your next step + live glance</strong>, and lets MagicFab own quick logging.
+          </p>
+        </div>
+      </div>
+
+      <div class="compare-grid">
+        <!-- BEFORE PHONE -->
+        <div class="phone-wrap">
+          <div class="phone-caption before">Current · Brand-New User Hits All This At Once</div>
+          <div class="phone tall">
+            <div class="status-bar on-dark">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body">
+              <div class="app-header compact">
+                <div class="header-top">
+                  <span class="eyebrow-gold">✨ GOOD EVENING, ALEX!</span>
+                  <div class="header-actions">
+                    <span class="icon-pill">🔔</span>
+                    <span class="icon-pill" style="border-color: #ff6b9a;">👤 You &amp; Crew</span>
+                  </div>
+                </div>
+                <div class="header-title">Ready for the Magic?</div>
+                <div class="header-sub">Magic Kingdom · 9 AM – 10 PM · 76°F Clear</div>
+              </div>
+
+              <div class="app-pad">
+                <div class="search-box">
+                  <span>🔍</span>
+                  <span>Search rides, dining, resorts...</span>
+                </div>
+
+                <!-- Exploration Prompt -->
+                <div class="card" style="display:flex;align-items:center;gap:10px;padding:10px;">
+                  <div style="width:40px;height:40px;border-radius:12px;background:var(--grad-header);display:grid;place-items:center;color:var(--accent);">✨</div>
+                  <div style="flex:1;">
+                    <div style="font-size:9px;font-weight:800;color:var(--primary-light);">PLAN A VACATION</div>
+                    <div style="font-size:13px;font-weight:800;">Plan Your Next Adventure</div>
+                    <div style="font-size:10.5px;color:var(--text-secondary);">Explore parks, build itineraries &amp; invite crew</div>
+                  </div>
+                  <span>→</span>
+                </div>
+
+                <!-- Duplicated Parks 2x2 -->
+                <div class="clutter-outline" style="padding:6px;">
+                  <span class="issue-tag">⚠ Duplicated from Explore tab</span>
+                  <div class="sec-row">
+                    <span class="sec-title">The Parks</span>
+                    <span class="sec-link">All Live Waits ›</span>
+                  </div>
+                  <div class="parks-2x2">
+                    <div class="park-tile" style="background:var(--park-mk);">
+                      <div class="park-tile-top"><span>🏰</span><span class="wait-pill">⚡ 34m</span></div>
+                      <div><div class="park-tile-name">Magic Kingdom</div><div class="park-tile-count">64 experiences</div></div>
+                    </div>
+                    <div class="park-tile" style="background:var(--park-ep);">
+                      <div class="park-tile-top"><span>🌐</span><span class="wait-pill">⚡ 28m</span></div>
+                      <div><div class="park-tile-name">EPCOT</div><div class="park-tile-count">58 experiences</div></div>
+                    </div>
+                    <div class="park-tile" style="background:var(--park-hs);">
+                      <div class="park-tile-top"><span>🎬</span><span class="wait-pill">⚡ 49m</span></div>
+                      <div><div class="park-tile-name">Hollywood Studios</div><div class="park-tile-count">34 experiences</div></div>
+                    </div>
+                    <div class="park-tile" style="background:var(--park-ak);">
+                      <div class="park-tile-top"><span>🌳</span><span class="wait-pill">⚡ 25m</span></div>
+                      <div><div class="park-tile-name">Animal Kingdom</div><div class="park-tile-count">31 experiences</div></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Duplicated Quick Log + Mickeys -->
+                <div class="clutter-outline" style="padding:6px;display:flex;flex-direction:column;gap:8px;">
+                  <span class="issue-tag">⚠ Duplicated from center MagicFab (+)</span>
+                  <div class="quick-log-row">
+                    <div class="quick-log-btn">
+                      <span style="font-size:18px;">🎢</span>
+                      <div><div style="font-size:12px;font-weight:800;">Log a Ride</div><div style="font-size:10px;color:var(--text-secondary);">Rate &amp; check off</div></div>
+                    </div>
+                    <div class="quick-log-btn">
+                      <span style="font-size:18px;">🍽️</span>
+                      <div><div style="font-size:12px;font-weight:800;">Log Food</div><div style="font-size:10px;color:var(--text-secondary);">Dishes &amp; snacks</div></div>
+                    </div>
+                  </div>
+                  <div class="card-soft" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span>✨</span>
+                      <div>
+                        <div style="font-size:11px;font-weight:800;">HIDDEN MICKEYS HUNT <span class="chip" style="font-size:9px;">0 of 40</span></div>
+                        <div style="font-size:10px;color:var(--text-secondary);">Search for secret silhouettes...</div>
+                      </div>
+                    </div>
+                    <span class="chip">Hunt →</span>
+                  </div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div>
+                  <div class="sec-row"><span class="sec-title">🏆 Highest-Rated</span><span class="sec-link">See All</span></div>
+                  <div class="lb-row">
+                    <div class="lb-rank">1</div>
+                    <div style="flex:1;"><div style="font-size:12.5px;font-weight:800;">Guardians: Cosmic Rewind</div><div style="font-size:10.5px;color:var(--text-secondary);">EPCOT · World Discovery</div></div>
+                    <div style="font-weight:800;font-size:12.5px;">★ 9.7</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-bar">
+              <div class="tab-item active"><span class="tab-ico">🏠</span>Home</div>
+              <div class="tab-item"><span class="tab-ico">🧭</span>Explore</div>
+              <div class="fab-slot"><div class="magic-fab">✨</div></div>
+              <div class="tab-item"><span class="tab-ico">🗺️</span>Trips</div>
+              <div class="tab-item"><span class="tab-ico">👤</span>You</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AFTER PHONE (INTERACTIVE) -->
+        <div class="phone-wrap">
+          <div class="phone-caption after">Proposed · Interactive Checklist + MagicFab Sheet</div>
+          <div class="phone tall" id="after-home-phone">
+            <div class="status-bar on-dark">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body">
+              <div class="app-header compact">
+                <div class="header-top">
+                  <span class="eyebrow-gold">✨ GOOD EVENING, ALEX!</span>
+                  <div class="header-actions">
+                    <span class="icon-pill" title="Notifications">🔔</span>
+                    <span class="icon-pill" title="Account &amp; Crew">👤</span>
+                  </div>
+                </div>
+                <div class="header-title">Ready for the Magic?</div>
+                <div class="header-sub">4 parks open · 76°F in Orlando</div>
+              </div>
+
+              <div class="app-pad">
+                <!-- Universal Search Entry -->
+                <a href="#sec-search" class="search-box" style="text-decoration:none;">
+                  <span>🔍</span>
+                  <span>Search rides, dining, or tools (e.g. "budget")</span>
+                </a>
+
+                <!-- Interactive Start Here Checklist -->
+                <div class="starter-card" id="starter-card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <div>
+                      <span class="chip">START HERE</span>
+                      <div style="font-size:14.5px;font-weight:800;margin-top:4px;" id="starter-heading">Get set up in 2 minutes</div>
+                    </div>
+                    <button type="button" class="btn-ghost" id="starter-dismiss-btn">Dismiss</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="progress-track" style="flex:1;">
+                      <div class="progress-fill" id="starter-progress-fill" style="width:25%;"></div>
+                    </div>
+                    <span style="font-size:11px;font-weight:800;color:var(--primary-fg);" id="starter-progress-text">1 of 4</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;" id="starter-list">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+
+                <!-- Compact Park Pulse Strip (replaces giant duplicated 2x2 grid) -->
+                <div>
+                  <div class="sec-row">
+                    <span class="sec-title">Live Park Pulse</span>
+                    <span class="sec-link">Open Explore ›</span>
+                  </div>
+                  <div class="pulse-strip">
+                    <div class="pulse-chip" style="background:var(--park-mk);">
+                      <span>🏰 MK</span>
+                      <strong>34m</strong>
+                    </div>
+                    <div class="pulse-chip" style="background:var(--park-ep);">
+                      <span>🌐 EP</span>
+                      <strong>28m</strong>
+                    </div>
+                    <div class="pulse-chip" style="background:var(--park-hs);">
+                      <span>🎬 HS</span>
+                      <strong>49m</strong>
+                    </div>
+                    <div class="pulse-chip" style="background:var(--park-ak);">
+                      <span>🌳 AK</span>
+                      <strong>25m</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Helpful Favorites Empty State -->
+                <div class="card" style="display:flex;align-items:center;gap:11px;">
+                  <div style="width:38px;height:38px;border-radius:12px;background:var(--warning-bg);display:grid;place-items:center;font-size:18px;flex-shrink:0;">⭐</div>
+                  <div style="flex:1;">
+                    <div style="font-size:13px;font-weight:800;">Watch your favorite waits</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">Star any ride in Explore to pin its live wait time right here.</div>
+                  </div>
+                </div>
+
+                <!-- Compact Community Picks -->
+                <div>
+                  <div class="sec-row">
+                    <span class="sec-title">🏆 Top Rated by Guests</span>
+                    <span class="sec-link">See All</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:7px;">
+                    <div class="lb-row">
+                      <div class="lb-rank">1</div>
+                      <div style="flex:1;"><div style="font-size:12.5px;font-weight:800;">Guardians: Cosmic Rewind</div><div style="font-size:10.5px;color:var(--text-secondary);">EPCOT · ⚡ 55m wait</div></div>
+                      <div style="font-weight:800;font-size:12px;">★ 9.7</div>
+                    </div>
+                    <div class="lb-row">
+                      <div class="lb-rank">2</div>
+                      <div style="flex:1;"><div style="font-size:12.5px;font-weight:800;">Avatar Flight of Passage</div><div style="font-size:10.5px;color:var(--text-secondary);">Animal Kingdom · ⚡ 65m wait</div></div>
+                      <div style="font-weight:800;font-size:12px;">★ 9.5</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="text-align:center;font-size:11px;color:var(--text-secondary);padding-top:2px;">
+                  Tip: Tap the purple <strong>✨</strong> button below to log a ride or snack anytime.
+                </div>
+              </div>
+            </div>
+
+            <!-- Interactive MagicFab Quick Action Sheet -->
+            <div class="sheet-backdrop" id="fab-sheet" aria-hidden="true">
+              <div class="sheet-panel">
+                <div class="sheet-handle"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <strong style="font-size:15px;">Quick Actions</strong>
+                  <button type="button" class="btn-ghost" id="close-fab-sheet">✕ Close</button>
+                </div>
+                <div class="sheet-action"><span>⏱️</span><span style="flex:1;">Check Live Waits</span><span>›</span></div>
+                <div class="sheet-action"><span>🎢</span><span style="flex:1;">Log a Ride</span><span>›</span></div>
+                <div class="sheet-action"><span>🍽️</span><span style="flex:1;">Log Food or Snack</span><span>›</span></div>
+                <div class="sheet-action"><span>✨</span><span style="flex:1;">Hunt Hidden Mickeys</span><span>›</span></div>
+                <div class="sheet-action"><span>📅</span><span style="flex:1;">View Today's Schedule</span><span>›</span></div>
+              </div>
+            </div>
+
+            <div class="tab-bar">
+              <button type="button" class="tab-item active"><span class="tab-ico">🏠</span>Home</button>
+              <button type="button" class="tab-item"><span class="tab-ico">🧭</span>Explore</button>
+              <div class="fab-slot">
+                <button type="button" class="magic-fab" id="open-fab-sheet" aria-label="Open Quick Actions" title="Tap to preview Quick Actions">✨</button>
+              </div>
+              <button type="button" class="tab-item"><span class="tab-ico">🗺️</span>Trips</button>
+              <button type="button" class="tab-item"><span class="tab-ico">👤</span>You</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION 3: UNIVERSAL "JUMP TO ANYTHING" SEARCH
+         ======================================================================= -->
+    <section id="sec-search" class="section-block">
+      <div class="section-head">
+        <div>
+          <div class="section-num">Proposal 03 · Feature Discoverability</div>
+          <h2>Universal "Jump to Anything" Search in <code>HomeSearchBar</code></h2>
+          <p class="section-desc">
+            When an app has 50 features, even returning users forget whether Crowd Calendar is in Explore or Trips, or where the Dining Plan Calculator lives. Indexing app tools right inside search gives everyone an instant escape hatch.
+          </p>
+        </div>
+      </div>
+
+      <div class="workbench-grid">
+        <div class="phone-wrap">
+          <div class="phone-caption interactive">Interactive · Type or tap a keyword</div>
+          <div class="phone">
+            <div class="status-bar">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body">
+              <div class="app-pad" style="padding-top:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <strong style="font-family:'Outfit',sans-serif;font-size:18px;">Search Anything</strong>
+                  <button type="button" class="btn-ghost" id="search-clear-btn">Clear</button>
+                </div>
+
+                <div class="search-box">
+                  <span>🔍</span>
+                  <input type="text" id="universal-search-input" placeholder='Try "budget", "crowd", "mickey", "dole"...' value="dining" aria-label="Search experiences and app tools" />
+                </div>
+
+                <div class="try-chips" aria-label="Sample queries">
+                  <button type="button" class="try-chip" data-q="dining">dining</button>
+                  <button type="button" class="try-chip" data-q="crowd">crowd</button>
+                  <button type="button" class="try-chip" data-q="budget">budget</button>
+                  <button type="button" class="try-chip" data-q="mickey">mickey</button>
+                  <button type="button" class="try-chip" data-q="pin">pin</button>
+                  <button type="button" class="try-chip" data-q="tron">tron</button>
+                  <button type="button" class="try-chip" data-q="">(empty)</button>
+                </div>
+
+                <div id="universal-search-results" style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="notes-col">
+          <div class="note-card">
+            <h3>How it works technically (zero backend cost)</h3>
+            <ul>
+              <li>Keep a tiny static client-side registry (~12 entries) of <strong>App Tool Shortcuts</strong> with keywords &amp; synonyms (e.g., <code>["dining plan", "meal plan", "worth it", "calculator"]</code> → <em>Dining Plan Calculator</em>).</li>
+              <li>When the user types in <code>HomeSearchBar</code>, filter the local tool registry synchronously (0 ms latency) and render up to 3 matching <strong>App Tools</strong> above the live <code>/catalog?q=</code> experience results.</li>
+              <li>Each result shows a clear breadcrumb (e.g., <code>Trips › Dining Plan</code>) so the search result <em>also teaches the user where that tool lives</em> for next time.</li>
+              <li>When the search input is empty and focused, show <strong>Popular Tools</strong> chips (Live Waits, Crowd Calendar, Dining Plan, Hidden Mickeys) so new users discover hidden gems passively.</li>
+            </ul>
+          </div>
+
+          <div class="note-card">
+            <h3>Edge case: Trip-scoped tools when user has 0 trips</h3>
+            <p>
+              If someone searches <code>"budget"</code> or <code>"dining plan"</code> before creating a trip, tapping the shortcut can open a tiny prompt: <em>"Budget &amp; Dining Plan live inside a Trip — create a quick trip to start?"</em> (or for Dining Plan Calculator, open the standalone calculator directly if supported).
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION 4: PHASE-AWARE TRIP HUB
+         ======================================================================= -->
+    <section id="sec-trips" class="section-block">
+      <div class="section-head">
+        <div>
+          <div class="section-num">Proposal 04 · Progressive Disclosure in Trips</div>
+          <h2>Phase-Aware <code>TripDetailScreen</code> (4 Relevant Now + Grouped Drawer)</h2>
+          <p class="section-desc">
+            Currently <code>TripDetailScreen</code> shows 11+ tools at equal weight the second you create a trip. Instead, surface the <strong>4 tools that matter for this exact stage of the trip</strong> and tuck all 11 into cleanly labeled collapsible groups below.
+          </p>
+        </div>
+        <div class="phase-switcher" role="group" aria-label="Trip phase preview">
+          <button type="button" class="phase-btn" data-phase="early" aria-pressed="true">📅 &gt;60 Days Out</button>
+          <button type="button" class="phase-btn" data-phase="prep" aria-pressed="false">🎒 14 Days Out</button>
+          <button type="button" class="phase-btn" data-phase="active" aria-pressed="false">🎢 In the Parks Today</button>
+          <button type="button" class="phase-btn" data-phase="past" aria-pressed="false">📸 Past Trip</button>
+        </div>
+      </div>
+
+      <div class="workbench-grid">
+        <div class="phone-wrap">
+          <div class="phone-caption interactive">Interactive · Switch phases &amp; expand groups</div>
+          <div class="phone tall">
+            <div class="status-bar on-dark">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body" id="trip-phase-body">
+              <!-- Populated by JS -->
+            </div>
+            <div class="tab-bar">
+              <div class="tab-item"><span class="tab-ico">🏠</span>Home</div>
+              <div class="tab-item"><span class="tab-ico">🧭</span>Explore</div>
+              <div class="fab-slot"><div class="magic-fab">✨</div></div>
+              <div class="tab-item active"><span class="tab-ico">🗺️</span>Trips</div>
+              <div class="tab-item"><span class="tab-ico">👤</span>You</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="notes-col">
+          <div class="note-card">
+            <h3>Phase-to-Tools Mapping (all 11 existing routes preserved)</h3>
+            <ul>
+              <li><strong>📅 Early Planning (&gt;60 days out):</strong> <em>Booking Timeline</em> (60-day dining alert!), <em>Planned List</em>, <em>Trip Budget</em>, <em>Dining Plan Calculator</em>.</li>
+              <li><strong>🎒 Final Prep (1–60 days out):</strong> <em>Schedule Builder &amp; Optimizer</em>, <em>Reservations</em>, <em>Packing List</em>, <em>Planned List</em>.</li>
+              <li><strong>🎢 Active (In the parks today):</strong> <em>Today's Schedule</em>, <em>Reservations</em>, <em>Trip Activity Feed</em>, <em>Expenses</em> (log on the go).</li>
+              <li><strong>📸 Past Trip:</strong> <em>Trip Summary</em>, <em>Trip Album</em>, <em>Expenses &amp; Settle Up</em>, <em>Trip Activity</em>.</li>
+            </ul>
+          </div>
+
+          <div class="note-card">
+            <h3>Why power users lose zero speed</h3>
+            <p>
+              Nothing is hidden behind a mode toggle. Every one of the 11 hub sections (<code>HUB_SECTION_DEFS</code>) remains accessible directly below under 4 scannable categories: <strong>Itinerary</strong>, <strong>Money &amp; Dining</strong>, <strong>Prep &amp; Stays</strong>, and <strong>Crew &amp; Memories</strong>. First-timers only need to look at the top 4 cards; power users tap straight into any group.
+            </p>
+          </div>
+
+          <div class="note-card">
+            <h3>Note on existing tests</h3>
+            <p>
+              <code>TripDetailScreen.tsx</code> has a <code>tripStructureRegression</code> test pinning <code>HUB_SECTIONS</code>. Keeping the canonical 11 definitions intact and organizing their presentation by phase + group keeps the data contract clean while dramatically lowering visual density.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         SECTION 5: "YOU" TAB CLEANUP & CLEAR TAB OWNERSHIP
+         ======================================================================= -->
+    <section id="sec-you" class="section-block">
+      <div class="section-head">
+        <div>
+          <div class="section-num">Proposal 05 · Information Architecture &amp; Cold-Start "You" Tab</div>
+          <h2>One Clear Job Per Tab + Friendly "You" Landing State</h2>
+          <p class="section-desc">
+            Right now the <code>You</code> tab packs 5 segments (<code>Pins | Food | Lists | Stats | Crew</code>) and drops a 0-pin user onto an empty wooden corkboard, while <code>You &amp; Crew</code> is also a pill in Home's header. Consolidating Crew/Settings and adding a warm 0-pin onboarding state makes the tab immediately understandable.
+          </p>
+        </div>
+      </div>
+
+      <div class="compare-grid">
+        <!-- BEFORE YOU TAB -->
+        <div class="phone-wrap">
+          <div class="phone-caption before">Current · 5 Cramped Segments + Empty Corkboard</div>
+          <div class="phone">
+            <div class="status-bar on-dark">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body">
+              <div class="app-header compact">
+                <div class="header-top">
+                  <span class="eyebrow-gold">👤 YOU &amp; YOUR VAULT</span>
+                  <span class="icon-pill">🖼️ Photos</span>
+                </div>
+                <div class="header-title">You</div>
+                <div class="header-sub">Crew, inbox, pins, lists, stats &amp; settings</div>
+              </div>
+
+              <div class="clutter-outline" style="margin:8px 10px 0;padding:4px;">
+                <span class="issue-tag" style="margin-left:4px;">⚠ 5 segments + Crew duplicated in Home header</span>
+                <div class="seg-bar" style="margin:0;">
+                  <div class="seg-pill active">📌 Pins</div>
+                  <div class="seg-pill">🍽️ Food</div>
+                  <div class="seg-pill">📋 Lists</div>
+                  <div class="seg-pill">📊 Stats</div>
+                  <div class="seg-pill" style="color:var(--danger);">👥 Crew</div>
+                </div>
+              </div>
+
+              <div class="app-pad">
+                <div class="clutter-outline" style="padding:6px;">
+                  <span class="issue-tag">⚠ Confusing on Day 1 with 0 pins earned</span>
+                  <div class="card">
+                    <div class="sec-row">
+                      <span style="font-size:11px;font-weight:800;">📌 PIN SHOWCASE BOARD</span>
+                      <span class="chip">Customize ✏️</span>
+                    </div>
+                    <div class="cork-mock">
+                      <div>
+                        <div style="font-size:13px;font-weight:800;">Your canvas is waiting!</div>
+                        <div style="font-size:10.5px;margin:3px 0 8px;">Tap Customize to pin your favorite achievements.</div>
+                        <span class="chip gold">Pin First Badge</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="sec-row">
+                    <div>
+                      <div style="font-size:13px;font-weight:800;">Pin Directory &amp; Rarity Tiers</div>
+                      <div style="font-size:11px;color:var(--text-secondary);">0 of 120 Pins Collected (0%)</div>
+                    </div>
+                    <span class="chip">View Board →</span>
+                  </div>
+                  <div class="progress-track"><div class="progress-fill" style="width:0%;"></div></div>
+                </div>
+
+                <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+                  <div>
+                    <div style="font-size:13px;font-weight:800;">Hidden Mickeys</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">0 of 40 Official Found</div>
+                  </div>
+                  <span class="chip">Hunt →</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-bar">
+              <div class="tab-item"><span class="tab-ico">🏠</span>Home</div>
+              <div class="tab-item"><span class="tab-ico">🧭</span>Explore</div>
+              <div class="fab-slot"><div class="magic-fab">✨</div></div>
+              <div class="tab-item"><span class="tab-ico">🗺️</span>Trips</div>
+              <div class="tab-item active"><span class="tab-ico">👤</span>You</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AFTER YOU TAB -->
+        <div class="phone-wrap">
+          <div class="phone-caption after">Proposed · Clear Summary + Smart 0-Pin State</div>
+          <div class="phone">
+            <div class="status-bar on-dark">
+              <span>9:41</span>
+              <span>5G 100%</span>
+            </div>
+            <div class="phone-body">
+              <div class="app-header compact">
+                <div class="header-top">
+                  <span class="eyebrow-gold">👤 YOUR DISNEY PROFILE</span>
+                  <div class="header-actions">
+                    <span class="icon-pill">🖼️ Photos</span>
+                    <span class="icon-pill">⚙️ Crew &amp; Settings</span>
+                  </div>
+                </div>
+                <div class="header-title">Alex Morgan</div>
+                <div class="header-sub">Your logged visits, food, lists &amp; earned pins</div>
+              </div>
+
+              <!-- 4 roomy, clear segments -->
+              <div class="seg-bar">
+                <button type="button" class="seg-pill active" data-you-tab="pins">📌 Pins</button>
+                <button type="button" class="seg-pill" data-you-tab="food">🍽️ Food</button>
+                <button type="button" class="seg-pill" data-you-tab="lists">📋 Lists</button>
+                <button type="button" class="seg-pill" data-you-tab="stats">📊 Stats</button>
+              </div>
+
+              <div class="app-pad" id="you-after-content">
+                <!-- Populated by JS so all 4 segments are clickable! -->
+              </div>
+            </div>
+
+            <div class="tab-bar">
+              <div class="tab-item"><span class="tab-ico">🏠</span>Home</div>
+              <div class="tab-item"><span class="tab-ico">🧭</span>Explore</div>
+              <div class="fab-slot"><div class="magic-fab">✨</div></div>
+              <div class="tab-item"><span class="tab-ico">🗺️</span>Trips</div>
+              <div class="tab-item active"><span class="tab-ico">👤</span>You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clear Tab Ownership Contract Table -->
+      <div class="ia-table-wrap">
+        <table class="ia-table">
+          <thead>
+            <tr>
+              <th>Surface</th>
+              <th>One-Sentence Job</th>
+              <th>What Lives Here</th>
+              <th>Duplication Removed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>🏠 Home</strong></td>
+              <td>"What should I look at <em>right now</em>?"</td>
+              <td>Universal Search, Active/Upcoming Trip card (or Start Here checklist), compact Park Pulse strip, Favorite Waits, Top Rated.</td>
+              <td>Removes giant 2×2 Parks grid, duplicate Log Ride / Log Food tiles, and cold-start Hidden Mickeys banner.</td>
+            </tr>
+            <tr>
+              <td><strong>🧭 Explore</strong></td>
+              <td>"Browse parks, resorts, waits &amp; crowds."</td>
+              <td>4 Theme Parks, Resorts Directory, Disney Springs, Water Parks, Live Waits, Crowd Calendar, Hidden Mickeys.</td>
+              <td>Becomes the single unmistakable browsing directory.</td>
+            </tr>
+            <tr>
+              <td><strong>✨ MagicFab (+)</strong></td>
+              <td>"Do a quick park action from anywhere."</td>
+              <td>Log Ride, Log Food, Check Live Waits, Hunt Hidden Mickeys, Today's Schedule, Claim Pins.</td>
+              <td>Single fast-capture entry point instead of repeating log buttons on Home &amp; sub-tabs.</td>
+            </tr>
+            <tr>
+              <td><strong>🗺️ Trips</strong></td>
+              <td>"Plan and run a trip with your crew."</td>
+              <td>Phase-aware Trip Hub (4 tools prioritized now + 4 collapsible groups covering all 11 trip tools).</td>
+              <td>Eliminates the flat 15-item wall when creating a brand-new trip.</td>
+            </tr>
+            <tr>
+              <td><strong>👤 You</strong></td>
+              <td>"Everything I've done, saved, or earned."</td>
+              <td>4 roomy segments (Pins, Food, Lists, Stats) + Photos + unified <code>Crew &amp; Settings</code> button in header (same destination as Home's avatar chip).</td>
+              <td>Removes 5th cramped <code>Crew</code> sub-tab and replaces empty 0-pin corkboard with an actionable "Earn your first pin" card.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // =========================================================================
+    // 0. Theme Switcher (mirrors modern-web-guidance: dark-mode-toggle)
+    // =========================================================================
+    const metaScheme = document.querySelector('meta[name="color-scheme"]');
+    const schemeBtns = document.querySelectorAll('.scheme-btn');
+
+    function applyScheme(mode) {
+      if (mode === 'light' || mode === 'dark') {
+        metaScheme.content = mode;
+        try { localStorage.setItem('dwt-mockup-color-scheme', mode); } catch {}
+      } else {
+        metaScheme.content = 'light dark';
+        try { localStorage.removeItem('dwt-mockup-color-scheme'); } catch {}
+      }
+      schemeBtns.forEach((btn) => {
+        btn.setAttribute('aria-pressed', String(btn.dataset.scheme === mode));
+      });
+    }
+
+    (() => {
+      let initial = 'system';
+      try {
+        const stored = localStorage.getItem('dwt-mockup-color-scheme');
+        if (stored === 'light' || stored === 'dark') initial = stored;
+      } catch {}
+      applyScheme(initial);
+    })();
+
+    schemeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => applyScheme(btn.dataset.scheme));
+    });
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'dwt-mockup-color-scheme') {
+        applyScheme(e.newValue === 'light' || e.newValue === 'dark' ? e.newValue : 'system');
+      }
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (ch) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+      ));
+    }
+
+    // =========================================================================
+    // 1. Interactive 3-Step Onboarding Prototype
+    // =========================================================================
+    const obState = {
+      step: 1,
+      intent: 'history', // 'plan' | 'inpark' | 'history' | 'explore'
+      pickedRides: new Set(['guardians', 'haunted', 'flight']),
+      selectedPark: 'Magic Kingdom',
+      tripName: 'Fall Disney Adventure',
+      tripDates: 'Oct 14 – Oct 19',
+    };
+
+    const INTENTS = [
+      { id: 'plan', icon: '🗓️', name: 'Planning an upcoming trip', desc: 'Schedules, booking reminders, budget & crew' },
+      { id: 'inpark', icon: '🎢', name: 'In the parks right now', desc: 'Live wait times, today\'s plan & quick logging' },
+      { id: 'history', icon: '⭐', name: 'Tracking rides, food & pins', desc: 'Check off past favorites, log snacks & earn pins' },
+      { id: 'explore', icon: '✨', name: 'Just looking around', desc: 'Browse parks, menus & crowd predictions' },
+    ];
+
+    const STARTER_RIDES = [
+      { id: 'guardians', name: 'Cosmic Rewind', park: 'EPCOT' },
+      { id: 'haunted', name: 'Haunted Mansion', park: 'Magic Kingdom' },
+      { id: 'flight', name: 'Flight of Passage', park: 'Animal Kingdom' },
+      { id: 'rise', name: 'Rise of the Resistance', park: 'Hollywood Studios' },
+      { id: 'space', name: 'Space Mountain', park: 'Magic Kingdom' },
+      { id: 'slinky', name: 'Slinky Dog Dash', park: 'Hollywood Studios' },
+      { id: 'pirates', name: 'Pirates of the Caribbean', park: 'Magic Kingdom' },
+      { id: 'everest', name: 'Expedition Everest', park: 'Animal Kingdom' },
+      { id: 'tower', name: 'Tower of Terror', park: 'Hollywood Studios' },
+      { id: 'soarin', name: "Soarin' Around World", park: 'EPCOT' },
+    ];
+
+    const obBody = document.getElementById('ob-body');
+    const obJumpBtns = document.querySelectorAll('[data-ob-jump]');
+
+    function renderOnboarding() {
+      obJumpBtns.forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.obJump) === obState.step)));
+
+      const dots = [1, 2, 3].map((n) => {
+        const cls = n < obState.step ? 'ob-dot done' : n === obState.step ? 'ob-dot active' : 'ob-dot';
+        return `<span class="${cls}"></span>`;
+      }).join('');
+
+      let inner = '';
+      let ctaLabel = 'Continue →';
+      let secondaryBtn = '';
+
+      if (obState.step === 1) {
+        inner = `
+          <div>
+            <span class="chip">WELCOME TO DWT</span>
+            <h3 class="ob-title" style="margin-top:8px;">What brings you here today?</h3>
+            <p class="ob-sub" style="margin-top:4px;">We'll tailor your first stop. You can still access every feature anytime.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+            ${INTENTS.map((it) => `
+              <button type="button" class="intent-card ${obState.intent === it.id ? 'selected' : ''}" data-pick-intent="${it.id}">
+                <div class="intent-ico">${it.icon}</div>
+                <div style="flex:1;">
+                  <div class="intent-name">${it.name}</div>
+                  <div class="intent-desc">${it.desc}</div>
+                </div>
+                <span style="font-size:16px;color:var(--primary-fg);">${obState.intent === it.id ? '●' : '○'}</span>
+              </button>
+            `).join('')}
+          </div>
+        `;
+      } else if (obState.step === 2) {
+        secondaryBtn = `<button type="button" class="btn-ghost" data-ob-step="1" style="width:100%;">← Back</button>`;
+        if (obState.intent === 'plan') {
+          inner = `
+            <div>
+              <span class="chip">QUICK START · PLANNING</span>
+              <h3 class="ob-title" style="margin-top:8px;">Start your first trip</h3>
+              <p class="ob-sub" style="margin-top:4px;">Just a name and rough dates — you can invite crew, add stays, or build a budget later.</p>
+            </div>
+            <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+              <div>
+                <label class="field-label" for="ob-trip-name">Trip Name</label>
+                <input id="ob-trip-name" class="text-input" value="${obState.tripName}" />
+              </div>
+              <div>
+                <label class="field-label" for="ob-trip-dates">Dates (optional)</label>
+                <input id="ob-trip-dates" class="text-input" value="${obState.tripDates}" />
+              </div>
+              <div class="card-soft" style="font-size:11.5px;color:var(--text-secondary);">
+                ✨ Automatically calculates your <strong>60-day dining booking date</strong> and unlocks your trip workspace.
+              </div>
+            </div>
+          `;
+          ctaLabel = 'Create Trip & Continue →';
+        } else if (obState.intent === 'inpark') {
+          const parks = [
+            { name: 'Magic Kingdom', icon: '🏰', wait: '34m avg', bg: 'var(--park-mk)' },
+            { name: 'EPCOT', icon: '🌐', wait: '28m avg', bg: 'var(--park-ep)' },
+            { name: 'Hollywood Studios', icon: '🎬', wait: '49m avg', bg: 'var(--park-hs)' },
+            { name: 'Animal Kingdom', icon: '🌳', wait: '25m avg', bg: 'var(--park-ak)' },
+          ];
+          inner = `
+            <div>
+              <span class="chip green">LIVE IN-PARK MODE</span>
+              <h3 class="ob-title" style="margin-top:8px;">Which park are you at?</h3>
+              <p class="ob-sub" style="margin-top:4px;">We'll pull up live standby waits and quick-logging for that park right away.</p>
+            </div>
+            <div class="parks-2x2" style="margin-top:6px;">
+              ${parks.map((p) => `
+                <button type="button" class="park-tile" data-pick-park="${p.name}" style="background:${p.bg};border:${obState.selectedPark === p.name ? '3px solid var(--accent)' : '2px solid transparent'};text-align:left;min-height:104px;">
+                  <div class="park-tile-top">
+                    <span style="font-size:20px;">${p.icon}</span>
+                    <span class="wait-pill">⚡ ${p.wait}</span>
+                  </div>
+                  <div>
+                    <div class="park-tile-name">${p.name}</div>
+                    <div class="park-tile-count">${obState.selectedPark === p.name ? '✓ Selected' : 'Tap to pick'}</div>
+                  </div>
+                </button>
+              `).join('')}
+            </div>
+          `;
+          ctaLabel = `Continue with ${obState.selectedPark} →`;
+        } else {
+          const count = obState.pickedRides.size;
+          inner = `
+            <div>
+              <span class="chip">20-SECOND CHECK-IN</span>
+              <h3 class="ob-title" style="margin-top:6px;">Tap rides you've already done</h3>
+              <p class="ob-sub" style="margin-top:2px;">This kicks off your stats and unlocks your very first collectible pin.</p>
+            </div>
+            ${count > 0 ? `
+              <div class="pin-toast">
+                <span style="font-size:20px;">🏅</span>
+                <div>
+                  <div>First Pin Ready! "Park Explorer (Bronze)"</div>
+                  <div style="font-weight:500;opacity:0.9;">${count} ride${count === 1 ? '' : 's'} selected — claim it in You › Pins</div>
+                </div>
+              </div>
+            ` : ''}
+            <div class="ride-grid">
+              ${STARTER_RIDES.map((r) => {
+                const picked = obState.pickedRides.has(r.id);
+                return `
+                  <button type="button" class="ride-pill ${picked ? 'picked' : ''}" data-toggle-ride="${r.id}">
+                    <div class="ride-pill-top">
+                      <span>${r.name}</span>
+                      <span>${picked ? '✓' : '+'}</span>
+                    </div>
+                    <div class="ride-pill-park">${r.park}</div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          `;
+          ctaLabel = count > 0 ? `Log ${count} Ride${count === 1 ? '' : 's'} & Continue →` : 'Skip for Now →';
+        }
+      } else {
+        secondaryBtn = `<button type="button" class="btn-ghost" data-ob-step="2" style="width:100%;">← Back</button>`;
+        const finalCta =
+          obState.intent === 'plan'
+            ? 'Open My New Trip →'
+            : obState.intent === 'inpark'
+            ? `Open ${obState.selectedPark} Waits →`
+            : 'Go to Home →';
+        ctaLabel = finalCta;
+
+        inner = `
+          <div>
+            <span class="chip green">ALL SET!</span>
+            <h3 class="ob-title" style="margin-top:6px;">Here's where things live</h3>
+            <p class="ob-sub" style="margin-top:2px;">Four tabs plus one quick-action button. You can also search for any tool from Home.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+            <div class="ob-map-row">
+              <div class="ob-map-ico">🏠</div>
+              <div>
+                <div style="font-size:13px;font-weight:800;">Home</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);">Today's pulse, favorite waits, and universal search.</div>
+              </div>
+            </div>
+            <div class="ob-map-row">
+              <div class="ob-map-ico">🧭</div>
+              <div>
+                <div style="font-size:13px;font-weight:800;">Explore</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);">Parks, resorts, live waits, Crowd Calendar &amp; Hidden Mickeys.</div>
+              </div>
+            </div>
+            <div class="ob-map-row">
+              <div class="ob-map-ico fab">✨</div>
+              <div>
+                <div style="font-size:13px;font-weight:800;">Center Magic Button</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);">Fast-log a ride or snack from any screen in 2 taps.</div>
+              </div>
+            </div>
+            <div class="ob-map-row">
+              <div class="ob-map-ico">🗺️</div>
+              <div>
+                <div style="font-size:13px;font-weight:800;">Trips</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);">Day schedules, reservations, budgets, dining plan &amp; crew.</div>
+              </div>
+            </div>
+            <div class="ob-map-row">
+              <div class="ob-map-ico">👤</div>
+              <div>
+                <div style="font-size:13px;font-weight:800;">You</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);">Your Pins, Food history, Lists, Stats, Friends &amp; Settings.</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      obBody.innerHTML = `
+        <div class="ob-shell">
+          <div class="ob-top">
+            <div class="ob-dots">${dots}</div>
+            <button type="button" class="btn-ghost" data-ob-skip>Skip</button>
+          </div>
+          <div class="ob-content">${inner}</div>
+          <div class="ob-footer">
+            <button type="button" class="btn-primary" data-ob-next>${ctaLabel}</button>
+            ${secondaryBtn}
+          </div>
+        </div>
+      `;
+
+      // Bind handlers
+      obBody.querySelectorAll('[data-pick-intent]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          obState.intent = btn.dataset.pickIntent;
+          renderOnboarding();
+        });
+      });
+      obBody.querySelectorAll('[data-pick-park]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          obState.selectedPark = btn.dataset.pickPark;
+          renderOnboarding();
+        });
+      });
+      obBody.querySelectorAll('[data-toggle-ride]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.toggleRide;
+          if (obState.pickedRides.has(id)) obState.pickedRides.delete(id);
+          else obState.pickedRides.add(id);
+          renderOnboarding();
+        });
+      });
+      const tripNameEl = obBody.querySelector('#ob-trip-name');
+      if (tripNameEl) tripNameEl.addEventListener('input', (e) => { obState.tripName = e.target.value; });
+      const tripDatesEl = obBody.querySelector('#ob-trip-dates');
+      if (tripDatesEl) tripDatesEl.addEventListener('input', (e) => { obState.tripDates = e.target.value; });
+
+      obBody.querySelector('[data-ob-next]').addEventListener('click', () => {
+        if (obState.step < 3) {
+          obState.step += 1;
+          renderOnboarding();
+        } else {
+          obState.step = 1;
+          renderOnboarding();
+        }
+      });
+      const backBtn = obBody.querySelector('[data-ob-step]');
+      if (backBtn) {
+        backBtn.addEventListener('click', () => {
+          obState.step = Number(backBtn.dataset.obStep);
+          renderOnboarding();
+        });
+      }
+      obBody.querySelector('[data-ob-skip]').addEventListener('click', () => {
+        document.getElementById('sec-home').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    obJumpBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        obState.step = Number(btn.dataset.obJump);
+        renderOnboarding();
+      });
+    });
+    renderOnboarding();
+
+    // =========================================================================
+    // 2. Interactive "Start Here" Checklist + MagicFab Sheet
+    // =========================================================================
+    const starterItems = [
+      { id: 'log', label: 'Log your first ride or snack', sub: 'Builds your stats & unlocks your first pin', done: true },
+      { id: 'fav', label: 'Star a favorite ride', sub: 'Pins its live wait time right onto Home', done: false },
+      { id: 'trip', label: 'Create or join a trip', sub: 'Unlocks schedules, budgets & reminders', done: false },
+      { id: 'pin', label: 'Claim your first pin', sub: 'Tap You › Pins to celebrate & display it', done: false },
+    ];
+    let starterDismissed = false;
+
+    const starterCard = document.getElementById('starter-card');
+
+    function renderStarter() {
+      if (starterDismissed) {
+        starterCard.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:12px;color:var(--text-secondary);">Start Here card dismissed (re-open in Settings).</span>
+            <button type="button" class="sec-link" id="starter-restore">Restore demo</button>
+          </div>
+        `;
+        document.getElementById('starter-restore').addEventListener('click', () => {
+          starterDismissed = false;
+          renderStarter();
+        });
+        return;
+      }
+      const doneCount = starterItems.filter((i) => i.done).length;
+      const pct = Math.round((doneCount / starterItems.length) * 100);
+      const heading = doneCount === starterItems.length ? 'You know the ropes! ✨' : 'Get set up in 2 minutes';
+
+      starterCard.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <span class="chip">START HERE</span>
+            <div style="font-size:14.5px;font-weight:800;margin-top:4px;">${heading}</div>
+          </div>
+          <button type="button" class="btn-ghost" id="starter-dismiss-btn">Dismiss</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="progress-track" style="flex:1;">
+            <div class="progress-fill" style="width:${pct}%;"></div>
+          </div>
+          <span style="font-size:11px;font-weight:800;color:var(--primary-fg);">${doneCount} of ${starterItems.length}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${starterItems.map((item) => `
+            <button type="button" class="check-item ${item.done ? 'done' : ''}" data-check-id="${item.id}">
+              <span class="check-circle">${item.done ? '✓' : ''}</span>
+              <div style="flex:1;">
+                <div class="check-label">${item.label}</div>
+                <div class="check-sub">${item.sub}</div>
+              </div>
+              <span style="font-size:12px;color:var(--text-secondary);">›</span>
+            </button>
+          `).join('')}
+        </div>
+      `;
+
+      starterCard.querySelector('#starter-dismiss-btn').addEventListener('click', () => {
+        starterDismissed = true;
+        renderStarter();
+      });
+
+      starterCard.querySelectorAll('[data-check-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const item = starterItems.find((i) => i.id === btn.dataset.checkId);
+          if (item) {
+            item.done = !item.done;
+            renderStarter();
+          }
+        });
+      });
+    }
+
+    renderStarter();
+
+    const fabSheet = document.getElementById('fab-sheet');
+    document.getElementById('open-fab-sheet').addEventListener('click', () => {
+      fabSheet.classList.add('open');
+      fabSheet.setAttribute('aria-hidden', 'false');
+    });
+    document.getElementById('close-fab-sheet').addEventListener('click', () => {
+      fabSheet.classList.remove('open');
+      fabSheet.setAttribute('aria-hidden', 'true');
+    });
+    fabSheet.addEventListener('click', (e) => {
+      if (e.target === fabSheet) {
+        fabSheet.classList.remove('open');
+        fabSheet.setAttribute('aria-hidden', 'true');
+      }
+    });
+
+    // =========================================================================
+    // 3. Universal Tool + Catalog Search Prototype
+    // =========================================================================
+    const APP_TOOLS = [
+      { icon: '🍽️', name: 'Dining Plan Calculator', path: 'Trips › Dining Plan', desc: 'Compare Quick-Service, Table-Service & No Plan', kw: ['dining', 'food', 'meal', 'plan', 'calculator', 'worth'] },
+      { icon: '💰', name: 'Trip Budget Estimator', path: 'Trips › Budget', desc: 'Tickets, Lightning Lane, dining & weekly savings', kw: ['budget', 'cost', 'price', 'money', 'ticket', 'dining'] },
+      { icon: '📅', name: 'Crowd Calendar', path: 'Explore › Crowds', desc: 'Predicted park busyness, best days & park hours', kw: ['crowd', 'busy', 'calendar', 'best day', 'hours', 'forecast'] },
+      { icon: '⏱️', name: 'Live Wait Times', path: 'Explore › Live Waits', desc: 'Real-time standby queues across all 4 parks', kw: ['wait', 'live', 'line', 'queue', 'crowd'] },
+      { icon: '✨', name: 'Hidden Mickeys Hunt', path: 'Explore › Hidden Mickeys', desc: 'Find & check off secret silhouettes in rides & queues', kw: ['mickey', 'hidden', 'hunt', 'scavenger', 'secret'] },
+      { icon: '📌', name: 'Pin Board & Showcase', path: 'You › Pins', desc: 'Claim unlocked achievements & arrange your corkboard', kw: ['pin', 'badge', 'achievement', 'corkboard', 'showcase', 'vault'] },
+      { icon: '🎒', name: 'Shared Packing List', path: 'Trips › Packing List', desc: 'Collaborative checklist for your trip group', kw: ['pack', 'packing', 'bag', 'checklist'] },
+      { icon: '🧾', name: 'Split Trip Expenses', path: 'Trips › Expenses', desc: 'Track who paid and settle balances', kw: ['expense', 'split', 'owe', 'money', 'budget', 'receipt'] },
+      { icon: '🔔', name: 'Booking Window Timeline', path: 'Trips › Booking Timeline', desc: '60-day dining & Lightning Lane reminder alerts', kw: ['booking', '60 day', 'dining', 'reservation', 'lightning', 'reminder'] },
+      { icon: '👥', name: 'Friends & Crew', path: 'You › Crew & Settings', desc: 'Add friends, view their stats & share picks', kw: ['friend', 'crew', 'social', 'profile', 'settings', 'dark'] },
+    ];
+
+    const CATALOG_ITEMS = [
+      { icon: '🎢', name: 'TRON Lightcycle / Run', park: 'Magic Kingdom', meta: '⚡ 65m standby · Tomorrowland', kw: ['tron', 'lightcycle', 'coaster', 'magic kingdom'] },
+      { icon: '🎢', name: 'Guardians: Cosmic Rewind', park: 'EPCOT', meta: '⚡ 55m standby · World Discovery', kw: ['guardians', 'cosmic', 'rewind', 'epcot', 'gotg'] },
+      { icon: '🍍', name: 'Aloha Isle (DOLE Whip®)', park: 'Magic Kingdom', meta: 'Quick-Service Dining · Adventureland', kw: ['dole', 'whip', 'aloha', 'snack', 'dining', 'food', 'pineapple'] },
+      { icon: '🍽️', name: 'Space 220 Restaurant', park: 'EPCOT', meta: 'Table-Service Dining · World Discovery', kw: ['space 220', 'dining', 'restaurant', 'food', 'epcot'] },
+      { icon: '🥨', name: 'Mickey-shaped Pretzel', park: 'All Parks', meta: 'Iconic Snack · Park Carts', kw: ['mickey', 'pretzel', 'snack', 'food'] },
+      { icon: '🏰', name: 'Be Our Guest Restaurant', park: 'Magic Kingdom', meta: 'Table-Service Dining · Fantasyland', kw: ['be our guest', 'dining', 'restaurant', 'castle'] },
+    ];
+
+    const searchInput = document.getElementById('universal-search-input');
+    const searchOut = document.getElementById('universal-search-results');
+
+    function renderSearch(raw) {
+      const q = raw.trim().toLowerCase();
+      if (!q) {
+        searchOut.innerHTML = `
+          <div>
+            <div class="sec-row"><span class="sec-title">Popular Tools</span><span style="font-size:11px;color:var(--text-secondary);">Jump straight there</span></div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              ${APP_TOOLS.slice(0, 5).map((tool) => `
+                <div class="search-result-row">
+                  <div class="search-ico">${tool.icon}</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:12.5px;font-weight:800;">${tool.name}</div>
+                    <div class="search-path">${tool.path}</div>
+                  </div>
+                  <span style="color:var(--text-secondary);">›</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const matchedTools = APP_TOOLS.filter((t) =>
+        t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q) || t.kw.some((k) => k.includes(q) || q.includes(k))
+      ).slice(0, 3);
+
+      const matchedCatalog = CATALOG_ITEMS.filter((c) =>
+        c.name.toLowerCase().includes(q) || c.park.toLowerCase().includes(q) || c.kw.some((k) => k.includes(q) || q.includes(k))
+      );
+
+      let html = '';
+      if (matchedTools.length) {
+        html += `
+          <div>
+            <div class="sec-row">
+              <span class="sec-title">App Tools &amp; Shortcuts</span>
+              <span class="chip">${matchedTools.length} match${matchedTools.length === 1 ? '' : 'es'}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              ${matchedTools.map((tool) => `
+                <div class="search-result-row" style="border-color:color-mix(in srgb, var(--primary) 35%, var(--border));">
+                  <div class="search-ico" style="background:color-mix(in srgb, var(--primary) 12%, var(--surface));">${tool.icon}</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:12.5px;font-weight:800;">${tool.name}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">${tool.desc}</div>
+                    <div class="search-path">${tool.path}</div>
+                  </div>
+                  <span style="color:var(--primary-fg);font-weight:800;">→</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (matchedCatalog.length) {
+        html += `
+          <div>
+            <div class="sec-row">
+              <span class="sec-title">Experiences &amp; Dining</span>
+              <span style="font-size:11px;color:var(--text-secondary);">${matchedCatalog.length} found</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              ${matchedCatalog.map((item) => `
+                <div class="search-result-row">
+                  <div class="search-ico">${item.icon}</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:12.5px;font-weight:800;">${item.name}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">${item.park} · ${item.meta}</div>
+                  </div>
+                  <span style="color:var(--text-secondary);">›</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (!matchedTools.length && !matchedCatalog.length) {
+        html = `
+          <div class="card" style="text-align:center;padding:24px 16px;">
+            <div style="font-size:24px;margin-bottom:6px;">🔍</div>
+            <div style="font-size:13.5px;font-weight:800;">No matches for "${escapeHtml(raw)}"</div>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">Try a ride nickname (RotR, SDD), restaurant, or tool like "budget" or "crowd".</div>
+          </div>
+        `;
+      }
+
+      searchOut.innerHTML = html;
+    }
+
+    searchInput.addEventListener('input', (e) => renderSearch(e.target.value));
+    document.getElementById('search-clear-btn').addEventListener('click', () => {
+      searchInput.value = '';
+      renderSearch('');
+      searchInput.focus();
+    });
+    document.querySelectorAll('.try-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        searchInput.value = chip.dataset.q;
+        renderSearch(chip.dataset.q);
+      });
+    });
+    renderSearch(searchInput.value);
+
+    // =========================================================================
+    // 4. Phase-Aware Trip Hub Prototype
+    // =========================================================================
+    const TRIP_PHASES = {
+      early: {
+        badge: '84 DAYS TO GO',
+        eyebrow: '🗓️ EARLY PLANNING PHASE',
+        subtitle: 'Oct 14 – Oct 19 · Polynesian Village · 4 Crew',
+        glanceIcon: '🔔',
+        glanceTitle: 'Dining window opens Aug 15',
+        glanceSub: '24 days until 60-day ADR booking opens at 6 AM ET.',
+        recommendedTitle: 'Focus on right now',
+        recommended: [
+          { icon: '🔔', title: 'Booking Timeline', sub: '60-day dining & LL dates', pill: 'In 24d' },
+          { icon: '📋', title: 'Planned List', sub: '12 must-do picks so far', pill: '12 items' },
+          { icon: '💰', title: 'Trip Budget', sub: '$4,280 est · $310/wk', pill: 'Set' },
+          { icon: '🍽️', title: 'Dining Plan', sub: 'Compare vs. pay out-of-pocket', pill: 'Compare' },
+        ],
+      },
+      prep: {
+        badge: '14 DAYS TO GO',
+        eyebrow: '🎒 FINAL PREP PHASE',
+        subtitle: 'Oct 14 – Oct 19 · Polynesian Village · 4 Crew',
+        glanceIcon: '⚡',
+        glanceTitle: 'Lightning Lane window in 7 days',
+        glanceSub: 'Resort guest 7-day booking opens Oct 7 at 7 AM ET.',
+        recommendedTitle: 'Focus on right now',
+        recommended: [
+          { icon: '🗓️', title: 'Schedule Builder', sub: 'Optimize park day order', pill: '4 days' },
+          { icon: '🎟️', title: 'Reservations', sub: '5 dining ADRs confirmed', pill: '5 held' },
+          { icon: '🎒', title: 'Packing List', sub: '9 of 24 items packed', pill: '38%' },
+          { icon: '📋', title: 'Planned List', sub: 'Assign rides to park days', pill: '18 items' },
+        ],
+      },
+      active: {
+        badge: 'DAY 2 OF 5 · LIVE',
+        eyebrow: '🎢 IN THE PARKS TODAY',
+        subtitle: 'Magic Kingdom Day · 4 Crew Active',
+        glanceIcon: '⏰',
+        glanceTitle: 'Up Next: Space Mountain LL · 10:15 AM',
+        glanceSub: 'Then Skipper Canteen reservation at 12:30 PM.',
+        recommendedTitle: 'In-park essentials',
+        recommended: [
+          { icon: '🗓️', title: "Today's Schedule", sub: 'Next stop in 18 mins', pill: 'Live' },
+          { icon: '🎟️', title: 'Reservations', sub: '2 windows left today', pill: 'Today' },
+          { icon: '💬', title: 'Trip Activity', sub: '6 rides logged by crew', pill: 'Live' },
+          { icon: '🧾', title: 'Expenses', sub: 'Snap receipt or log split', pill: '$142' },
+        ],
+      },
+      past: {
+        badge: 'COMPLETED TRIP',
+        eyebrow: '📸 TRIP MEMORIES & WRAP-UP',
+        subtitle: 'Oct 14 – Oct 19 · 42 Experiences Completed',
+        glanceIcon: '🏆',
+        glanceTitle: 'Your Trip Recap is Ready!',
+        glanceSub: '42 rides & meals logged · Top rated: Guardians (9.8).',
+        recommendedTitle: 'Wrap-up tools',
+        recommended: [
+          { icon: '📊', title: 'Trip Summary', sub: 'Stats, top picks & awards', pill: 'Share' },
+          { icon: '🖼️', title: 'Trip Album', sub: '38 shared crew photos', pill: '38 pics' },
+          { icon: '🧾', title: 'Settle Expenses', sub: '2 balances left to settle', pill: '$64 owed' },
+          { icon: '💬', title: 'Trip Activity', sub: 'Relive the feed & comments', pill: 'Recap' },
+        ],
+      },
+    };
+
+    const ALL_TOOL_GROUPS = [
+      {
+        label: '🗓️ Itinerary & Days (3)',
+        items: [
+          { name: 'Planned List', sub: 'Shared group wish list' },
+          { name: 'Schedule Builder', sub: 'Day-by-day optimizer' },
+          { name: 'Reservations', sub: 'Dining & Lightning Lanes' },
+        ],
+      },
+      {
+        label: '💰 Money & Dining (3)',
+        items: [
+          { name: 'Budget', sub: 'Forward-looking cost estimate' },
+          { name: 'Dining Plan Calculator', sub: 'Is a meal plan worth it?' },
+          { name: 'Expenses & Balances', sub: 'Who paid & settle-up' },
+        ],
+      },
+      {
+        label: '🎒 Prep & Lodging (3)',
+        items: [
+          { name: 'Booking Timeline', sub: '60-day & 7-day alerts' },
+          { name: 'Packing List', sub: 'Shared crew checklist' },
+          { name: 'Resort Stays & Park Days', sub: 'Split stays & daily park picks' },
+        ],
+      },
+      {
+        label: '👥 Crew & Memories (3)',
+        items: [
+          { name: 'Members & Roles', sub: '4 travelers · Manage invites' },
+          { name: 'Trip Activity & Album', sub: 'Live feed, reactions & photos' },
+          { name: 'Trip Summary', sub: 'Counts, top moments & recap' },
+        ],
+      },
+    ];
+
+    const tripPhaseBody = document.getElementById('trip-phase-body');
+    const phaseBtns = document.querySelectorAll('.phase-btn');
+
+    function renderTripPhase(phaseKey) {
+      phaseBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.phase === phaseKey)));
+      const p = TRIP_PHASES[phaseKey];
+
+      tripPhaseBody.innerHTML = `
+        <div class="app-header compact">
+          <div class="header-top">
+            <span class="eyebrow-gold">${p.eyebrow}</span>
+            <span class="icon-pill">${p.badge}</span>
+          </div>
+          <div class="header-title">Fall Disney Adventure</div>
+          <div class="header-sub">${p.subtitle}</div>
+        </div>
+
+        <div class="app-pad">
+          <!-- Contextual Hero Glance -->
+          <div class="card" style="display:flex;align-items:center;gap:11px;border-color:color-mix(in srgb, var(--primary) 35%, var(--border));">
+            <div style="width:40px;height:40px;border-radius:13px;background:var(--surface-alt);display:grid;place-items:center;font-size:19px;flex-shrink:0;">${p.glanceIcon}</div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:800;">${p.glanceTitle}</div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">${p.glanceSub}</div>
+            </div>
+          </div>
+
+          <!-- Top 4 Phase-Prioritized Tools -->
+          <div>
+            <div class="sec-row">
+              <span class="sec-title">${p.recommendedTitle}</span>
+              <span class="chip">4 of 11</span>
+            </div>
+            <div class="tool-grid-2x2">
+              ${p.recommended.map((t) => `
+                <div class="tool-tile">
+                  <div class="tool-tile-top">
+                    <span class="tool-tile-ico">${t.icon}</span>
+                    <span class="chip" style="font-size:9.5px;">${t.pill}</span>
+                  </div>
+                  <div class="tool-tile-title">${t.title}</div>
+                  <div class="tool-tile-sub">${t.sub}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Grouped Collapsible "All Trip Tools" using native <details> -->
+          <div>
+            <div class="sec-row">
+              <span class="sec-title">All Trip Tools</span>
+              <span style="font-size:11px;color:var(--text-secondary);">Tap a group to expand</span>
+            </div>
+            <section class="tool-accordion" aria-label="All trip tools">
+              ${ALL_TOOL_GROUPS.map((g, idx) => `
+                <details ${idx === 0 ? 'open' : ''}>
+                  <summary>${g.label}</summary>
+                  <div class="acc-body">
+                    ${g.items.map((item) => `
+                      <div class="mini-tool-row">
+                        <div>
+                          <div>${item.name}</div>
+                          <span class="sub">${item.sub}</span>
+                        </div>
+                        <span style="color:var(--text-secondary);">›</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </details>
+              `).join('')}
+            </section>
+          </div>
+        </div>
+      `;
+    }
+
+    phaseBtns.forEach((btn) => {
+      btn.addEventListener('click', () => renderTripPhase(btn.dataset.phase));
+    });
+    renderTripPhase('early');
+
+    // =========================================================================
+    // 5. Proposed "You" Tab (Interactive 4-segment preview)
+    // =========================================================================
+    const youTabs = document.querySelectorAll('[data-you-tab]');
+    const youContent = document.getElementById('you-after-content');
+
+    function renderYouTab(tab) {
+      youTabs.forEach((b) => b.classList.toggle('active', b.dataset.youTab === tab));
+
+      if (tab === 'pins') {
+        youContent.innerHTML = `
+          <div class="stat-mini-grid">
+            <div class="stat-mini"><strong>0</strong><span>Rides</span></div>
+            <div class="stat-mini"><strong>0</strong><span>Dishes</span></div>
+            <div class="stat-mini"><strong>0</strong><span>Pins</span></div>
+          </div>
+
+          <div class="card" style="text-align:center;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;border-color:color-mix(in srgb, var(--primary) 35%, var(--border));">
+            <div style="width:48px;height:48px;border-radius:16px;background:var(--warning-bg);display:grid;place-items:center;font-size:24px;">🏅</div>
+            <div style="font-size:14.5px;font-weight:800;">Earn Your First Collectible Pin</div>
+            <div style="font-size:12px;color:var(--text-secondary);max-width:260px;">
+              Pins unlock automatically as you log rides, snacks, and resorts. Once you earn one, your customizable corkboard opens right here.
+            </div>
+            <button type="button" class="btn-primary" style="margin-top:4px;padding:10px 14px;font-size:13px;">Log Your First Ride →</button>
+          </div>
+
+          <div class="card">
+            <div class="sec-row">
+              <span class="sec-title">🎯 Easiest Pins to Unlock First</span>
+              <span class="sec-link">All 120 ›</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
+              <div class="mini-tool-row">
+                <div>
+                  <div>🏰 First Steps <span class="chip gold" style="font-size:9px;">Bronze</span></div>
+                  <span class="sub">Log any 1 attraction at Walt Disney World</span>
+                </div>
+                <span style="font-size:11px;font-weight:800;color:var(--primary-fg);">0/1</span>
+              </div>
+              <div class="mini-tool-row">
+                <div>
+                  <div>🍍 First Bite <span class="chip gold" style="font-size:9px;">Bronze</span></div>
+                  <span class="sub">Rate any dish or iconic park snack</span>
+                </div>
+                <span style="font-size:11px;font-weight:800;color:var(--primary-fg);">0/1</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (tab === 'food') {
+        youContent.innerHTML = `
+          <div class="card" style="text-align:center;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div style="font-size:28px;">🍍</div>
+            <div style="font-size:14.5px;font-weight:800;">Your Disney Food Diary</div>
+            <div style="font-size:12px;color:var(--text-secondary);">Rate individual dishes, EPCOT festival booths, and snacks — plus see what your friends loved.</div>
+            <button type="button" class="btn-primary" style="margin-top:4px;padding:10px 14px;font-size:13px;">+ Log a Dish or Snack</button>
+          </div>
+          <div class="card">
+            <div class="sec-title" style="margin-bottom:8px;">Classic Treats Checklist (0 of 4)</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div class="mini-tool-row"><span>🍍 DOLE Whip® Float</span><span class="chip">Log</span></div>
+              <div class="mini-tool-row"><span>🥨 Mickey-shaped Pretzel</span><span class="chip">Log</span></div>
+              <div class="mini-tool-row"><span>🥖 Classic Disney Churro</span><span class="chip">Log</span></div>
+            </div>
+          </div>
+        `;
+      } else if (tab === 'lists') {
+        youContent.innerHTML = `
+          <div class="card" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="sec-row"><span class="sec-title">🎢 Ride &amp; Experience Lists</span><button type="button" class="sec-link">+ New</button></div>
+            <div style="font-size:12px;color:var(--text-secondary);">Build wish lists like "Rainy Day Rides" or "Must-Dos with Kids" and attach them to any trip.</div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="sec-row"><span class="sec-title">🍽️ Food &amp; Snack Lists</span><button type="button" class="sec-link">+ New</button></div>
+            <div style="font-size:12px;color:var(--text-secondary);">Save dishes to try and share live lists with your friends.</div>
+          </div>
+        `;
+      } else {
+        youContent.innerHTML = `
+          <div class="card" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="sec-row"><span class="sec-title">Park Completion</span><span class="chip">0% Overall</span></div>
+            <div style="font-size:12px;color:var(--text-secondary);">As you log attractions, shows, dining, and resorts, your park-by-park coverage fills in here.</div>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px;">
+              <div><div style="font-size:11.5px;font-weight:700;margin-bottom:3px;">Magic Kingdom · 0 / 64</div><div class="progress-track"><div class="progress-fill" style="width:0%;"></div></div></div>
+              <div><div style="font-size:11.5px;font-weight:700;margin-bottom:3px;">EPCOT · 0 / 58</div><div class="progress-track"><div class="progress-fill" style="width:0%;"></div></div></div>
+              <div><div style="font-size:11.5px;font-weight:700;margin-bottom:3px;">Hollywood Studios · 0 / 34</div><div class="progress-track"><div class="progress-fill" style="width:0%;"></div></div></div>
+              <div><div style="font-size:11.5px;font-weight:700;margin-bottom:3px;">Animal Kingdom · 0 / 31</div><div class="progress-track"><div class="progress-fill" style="width:0%;"></div></div></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    youTabs.forEach((btn) => {
+      btn.addEventListener('click', () => renderYouTab(btn.dataset.youTab));
+    });
+    renderYouTab('pins');
+  </script>
+</body>
+</html>

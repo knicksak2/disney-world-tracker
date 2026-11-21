@@ -28,9 +28,81 @@ describe('TripExpenseRepo - Settlements & Refunds', () => {
       expect(settlement.amountCents).toBe(5000);
       expect(settlement.payerId).toBe(seed.user2Id);
       expect(settlement.recipientId).toBe(seed.user1Id);
+      expect(settlement.note).toBeNull();
 
       const list = await repo.listExpensesAndSettlements(seed.tripId);
       expect(list.some((item) => item.id === settlement.id)).toBe(true);
+    });
+
+    it('persists, updates, clears, and rejects over-length settlement notes (Req 7.8, Property 23)', async () => {
+      const created = await repo.createSettlement(seed.tripId, seed.user2Id, {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 4500,
+        date: '2026-10-03',
+        note: '  Venmo for Ohana dinner  ',
+      });
+      expect(created.note).toBe('Venmo for Ohana dinner');
+
+      const listAfterCreate = await repo.listExpensesAndSettlements(seed.tripId);
+      const listed = listAfterCreate.find((it) => it.id === created.id);
+      expect(listed && 'recipientId' in listed ? listed.note : undefined).toBe('Venmo for Ohana dinner');
+
+      const memberDrill = await repo.getBalanceDrillDown(seed.tripId, seed.user2Id);
+      expect(memberDrill.find((d) => d.sourceId === created.id)?.note).toBe('Venmo for Ohana dinner');
+
+      const pairwiseDrill = await repo.getBalanceDrillDown(seed.tripId, seed.user2Id, seed.user1Id);
+      expect(pairwiseDrill.find((d) => d.sourceId === created.id)?.note).toBe('Venmo for Ohana dinner');
+
+      const updated = await repo.editSettlement(seed.tripId, created.id, seed.user2Id, 'member', {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 4500,
+        date: '2026-10-03',
+        note: 'Zelle for Ohana + Uber',
+      });
+      expect(updated.note).toBe('Zelle for Ohana + Uber');
+
+      const clearedWithNull = await repo.editSettlement(seed.tripId, created.id, seed.user2Id, 'member', {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 4500,
+        date: '2026-10-03',
+        note: null,
+      });
+      expect(clearedWithNull.note).toBeNull();
+
+      const withNoteAgain = await repo.editSettlement(seed.tripId, created.id, seed.user2Id, 'member', {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 4500,
+        date: '2026-10-03',
+        note: 'Cash in person',
+      });
+      expect(withNoteAgain.note).toBe('Cash in person');
+
+      const clearedWithWhitespace = await repo.editSettlement(seed.tripId, created.id, seed.user2Id, 'member', {
+        payerId: seed.user2Id,
+        recipientId: seed.user1Id,
+        amountCents: 4500,
+        date: '2026-10-03',
+        note: '   \t ',
+      });
+      expect(clearedWithWhitespace.note).toBeNull();
+
+      const listAfterClear = await repo.listExpensesAndSettlements(seed.tripId);
+      const listedCleared = listAfterClear.find((it) => it.id === created.id);
+      expect(listedCleared && 'recipientId' in listedCleared ? listedCleared.note : undefined).toBeNull();
+
+      await expect(
+        repo.createSettlement(seed.tripId, seed.user2Id, {
+          payerId: seed.user2Id,
+          recipientId: seed.user1Id,
+          amountCents: 1000,
+          date: '2026-10-03',
+          note: 'a'.repeat(301),
+        }),
+      ).rejects.toThrowError(AppError);
     });
 
     it('rejects settlement between same user (payer == recipient)', async () => {

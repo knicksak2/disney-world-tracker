@@ -68,6 +68,7 @@ import {
   apiFetchText as mockedApiFetchText,
 } from '../../../api/client';
 import type {
+  BalanceDrillDownEntryDTO,
   ExpenseDTO,
   SettlementDTO,
   TripMemberDTO,
@@ -155,6 +156,7 @@ const SETTLEMENT_1: SettlementDTO = {
   createdByUserId: USER_2,
   amountCents: 5000,
   date: '2026-10-03',
+  note: null,
   createdAt: '2026-10-03T10:00:00Z',
 };
 
@@ -193,12 +195,34 @@ describe('TripExpensesScreen', () => {
   let queryClient: QueryClient;
   let navigation: ReturnType<typeof makeNavigation>;
   let recordedLedger: (ExpenseDTO | SettlementDTO)[];
+  let recordedDrilldown: BalanceDrillDownEntryDTO[];
 
   beforeEach(() => {
     jest.clearAllMocks();
     queryClient = makeQueryClient();
     navigation = makeNavigation();
     recordedLedger = [EXPENSE_1, SETTLEMENT_1];
+    recordedDrilldown = [
+      {
+        kind: 'expense',
+        sourceId: 'exp-1',
+        description: 'Lunch at Be Our Guest',
+        date: '2026-10-02',
+        contributionCents: 2000,
+        payerId: USER_1,
+        recipientId: USER_2,
+      },
+      {
+        kind: 'settlement',
+        sourceId: 'set-1',
+        description: 'Settlement',
+        date: '2026-10-03',
+        contributionCents: -1000,
+        payerId: USER_2,
+        recipientId: USER_1,
+        note: null,
+      },
+    ];
 
     apiRequestMock.mockImplementation(async (method: string, path: string, body?: any) => {
       if (method === 'GET' && path === '/me') {
@@ -220,26 +244,7 @@ describe('TripExpensesScreen', () => {
         return BALANCES_FIXTURE as any;
       }
       if (method === 'GET' && path.includes('/drilldown')) {
-        return [
-          {
-            kind: 'expense',
-            sourceId: 'exp-1',
-            description: 'Lunch at Be Our Guest',
-            date: '2026-10-02',
-            contributionCents: 2000,
-            payerId: USER_1,
-            recipientId: USER_2,
-          },
-          {
-            kind: 'settlement',
-            sourceId: 'set-1',
-            description: 'Settlement',
-            date: '2026-10-03',
-            contributionCents: -1000,
-            payerId: USER_2,
-            recipientId: USER_1,
-          },
-        ] as any;
+        return recordedDrilldown as any;
       }
       if (method === 'POST' && path === `/trips/${TRIP_ID}/expenses`) {
         const created: ExpenseDTO = {
@@ -309,6 +314,39 @@ describe('TripExpensesScreen', () => {
         }
         return {} as any;
       }
+      if (method === 'POST' && path === `/trips/${TRIP_ID}/settlements`) {
+        const created: SettlementDTO = {
+          id: `set-new-${recordedLedger.length + 1}`,
+          tripId: TRIP_ID,
+          payerId: body.payerId,
+          recipientId: body.recipientId,
+          createdByUserId: USER_1,
+          amountCents: body.amountCents,
+          date: body.date,
+          note: body.note ?? null,
+          createdAt: new Date().toISOString(),
+        };
+        recordedLedger = [created, ...recordedLedger];
+        return created as any;
+      }
+      if (method === 'PATCH' && path.startsWith(`/trips/${TRIP_ID}/settlements/`)) {
+        const settlementId = path.split('/').pop()!;
+        const idx = recordedLedger.findIndex((it) => it.id === settlementId);
+        if (idx >= 0) {
+          const old = recordedLedger[idx] as SettlementDTO;
+          const updated: SettlementDTO = {
+            ...old,
+            payerId: body.payerId ?? old.payerId,
+            recipientId: body.recipientId ?? old.recipientId,
+            amountCents: body.amountCents ?? old.amountCents,
+            date: body.date ?? old.date,
+            note: body.note === undefined ? old.note : body.note,
+          };
+          recordedLedger[idx] = updated;
+          return updated as any;
+        }
+        return {} as any;
+      }
       throw new Error(`Unhandled mock request: ${method} ${path}`);
     });
 
@@ -337,7 +375,107 @@ describe('TripExpensesScreen', () => {
     expect(screen.getByTestId('hero-total-spend')).toBeTruthy();
     expect(screen.getByTestId('hero-personal-share')).toBeTruthy();
     expect(screen.getByTestId('hero-settled-total')).toBeTruthy();
+    expect(screen.queryByTestId(`settlement-note-${SETTLEMENT_1.id}`)).toBeNull();
     expect(screen.queryByText(/Switch Payer/)).toBeNull();
+  });
+
+  it('records, displays, edits, and clears settlement notes on the ledger (Req 7.9)', async () => {
+    renderScreen();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`settlement-card-${SETTLEMENT_1.id}`)).toBeTruthy();
+      expect(screen.getByTestId(`hero-debt-item-${USER_2}`)).toBeTruthy();
+    });
+
+    // 1. Create a new settlement with a note
+    fireEvent.press(screen.getByTestId('hero-settle-up-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('settlement-modal')).toBeTruthy();
+      expect(screen.getByTestId('settlement-amount-input')).toHaveProp('value', '10.00');
+    });
+
+    fireEvent.changeText(screen.getByTestId('settlement-note-input'), '  Venmo from Eric  ');
+    fireEvent.press(screen.getByTestId('submit-settlement-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', `/trips/${TRIP_ID}/settlements`, {
+        payerId: USER_2,
+        recipientId: USER_1,
+        amountCents: 1000,
+        date: expect.any(String),
+        note: 'Venmo from Eric',
+      });
+      expect(screen.getByText('Venmo from Eric')).toBeTruthy();
+    });
+
+    // 2. Edit existing SETTLEMENT_1 to add a note
+    fireEvent.press(screen.getByTestId(`edit-settlement-${SETTLEMENT_1.id}`));
+    await waitFor(() => {
+      expect(screen.getByTestId('settlement-modal')).toBeTruthy();
+      expect(screen.getByTestId('settlement-note-input')).toHaveProp('value', '');
+    });
+
+    fireEvent.changeText(screen.getByTestId('settlement-note-input'), 'Paid via Zelle');
+    fireEvent.press(screen.getByTestId('submit-settlement-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        `/trips/${TRIP_ID}/settlements/${SETTLEMENT_1.id}`,
+        expect.objectContaining({ note: 'Paid via Zelle' }),
+      );
+      expect(screen.getByTestId(`settlement-note-${SETTLEMENT_1.id}`)).toHaveTextContent('Paid via Zelle');
+    });
+
+    // 3. Reopen SETTLEMENT_1, verify pre-populated note, then clear it
+    fireEvent.press(screen.getByTestId(`edit-settlement-${SETTLEMENT_1.id}`));
+    await waitFor(() => {
+      expect(screen.getByTestId('settlement-note-input')).toHaveProp('value', 'Paid via Zelle');
+    });
+
+    fireEvent.changeText(screen.getByTestId('settlement-note-input'), '   ');
+    fireEvent.press(screen.getByTestId('submit-settlement-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        'PATCH',
+        `/trips/${TRIP_ID}/settlements/${SETTLEMENT_1.id}`,
+        expect.objectContaining({ note: null }),
+      );
+      expect(screen.queryByTestId(`settlement-note-${SETTLEMENT_1.id}`)).toBeNull();
+    });
+  });
+
+  it('displays settlement note in member drill-down and pairwise breakdown modals (Req 7.9)', async () => {
+    recordedDrilldown = [
+      recordedDrilldown[0]!,
+      {
+        ...recordedDrilldown[1]!,
+        note: 'Cash at dinner',
+      },
+    ];
+
+    renderScreen();
+
+    // Open pairwise breakdown from hero debt item
+    await waitFor(() => expect(screen.getByTestId(`hero-debt-item-${USER_2}`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId(`hero-debt-item-${USER_2}`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pairwise-entry-note-1')).toHaveTextContent('Cash at dinner');
+    });
+
+    fireEvent.press(screen.getByTestId('close-pairwise-breakdown-modal'));
+    await waitFor(() => expect(screen.queryByTestId('pairwise-breakdown-modal')).toBeNull());
+
+    // Switch to Who Owes What tab and open Eric's member drill-down
+    fireEvent.press(screen.getByTestId('tab-balances-btn'));
+    await waitFor(() => expect(screen.getByTestId(`net-balance-card-${USER_2}`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId(`net-balance-card-${USER_2}`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('drilldown-entry-note-1')).toHaveTextContent('Cash at dinner');
+    });
   });
 
   it('adds an expense in EXACT split mode asserting POST payload', async () => {

@@ -313,6 +313,17 @@ lists or polling each other.
 5. WHERE no Experience is favorited by two or more of the Trip's current Trip_Members, THE "Group
    Favorites" section SHALL display an empty state rather than being omitted silently, so Members
    understand the feature exists and simply has no current matches.
+6. WHEN a Trip's Group Favorites list contains more than 5 Experiences, THE App SHALL display only
+   the top 5 Experiences inline on the Trip hub (preserving the server's count-descending,
+   name-ascending order) and SHALL present a "See all N favorites" control beneath the preview;
+   WHERE the list contains 5 or fewer Experiences, THE App SHALL display all of them inline with no
+   "See all" control.
+7. WHEN the User activates the "See all" control, THE App SHALL open a scrollable bottom-sheet modal
+   listing every Group Favorite for the Trip, including a search input that filters by Experience
+   name, park, or favoriting Member display name and — WHERE the Group Favorites span two or more
+   parks — park filter pills that compose conjunctively with search.
+8. WHEN the User selects an Experience from the Group Favorites modal, THE App SHALL close the
+   modal and navigate to `Experience_Detail_Screen` for that Experience.
 
 ## Cross-Spec Dependencies
 

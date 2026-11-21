@@ -15,6 +15,7 @@ import type { FavoritesResponseDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { onboardingKeys } from '../onboarding/onboardingApi';
 import { HEART } from './FavoriteToggle.palette';
 import { FAVORITES_QUERY_KEY } from './useFavoritedExperiences';
 
@@ -64,6 +65,7 @@ export default function FavoriteToggle({
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: FAVORITES_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
     },
   });
 

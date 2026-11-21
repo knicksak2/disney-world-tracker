@@ -97,6 +97,7 @@ const SETTLEMENT_WITH_DELETED: SettlementDTO = {
   createdByUserId: USER_1,
   amountCents: 2000,
   date: '2026-10-03',
+  note: null,
   createdAt: '2026-10-03T10:00:00Z',
 };
 

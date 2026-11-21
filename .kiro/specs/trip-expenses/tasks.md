@@ -314,6 +314,24 @@ No external vendor, credential, or network call is introduced anywhere in this p
     - Redesign category selector in `ExpenseFormModal.tsx` to 3×2 grid + full-width Other shelf matching the budget styling with Ionicons. Add `lightning_lane` filter chip and category meta in `TripExpensesScreen.tsx`.
     - _Requirements: 10.5, 11.8_
 
+- [x] 23. Optional Notes on Settlements
+  - [x] 23.1 Shared contract & schema tests
+    - Add `SETTLEMENT_NOTE_MAX = 300`, optional/nullable `note` (trimmed, whitespace normalized to `null`) on `settlementCreateSchema`, `note: string | null` on `SettlementDTO`, and optional `note` on `BalanceDrillDownEntryDTO` in `packages/shared/src/tripExpenses.ts`, exported from `packages/shared/src/index.ts`. Add schema validation tests in `packages/shared/src/__tests__/tripExpenses.test.ts`.
+    - _Requirements: 7.8_
+  - [x] 23.2 Migration `0079_settlement_notes.sql` and migration test
+    - Add `apps/api/migrations/0079_settlement_notes.sql` adding nullable `note VARCHAR(300)` and `chk_settlements_note` to `settlements`. Add `apps/api/src/db/__tests__/migration0079.test.ts` and apply `0079` in `tripExpenses/__tests__/testDb.ts` and `tripBudget/__tests__/testDb.ts`.
+    - _Requirements: 7.8_
+  - [x] 23.3 Backend repo, balance events, CSV export, and tests
+    - Update `BalanceEvent` (`balances.ts`), `createSettlement`, `editSettlement`, `listExpensesAndSettlements`, `buildBalanceEvents`, `getBalanceDrillDown`, and `exportLedgerCsv` (`repo.ts`). Add route tests in `routes.test.ts` and pg-mem integration tests in `repo.settlementsAndRefunds.integration.test.ts` and `repo.lifecycle.integration.test.ts`.
+    - **Property 23: Settlement notes round-trip, normalize whitespace, clear, and enforce length bounds.**
+    - _Requirements: 7.8, 13.3_
+  - [x] 23.4 Mobile UI & Jest component tests
+    - Add optional Notes input to `SettlementModal.tsx` (pre-populated on edit, clearing sends `note: null`), and render `note` when present on `TripExpensesScreen.tsx` (settlement ledger card, member drill-down, pairwise breakdown) and `TripBalancesScreen.tsx` (member drill-down, pairwise breakdown). Add component tests in `TripExpensesScreen.test.tsx` and `TripBalancesScreen.test.tsx`.
+    - _Requirements: 7.9_
+  - [x] 23.5 Verification gate
+    - Run `npm run verify` across all workspaces and confirm exit code `0`.
+    - _Requirements: 7.8, 7.9_
+
 ## Notes
 
 - **New service, not an extension of `trips/repo.ts`.** `apps/api/src/services/tripExpenses/` is a sibling to `apps/api/src/services/trips/`, reusing only `assertTripMember`/`assertTripOrganizer` from `trips/authz.ts` by import. Do not add Expense/Settlement/Guest methods to `trips/repo.ts` itself.
@@ -388,7 +406,10 @@ No external vendor, credential, or network call is introduced anywhere in this p
     { "id": 54, "tasks": ["20.1", "20.2", "20.3", "20.4"] },
     { "id": 55, "tasks": ["20.5"] },
     { "id": 56, "tasks": ["20.6"] },
-    { "id": 57, "tasks": ["21.1"] }
+    { "id": 57, "tasks": ["21.1"] },
+    { "id": 58, "tasks": ["23.1", "23.2"] },
+    { "id": 59, "tasks": ["23.3", "23.4"] },
+    { "id": 60, "tasks": ["23.5"] }
   ]
 }
 ```

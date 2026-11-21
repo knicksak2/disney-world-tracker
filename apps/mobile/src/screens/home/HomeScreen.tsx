@@ -19,7 +19,7 @@
  *      - Cached community leaderboard rows
  */
 
-import React, { useCallback, useContext, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -36,7 +36,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { CompositeScreenProps } from '@react-navigation/native';
+import { useFocusEffect, type CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type {
@@ -46,6 +46,7 @@ import type {
   ExperienceDTO,
   FoodItemDTO,
   LeaderboardEntryDTO,
+  OnboardingStateDTO,
   Park,
   PlannedItemDTO,
   TripDTO,
@@ -79,9 +80,16 @@ import ExplorationPromptCard from './ExplorationPromptCard';
 import HomeFavoritesSection from './HomeFavoritesSection';
 import { HomeSearchBar } from './HomeSearchBar';
 import HomeThemeParksSection from './HomeThemeParksSection';
+import StartHereCard from './StartHereCard';
 import UpcomingTripHero from './UpcomingTripHero';
 import { buildOperatingContextSubtitle } from './operatingContext';
 import { deriveTodaysPark } from './deriveTodaysPark';
+import {
+  onboardingKeys,
+  useOnboardingState,
+  useUpdateOnboarding,
+} from '../onboarding/onboardingApi';
+import { useOnboardingPreviewStore } from '../onboarding/onboardingPreviewStore';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -156,6 +164,36 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
     queryFn: () => apiRequest<{ experiences: readonly ExperienceDTO[] }>('GET', '/catalog'),
     staleTime: 3600 * 1000,
   });
+
+  const onboardingQuery = useOnboardingState();
+  const updateOnboarding = useUpdateOnboarding();
+  const previewStarterChecklist = useOnboardingPreviewStore(
+    (s) => s.previewStarterChecklist,
+  );
+  const previewChecklist = useOnboardingPreviewStore((s) => s.previewChecklist);
+  const dismissStarterChecklistPreview = useOnboardingPreviewStore(
+    (s) => s.dismissStarterChecklistPreview,
+  );
+
+  // Keep the Start Here checklist synced when returning to Home from other tabs
+  // while active, skipping the initial mount fetch and costing nothing once dismissed/completed.
+  const hasMountedOnboardingFocusRef = useRef(false);
+  const showStarterChecklistRef = useRef(false);
+  showStarterChecklistRef.current =
+    onboardingQuery.data?.showStarterChecklist === true;
+  const refetchOnboarding = onboardingQuery.refetch;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasMountedOnboardingFocusRef.current) {
+        hasMountedOnboardingFocusRef.current = true;
+        return;
+      }
+      if (showStarterChecklistRef.current) {
+        void refetchOnboarding();
+      }
+    }, [refetchOnboarding]),
+  );
 
   const experiencesById = useMemo(() => {
     const map = new Map<string, ExperienceDTO>();
@@ -276,9 +314,10 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
       tripsQuery.refetch(),
       catalogQuery.refetch(),
       activePlannedItemsQuery.refetch(),
+      onboardingQuery.refetch(),
     ]);
     setRefreshing(false);
-  }, [query, meQuery, tripsQuery, catalogQuery, activePlannedItemsQuery]);
+  }, [query, meQuery, tripsQuery, catalogQuery, activePlannedItemsQuery, onboardingQuery]);
 
   const displayName = meQuery.data?.profile?.displayName?.trim();
   const firstName = displayName ? displayName.split(' ')[0] : 'Nicholas';
@@ -356,6 +395,59 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
       >
         <HomeSearchBar />
 
+        {(onboardingQuery.data?.showStarterChecklist === true &&
+          onboardingQuery.data?.checklist != null) ||
+        previewStarterChecklist ? (
+          <StartHereCard
+            checklist={
+              onboardingQuery.data?.showStarterChecklist === true &&
+              onboardingQuery.data?.checklist != null
+                ? onboardingQuery.data.checklist
+                : previewChecklist
+            }
+            onLogFirst={() => {
+              setPickerTab('rides');
+              setPickerVisible(true);
+            }}
+            onStarFavorite={() =>
+              navigation.navigate('Explore', { screen: 'CatalogList' } as any)
+            }
+            onCreateTrip={() =>
+              navigation.navigate('Trips', { screen: 'TripsList' } as any)
+            }
+            onClaimPin={() =>
+              navigation.navigate('Collection', { screen: 'PinBoard' } as any)
+            }
+            onDismiss={() => {
+              const isRealStarterChecklist =
+                onboardingQuery.data?.showStarterChecklist === true &&
+                onboardingQuery.data?.checklist != null;
+              if (!isRealStarterChecklist) {
+                dismissStarterChecklistPreview();
+                return;
+              }
+              const previous = queryClient.getQueryData<OnboardingStateDTO>(onboardingKeys.me);
+              if (previous) {
+                queryClient.setQueryData<OnboardingStateDTO>(onboardingKeys.me, {
+                  ...previous,
+                  showStarterChecklist: false,
+                  starterChecklistDismissedAt: new Date().toISOString(),
+                });
+              }
+              updateOnboarding.mutate(
+                { dismissStarterChecklist: true },
+                {
+                  onError: () => {
+                    if (previous) {
+                      queryClient.setQueryData(onboardingKeys.me, previous);
+                    }
+                  },
+                },
+              );
+            }}
+          />
+        ) : null}
+
         {/* 2. Vacation Context: Active Vacation, Upcoming Countdown Hero, or Exploration Prompt */}
         <ActiveTripShortcut />
         {!activeTrip && <UpcomingTripHero />}
@@ -365,7 +457,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           />
         )}
 
-        {/* Zone 2: The Parks & Quick Logging */}
+        {/* Zone 2: Live Park Pulse Strip */}
         <HomeThemeParksSection
           currentPark={currentPark}
           onSelectPark={(park) =>
@@ -380,17 +472,6 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
               params: { park: currentPark } as any,
             } as any)
           }
-          onOpenLogRide={() => {
-            setPickerTab('rides');
-            setPickerVisible(true);
-          }}
-          onOpenLogFood={() => {
-            setPickerTab('dining');
-            setPickerVisible(true);
-          }}
-          onOpenHiddenMickeys={() =>
-            navigation.navigate('HiddenMickeys' as any, { initialPark: currentPark ?? undefined } as any)
-          }
         />
 
         {/* 4b. Your Favorites (R8, Task 10.2, 10.5) */}
@@ -403,6 +484,9 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
               screen: 'LiveWaits' as any,
               params: { filter: 'favorites' } as any,
             } as any)
+          }
+          onExplore={() =>
+            navigation.navigate('Explore', { screen: 'CatalogList' } as any)
           }
         />
 
@@ -521,6 +605,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           onLogged={() => {
             setSelectedRideExperience(null);
             void queryClient.invalidateQueries({ queryKey: ['home'] });
+            void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
           }}
         />
       )}
@@ -557,6 +642,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             setSelectedFoodItem(null);
             setSelectedDiningExperience(null);
             void queryClient.invalidateQueries({ queryKey: ['home'] });
+            void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
           }}
         />
       )}

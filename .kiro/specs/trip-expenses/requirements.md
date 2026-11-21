@@ -172,6 +172,8 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 5. IF a User who is not a Trip_Member of a Trip attempts to create a Settlement on that Trip, THEN THE Trip_Service SHALL reject the request with `trip_forbidden`.
 6. THE Expense_Ledger_Screen SHALL list Settlements interleaved with Expenses in Date order, each visually distinguishable as a Settlement rather than an Expense.
 7. WHEN a Trip_Member views the Balances_View and a pairwise balance is nonzero, THE Mobile_App SHALL offer a control to record a Settlement pre-filled with that pair and the simplified pairwise amount from Requirement 6.5, which the member may adjust before submitting.
+8. THE Trip_Service SHALL accept an optional Note of 1 to 300 characters after trimming on a Settlement (storing empty or whitespace-only values as null, and rejecting a Note longer than 300 characters with `trip_validation_failed`), SHALL persist and return it on Settlement create, edit, and ledger reads, SHALL include it in Balance drill-down and pairwise transaction breakdown entries, and SHALL include it in the CSV export (Requirement 13.3) when present.
+9. THE Mobile_App SHALL provide an optional Notes input on the Record/Edit Settlement form (pre-populated when editing an existing Settlement, allowing the member to add, update, or clear the Note) and SHALL display a Settlement's Note when present on its ledger card, member Balance drill-down entry, and pairwise transaction breakdown card.
 
 ### Requirement 8: Editing, Removing, and Trip Lifecycle Interaction
 

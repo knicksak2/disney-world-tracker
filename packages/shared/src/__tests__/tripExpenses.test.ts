@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  SETTLEMENT_NOTE_MAX,
   chargeLineInputSchema,
   expenseCreateSchema,
   expenseEditSchema,
@@ -422,8 +423,8 @@ describe('expenseCreateSchema & expenseEditSchema splitMode discrimination (R1.1
   });
 });
 
-describe('settlementCreateSchema (R7.1, R7.2)', () => {
-  it('accepts valid settlement between distinct members', () => {
+describe('settlementCreateSchema (R7.1, R7.2, R7.8)', () => {
+  it('accepts valid settlement between distinct members without note', () => {
     const res = settlementCreateSchema.safeParse({
       payerId: VALID_UUID_1,
       recipientId: VALID_UUID_2,
@@ -431,6 +432,62 @@ describe('settlementCreateSchema (R7.1, R7.2)', () => {
       date: VALID_DATE,
     });
     expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.note).toBeUndefined();
+    }
+  });
+
+  it('trims valid note and accepts max length', () => {
+    const res = settlementCreateSchema.safeParse({
+      payerId: VALID_UUID_1,
+      recipientId: VALID_UUID_2,
+      amountCents: 5000,
+      date: VALID_DATE,
+      note: '  Venmo for hotel  ',
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.note).toBe('Venmo for hotel');
+    }
+
+    const maxRes = settlementCreateSchema.safeParse({
+      payerId: VALID_UUID_1,
+      recipientId: VALID_UUID_2,
+      amountCents: 5000,
+      date: VALID_DATE,
+      note: `  ${'a'.repeat(SETTLEMENT_NOTE_MAX)}  `,
+    });
+    expect(maxRes.success).toBe(true);
+    if (maxRes.success) {
+      expect(maxRes.data.note).toBe('a'.repeat(SETTLEMENT_NOTE_MAX));
+    }
+  });
+
+  it('normalizes empty or whitespace-only note to null and accepts explicit null', () => {
+    for (const note of ['', '   \t\n ', null]) {
+      const res = settlementCreateSchema.safeParse({
+        payerId: VALID_UUID_1,
+        recipientId: VALID_UUID_2,
+        amountCents: 5000,
+        date: VALID_DATE,
+        note,
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.note).toBeNull();
+      }
+    }
+  });
+
+  it('rejects note longer than SETTLEMENT_NOTE_MAX after trimming (R7.8)', () => {
+    const res = settlementCreateSchema.safeParse({
+      payerId: VALID_UUID_1,
+      recipientId: VALID_UUID_2,
+      amountCents: 5000,
+      date: VALID_DATE,
+      note: 'a'.repeat(SETTLEMENT_NOTE_MAX + 1),
+    });
+    expect(res.success).toBe(false);
   });
 
   it('rejects settlement where payerId === recipientId (R7.2)', () => {

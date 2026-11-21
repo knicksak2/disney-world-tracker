@@ -581,12 +581,29 @@ describe('Entry-point smoke tests (Requirements 1.1, 13.3)', () => {
     });
   });
 
-  test('7. HomeScreen: quick log ride activates sheet and submits to /me/experiences/:id/logs', async () => {
+  test('7. HomeScreen: StartHereCard log ride activates sheet and submits to /me/experiences/:id/logs', async () => {
     apiRequestMock.mockImplementation(async (method, path) => {
       if (typeof path === 'string' && path.startsWith('/catalog')) return { experiences: [sampleExp] };
       if (path === '/home') return {};
       if (path === '/me/trips') return [];
       if (path === '/me') return { user: { id: 'user-me' } };
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: false,
+            starredFavorite: false,
+            hasTrip: false,
+            claimedPin: false,
+          },
+          showStarterChecklist: true,
+        };
+      }
       if (method === 'POST' && typeof path === 'string' && path.includes('/logs')) {
         return {
           id: 'log-smoke-7',
@@ -611,8 +628,8 @@ describe('Entry-point smoke tests (Requirements 1.1, 13.3)', () => {
       </QueryClientProvider>,
     );
 
-    // Tap Log Ride on HomeScreen
-    const logRideTile = await screen.findByTestId('home-quick-log-ride');
+    // Tap Log Ride via StartHereCard on HomeScreen
+    const logRideTile = await screen.findByTestId('start-here-item-log');
     fireEvent.press(logRideTile);
 
     // Select experience from ExperiencePicker

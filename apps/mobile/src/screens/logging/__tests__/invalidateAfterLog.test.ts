@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { onboardingKeys } from '../../onboarding/onboardingApi';
 import { tripFeedKeys } from '../../trips/tripFeedQueryKeys';
 import { tripsListKeys } from '../../trips/TripsListScreen';
 import { invalidateAfterLog } from '../invalidateAfterLog';
@@ -31,6 +32,7 @@ describe('invalidateAfterLog', () => {
       ['me-stats'],
       ['me', 'trips', 'active'],
       tripsListKeys.list(),
+      onboardingKeys.me,
     ]);
   });
 
@@ -48,6 +50,7 @@ describe('invalidateAfterLog', () => {
       ['me-stats'],
       ['me', 'trips', 'active'],
       tripsListKeys.list(),
+      onboardingKeys.me,
       tripFeedKeys.feed('trip-456'),
       ['trips', 'trip-456', 'summary'],
       ['trips', 'trip-456', 'planned-items'],

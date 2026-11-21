@@ -125,6 +125,16 @@
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - [x] 13.6 Checkpoint — run `npm run typecheck` and the mobile test suite scoped to `ExperiencePicker`, `experiencePickerFilters`, `TripPlannedListScreen`, `TripScheduleScreen`, and `TripReservationsScreen`
 
+- [x] 14. Amendment — Cap Inline Trip Group Favorites Preview & Full-List Sheet (Requirements 9.6–9.8)
+  - [x] 14.1 Create pure view helpers in `apps/mobile/src/screens/trips/groupFavoritesView.ts` (`GROUP_FAVORITES_PREVIEW_LIMIT = 5`, `sliceGroupFavoritesPreview`, `deriveGroupFavoriteParks`, `filterGroupFavorites`)
+    - _Requirements: 9.6, 9.7_
+  - [x] 14.2 Update `GroupFavoritesSection.tsx` and `GroupFavoritesSection.palette.ts` to cap inline rendering at 5 items, render the "See all N favorites" trigger when overflowing, and present a scrollable bottom-sheet Modal with search input and park filter pills (when >= 2 parks)
+    - _Requirements: 9.6, 9.7, 9.8_
+  - [x] 14.3 Add property tests (`groupFavoritesView.prop.test.ts`), component tests (`GroupFavoritesSection.test.tsx`), and a `TripDetailScreen.test.tsx` overflow integration test
+    - _Requirements: 9.6, 9.7, 9.8_
+  - [x] 14.4 Checkpoint — run `npm run verify:mobile`
+    - _Requirements: 9.6, 9.7, 9.8_
+
 ## Notes
 
 - **No optimizer changes.** Requirement 6.4 and design.md are explicit: `day-planning-optimization`'s `optimizer.ts`/`OptimizeInput` are not touched by any task in this plan. The Favorites quick chip (Task 8) is a display/candidate filter only, applied before the User manually adds an item to a Trip's Planned_List — it never becomes a cost-function input.
@@ -163,7 +173,11 @@
     { "id": 20, "tasks": ["13.2", "13.3"] },
     { "id": 21, "tasks": ["13.4"] },
     { "id": 22, "tasks": ["13.5"] },
-    { "id": 23, "tasks": ["13.6"] }
+    { "id": 23, "tasks": ["13.6"] },
+    { "id": 24, "tasks": ["14.1"] },
+    { "id": 25, "tasks": ["14.2"] },
+    { "id": 26, "tasks": ["14.3"] },
+    { "id": 27, "tasks": ["14.4"] }
   ]
 }
 ```

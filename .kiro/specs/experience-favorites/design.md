@@ -415,7 +415,13 @@ contract, one optimistic-update strategy, satisfying Requirement 2.2/2.3 and Req
   card section" shape), reading `GET /trips/:id/favorites/shared`. Section title is "Group
   Favorites" — deliberately distinct from `TripSummaryScreen.tsx`'s existing "Crowd Favorite"
   superlative tile, which is an unrelated, already-shipped, rating-derived concept (Requirement
-  9.4).
+  9.4). Inline rendering on the Trip Detail hub is capped at `GROUP_FAVORITES_PREVIEW_LIMIT = 5`
+  via pure view helpers in `apps/mobile/src/screens/trips/groupFavoritesView.ts`
+  (`sliceGroupFavoritesPreview`, `deriveGroupFavoriteParks`, `filterGroupFavorites`); when more
+  than 5 items exist, a "See all N favorites" trigger opens a scrollable bottom-sheet `Modal`
+  containing all items, a search input (matching experience name, park, or favoriting member name),
+  and park filter pills (shown when `>= 2` distinct parks exist) that compose conjunctively with
+  search (Requirements 9.6–9.8).
 
 ## Data Models
 
@@ -480,6 +486,7 @@ No new `ErrorCode` values are introduced by this spec.
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `FAVORITES_QUERY_KEY` | `['me', 'favorites']` | TanStack Query cache key shared by every mobile surface reading or invalidating the Favorited_Set (`useFavoritedExperiences.ts`). |
+| `GROUP_FAVORITES_PREVIEW_LIMIT` | `5` | Maximum number of Group Favorites rendered inline on the Trip Detail hub before showing the "See all N favorites" sheet trigger. |
 
 No new environment variables. No new external API calls — Requirement 8's live-wait data reuses
 the existing `GET /parks/:park/live` read (ThemeParks.wiki, via the existing `Live_Service`);
@@ -600,6 +607,19 @@ not exist at all, `GET /trips/:id/favorites/shared` returns the identical `403 t
 response in both cases.*
 
 **Validates: Requirements 9.2**
+
+### Property 12: Group Favorites Preview Cap and Modal Filter Conjunction
+
+*For any ordered sequence of Group Favorites `items` and non-negative integer `limit`,
+`sliceGroupFavoritesPreview(items, limit)` returns a `visibleItems` prefix of length
+`min(items.length, floor(limit))`, `hiddenCount` equal to `items.length - visibleItems.length`,
+and `hasMore` equal to `hiddenCount > 0`. For any `selectedPark` and `searchQuery`,
+`filterGroupFavorites(items, selectedPark, searchQuery)` returns an ordered subsequence of `items`
+containing every and only those entries matching BOTH the park constraint (when non-null) and the
+case-insensitive substring query across experience name, park, or any favoriting member display
+name.*
+
+**Validates: Requirements 9.6, 9.7**
 
 ## Testing Strategy
 

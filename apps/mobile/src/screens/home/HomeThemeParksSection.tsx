@@ -1,14 +1,8 @@
 /**
- * HomeThemeParksSection — 2x2 Theme Parks Landmark Grid + Quick Log Buttons.
+ * HomeThemeParksSection — Compact single-row 4-park Live Park Pulse strip.
  *
- * Implements Task 20.3 (Requirements 2.7).
- * Features:
- *   1. Section header with title "The Parks" and "All Live Waits ›" link navigating to LiveWaitsScreen.
- *   2. 2x2 Theme Parks Landmark Grid for Magic Kingdom, EPCOT, Disney's Hollywood Studios,
- *      and Disney's Animal Kingdom. Each tile displays landmark artwork, experience count,
- *      and embedded live wait average badge (`⚡ XXm avg`); tapping any park navigates to DestinationScreen.
- *   3. Two equal-width Quick Log buttons directly below the 4 parks: "Log a Ride" and "Log Food",
- *      triggering the respective logging modals.
+ * Replaces the 2x2 landmark grid, duplicate Log a Ride / Log Food buttons, and
+ * Hidden Mickeys banner per first-run-onboarding Requirement 6.1–6.3.
  */
 
 import React, { useMemo } from 'react';
@@ -22,9 +16,8 @@ import { apiRequest } from '../../api/client';
 import type { DestinationId } from '../catalog/destinations';
 import { DESTINATION_VISUALS } from '../catalog/destinationVisuals';
 import { calculateParkWaitAverage } from './pulseCalculations';
-import { useMickeyConfig, useMickeySummary } from '../mickeys/api';
 import { makeStyles } from '../../theme/makeStyles';
-import { usePalette, useAppTheme } from '../../theme/useAppTheme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { HOME_THEME_PARKS } from './HomeThemeParksSection.palette';
 
 const THEME_PARKS: readonly DestinationId[] = [
@@ -34,12 +27,16 @@ const THEME_PARKS: readonly DestinationId[] = [
   'Animal Kingdom',
 ] as const;
 
+const PARK_SHORT_LABEL: Readonly<Record<string, string>> = {
+  'Magic Kingdom': 'MK',
+  EPCOT: 'EP',
+  'Hollywood Studios': 'HS',
+  'Animal Kingdom': 'AK',
+};
+
 export interface HomeThemeParksSectionProps {
   readonly onSelectPark: (park: DestinationId) => void;
   readonly onOpenLiveWaits: () => void;
-  readonly onOpenLogRide: () => void;
-  readonly onOpenLogFood: () => void;
-  readonly onOpenHiddenMickeys?: (() => void) | undefined;
   readonly currentPark?: DestinationId | null | undefined;
   readonly testID?: string;
 }
@@ -47,152 +44,50 @@ export interface HomeThemeParksSectionProps {
 export default function HomeThemeParksSection({
   onSelectPark,
   onOpenLiveWaits,
-  onOpenLogRide,
-  onOpenLogFood,
-  onOpenHiddenMickeys,
-  currentPark,
   testID = 'home-theme-parks-section',
 }: HomeThemeParksSectionProps): JSX.Element {
   const styles = useStyles();
   const t = useAppTheme();
 
-  const { data: config } = useMickeyConfig();
-  const isMickeysEnabled = Boolean(config?.enabled);
-  const { data: summary } = useMickeySummary(undefined, isMickeysEnabled);
-
-  // Query destination counts to display experience counts per park
-  const destinationsQuery = useQuery<{
-    readonly destinations: readonly { readonly destination: DestinationId; readonly count: number }[];
-  }>({
-    queryKey: ['catalog', 'destinations'],
-    queryFn: () => apiRequest('GET', '/catalog/destinations'),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const countById = useMemo(() => {
-    const map = new Map<DestinationId, number>();
-    for (const entry of destinationsQuery.data?.destinations ?? []) {
-      map.set(entry.destination, entry.count);
-    }
-    return map;
-  }, [destinationsQuery.data?.destinations]);
-
   return (
     <View style={styles.container} testID={testID}>
-      {/* 1. Header with Title & All Live Waits link */}
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>The Parks</Text>
+          <Ionicons name="pulse-outline" size={16} color={t.color.primaryFg} />
+          <Text style={styles.title}>Live Park Pulse</Text>
         </View>
         <Pressable
           onPress={onOpenLiveWaits}
           hitSlop={8}
           accessibilityRole="link"
-          accessibilityLabel="View all live wait times"
+          accessibilityLabel="View all live waits"
           testID="home-parks-live-waits-link"
         >
           <Text style={styles.link}>All Live Waits ›</Text>
         </Pressable>
       </View>
 
-      {/* 2. 2x2 Theme Parks Landmark Grid */}
-      <View style={styles.parksGrid} testID="home-parks-grid">
+      <View style={styles.pulseStrip} testID="home-parks-pulse-strip">
         {THEME_PARKS.map((park) => (
-          <ParkGridCard
+          <ParkPulseChip
             key={park}
             park={park}
-            count={countById.get(park) ?? 0}
+            shortCode={PARK_SHORT_LABEL[park] ?? park}
             onPress={() => onSelectPark(park)}
           />
         ))}
       </View>
-
-      {/* 3. Quick Log Row underneath the 4 parks */}
-      <View style={styles.logRow} testID="home-quick-log-row">
-        <Pressable
-          style={({ pressed }) => [styles.logButton, pressed && styles.pressed]}
-          onPress={onOpenLogRide}
-          accessibilityRole="button"
-          accessibilityLabel="Log a ride or attraction"
-          testID="home-quick-log-ride"
-        >
-          <View style={[styles.logIconWrap, styles.logRideIconWrap]}>
-            <Text style={styles.logEmoji}>🎢</Text>
-          </View>
-          <View style={styles.logBtnTextCol}>
-            <Text style={styles.logBtnTitle}>Log a Ride</Text>
-            <Text style={styles.logBtnSubtitle}>Rate & check off</Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [styles.logButton, pressed && styles.pressed]}
-          onPress={onOpenLogFood}
-          accessibilityRole="button"
-          accessibilityLabel="Log food item or meal"
-          testID="home-quick-log-food"
-        >
-          <View style={[styles.logIconWrap, styles.logFoodIconWrap]}>
-            <Text style={styles.logEmoji}>🍽️</Text>
-          </View>
-          <View style={styles.logBtnTextCol}>
-            <Text style={styles.logBtnTitle}>Log Food</Text>
-            <Text style={styles.logBtnSubtitle}>Dishes & snacks</Text>
-          </View>
-        </Pressable>
-      </View>
-
-      {/* 5. Hidden Mickeys Scavenger Hunt Banner (Home Screen Discovery) */}
-      {isMickeysEnabled && (
-        <Pressable
-          style={({ pressed }) => [styles.mickeyHuntCard, pressed && styles.pressed]}
-          onPress={onOpenHiddenMickeys}
-          accessibilityRole="button"
-          accessibilityLabel="Hidden Mickeys Scavenger Hunt"
-          testID="home-hidden-mickeys-card"
-        >
-          <View style={styles.mickeyHuntInner}>
-            <View style={styles.mickeyIconWrap}>
-              <Ionicons name="sparkles" size={20} color={t.color.primaryFg} />
-            </View>
-            <View style={styles.mickeyTextCol}>
-              <View style={styles.mickeyTitleRow}>
-                <Text style={styles.mickeyTitle}>HIDDEN MICKEYS HUNT</Text>
-                {summary?.overall ? (
-                  <View style={styles.mickeyBadge}>
-                    <Text style={styles.mickeyBadgeText}>
-                      {summary.overall.found} of {summary.overall.total} Found
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.mickeySubtitle} numberOfLines={1}>
-                {currentPark
-                  ? `Search for secret silhouettes in ${currentPark} today`
-                  : 'Search for secret silhouettes hidden in lines & rides'}
-              </Text>
-            </View>
-            <View style={styles.mickeyActionBtn}>
-              <Text style={styles.mickeyActionBtnText}>Hunt ➔</Text>
-            </View>
-          </View>
-        </Pressable>
-      )}
     </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Park Grid Card Subcomponent
-// ---------------------------------------------------------------------------
-
-function ParkGridCard({
+function ParkPulseChip({
   park,
-  count,
+  shortCode,
   onPress,
 }: {
   readonly park: DestinationId;
-  readonly count: number;
+  readonly shortCode: string;
   readonly onPress: () => void;
 }): JSX.Element {
   const styles = useStyles();
@@ -201,7 +96,8 @@ function ParkGridCard({
 
   const liveWaitQuery = useQuery<ParkLiveSnapshotDTO>({
     queryKey: ['park-live', park],
-    queryFn: () => apiRequest<ParkLiveSnapshotDTO>('GET', `/parks/${encodeURIComponent(park)}/live`),
+    queryFn: () =>
+      apiRequest<ParkLiveSnapshotDTO>('GET', `/parks/${encodeURIComponent(park)}/live`),
     staleTime: 60 * 1000,
   });
 
@@ -212,10 +108,10 @@ function ParkGridCard({
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.parkCard, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.parkChip, pressed && styles.pressed]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${park}, ${count} experiences${avgWait !== null ? `, ${avgWait} minutes average wait` : ''}`}
+      accessibilityLabel={`${park}${avgWait !== null ? `, ${avgWait} minutes average wait` : ''}`}
       testID={`home-park-tile-${park}`}
     >
       <LinearGradient
@@ -224,44 +120,22 @@ function ParkGridCard({
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      {visual?.watermarkGlyph && (
-        <Ionicons
-          name={visual.watermarkGlyph}
-          size={78}
-          color={pal.watermark}
-          style={styles.parkWatermark}
-        />
-      )}
 
-      <View style={styles.parkCardInner}>
-        <View style={styles.parkCardTopRow}>
-          <View style={styles.parkIconBadge}>
-            <Text style={styles.parkIconText}>{visual?.icon ?? '🏰'}</Text>
-          </View>
-          {avgWait !== null && (
-            <View style={styles.parkWaitBadge} testID={`home-park-wait-${park}`}>
-              <Ionicons name="flash" size={10} color={pal.waitPulseText} />
-              <Text style={styles.parkWaitText}>{avgWait}m avg</Text>
-            </View>
-          )}
+      <View style={styles.chipInner}>
+        <View style={styles.chipTopRow}>
+          <Text style={styles.parkEmoji}>{visual?.icon ?? '🏰'}</Text>
+          <Text style={styles.shortCodeText}>{shortCode}</Text>
         </View>
-
-        <View style={styles.parkCardBottom}>
-          <Text style={styles.parkTitle} numberOfLines={1}>
-            {park}
-          </Text>
-          <Text style={styles.parkCountText}>
-            {count} {count === 1 ? 'experience' : 'experiences'}
+        <View style={styles.waitBadge} testID={`home-park-wait-${park}`}>
+          <Ionicons name="flash" size={9} color={pal.waitPulseText} />
+          <Text style={styles.waitText} numberOfLines={1}>
+            {avgWait !== null ? `${avgWait}m avg` : '--'}
           </Text>
         </View>
       </View>
     </Pressable>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const useStyles = makeStyles((t) => ({
   container: {
@@ -273,7 +147,7 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
     paddingHorizontal: 2,
   },
   titleRow: {
@@ -283,7 +157,7 @@ const useStyles = makeStyles((t) => ({
   },
   title: {
     ...t.typography.heading,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: t.color.textPrimary,
   },
@@ -292,15 +166,14 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '700',
     color: t.color.primaryFg,
   },
-  parksGrid: {
+  pulseStrip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
-  parkCard: {
-    width: '48.5%',
-    height: 116,
-    borderRadius: 16,
+  parkChip: {
+    flex: 1,
+    minHeight: 68,
+    borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
     borderWidth: 1,
@@ -308,184 +181,50 @@ const useStyles = makeStyles((t) => ({
     shadowColor: HOME_THEME_PARKS[t.scheme].tileShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.14,
-    shadowRadius: 6,
+    shadowRadius: 5,
     elevation: 2,
   },
   pressed: {
     opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
-  parkWatermark: {
-    position: 'absolute',
-    right: -10,
-    bottom: -10,
-  },
-  parkCardInner: {
+  chipInner: {
     flex: 1,
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     justifyContent: 'space-between',
+    gap: 6,
   },
-  parkCardTopRow: {
+  chipTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  parkIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: HOME_THEME_PARKS[t.scheme].iconBadgeBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  parkIconText: {
-    fontSize: 17,
+  parkEmoji: {
+    fontSize: 15,
     ...t.textDefault,
   },
-  parkWaitBadge: {
+  shortCodeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: HOME_THEME_PARKS[t.scheme].tileTitle,
+    letterSpacing: 0.3,
+  },
+  waitBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
+    gap: 2,
     backgroundColor: HOME_THEME_PARKS[t.scheme].waitPulseBg,
     borderWidth: 1,
     borderColor: HOME_THEME_PARKS[t.scheme].waitPulseBorder,
-    paddingVertical: 2.5,
-    paddingHorizontal: 6.5,
-    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderRadius: 10,
   },
-  parkWaitText: {
-    fontSize: 10.5,
+  waitText: {
+    fontSize: 10,
     fontWeight: '800',
     color: HOME_THEME_PARKS[t.scheme].waitPulseText,
   },
-  parkCardBottom: {
-    gap: 1,
-  },
-  parkTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: HOME_THEME_PARKS[t.scheme].tileTitle,
-    lineHeight: 18,
-  },
-  parkCountText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: HOME_THEME_PARKS[t.scheme].tileSubtitle,
-  },
-  logRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  logButton: {
-    flex: 1,
-    backgroundColor: HOME_THEME_PARKS[t.scheme].logBtnBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: HOME_THEME_PARKS[t.scheme].logBtnBorder,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: HOME_THEME_PARKS[t.scheme].logBtnShadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  logIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logRideIconWrap: {
-    backgroundColor: HOME_THEME_PARKS[t.scheme].logRideIconBg,
-  },
-  logFoodIconWrap: {
-    backgroundColor: HOME_THEME_PARKS[t.scheme].logFoodIconBg,
-  },
-  logEmoji: {
-    fontSize: 19,
-    ...t.textDefault,
-  },
-  logBtnTextCol: {
-    flex: 1,
-  },
-  logBtnTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: t.color.textPrimary,
-  },
-  logBtnSubtitle: {
-    fontSize: 11,
-    color: t.color.textSecondary,
-    marginTop: 1,
-  },
-  mickeyHuntCard: {
-    marginTop: 10,
-    backgroundColor: HOME_THEME_PARKS[t.scheme].huntCardBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: HOME_THEME_PARKS[t.scheme].huntCardBorder,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  mickeyHuntInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  mickeyIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: HOME_THEME_PARKS[t.scheme].huntIconBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mickeyTextCol: {
-    flex: 1,
-  },
-  mickeyTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mickeyTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: t.color.textPrimary,
-    letterSpacing: 0.3,
-  },
-  mickeyBadge: {
-    backgroundColor: HOME_THEME_PARKS[t.scheme].huntBadgeBg,
-    paddingVertical: 1.5,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-  },
-  mickeyBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: HOME_THEME_PARKS[t.scheme].huntBadgeText,
-  },
-  mickeySubtitle: {
-    fontSize: 11,
-    color: HOME_THEME_PARKS[t.scheme].huntSubtitle,
-    marginTop: 2,
-  },
-  mickeyActionBtn: {
-    backgroundColor: HOME_THEME_PARKS[t.scheme].huntActionBg,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-  },
-  mickeyActionBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: HOME_THEME_PARKS[t.scheme].huntActionText,
-  },
 }));
-

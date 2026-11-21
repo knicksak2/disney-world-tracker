@@ -250,6 +250,10 @@ describe('CollectionScreen — Disney Vault Hub', () => {
               component={() => <DummyScreen testID="screen-stats" />}
             />
             <Stack.Screen
+              name="YouAndCrew"
+              component={() => <DummyScreen testID="screen-you-and-crew" />}
+            />
+            <Stack.Screen
               name="HiddenMickeys"
               component={() => <DummyScreen testID="screen-hidden-mickeys" />}
             />
@@ -265,9 +269,8 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     expect(screen.getByTestId('header-eyebrow-pill')).toBeTruthy();
     expect(screen.getByText('👤 YOU & YOUR VAULT')).toBeTruthy();
     expect(screen.getByText('You')).toBeTruthy();
-    expect(
-      screen.getByText('Crew, inbox, pins, lists, stats & settings'),
-    ).toBeTruthy();
+    expect(screen.getByText('Pins, food, lists & stats')).toBeTruthy();
+    expect(screen.queryByTestId('vault-seg-crew')).toBeNull();
   });
 
   it('renders segmented control with 4 tabs defaulting to Pins & Showcase (Requirement 6.6a)', () => {
@@ -1194,18 +1197,62 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     });
   });
 
-  describe('Crew & Profile segment in You tab', () => {
-    it('switches to Crew segment and renders the embedded You & Crew sections', () => {
+  describe('Unified Crew header entry & 0-pin cold start (Requirements 8.1–8.5)', () => {
+    it('renders exactly 4 segments (no vault-seg-crew) and navigates to YouAndCrew from header Crew pill', async () => {
+      const navRef = createNavigationContainerRef();
+      renderCollection(navRef);
+
+      expect(screen.getByTestId('vault-seg-pins')).toBeTruthy();
+      expect(screen.getByTestId('vault-seg-food')).toBeTruthy();
+      expect(screen.getByTestId('vault-seg-lists')).toBeTruthy();
+      expect(screen.getByTestId('vault-seg-stats')).toBeTruthy();
+      expect(screen.queryByTestId('vault-seg-crew')).toBeNull();
+
+      const crewBtn = await screen.findByTestId('collection-crew-settings-btn');
+      fireEvent.press(crewBtn);
+
+      expect(await screen.findByTestId('screen-you-and-crew')).toBeTruthy();
+    });
+
+    it('replaces corkboard with ZeroPinsStarterCard when totalUnlocked === 0 and claimableCount === 0, opening ExperiencePicker on CTA press', async () => {
+      mockApiRequest.mockImplementation(async (_method: string, path: string) => {
+        if (path === '/me/pins') {
+          return {
+            pins: mockBoardData.pins.map((p) => ({
+              ...p,
+              unlockedAt: null,
+              claimedAt: null,
+              percentComplete: 0,
+            })),
+            tierSummary: [],
+            totalUnlocked: 0,
+            totalPins: PINS.length,
+            overallPercent: 0,
+          } as never;
+        }
+        if (path === '/catalog') {
+          return { experiences: [] } as never;
+        }
+        return {} as never;
+      });
+
       renderCollection();
 
-      fireEvent.press(screen.getByTestId('vault-seg-crew'));
-      expect(screen.getByTestId('collection-crew-view')).toBeTruthy();
-      expect(screen.getByTestId('you-and-crew-identity-section')).toBeTruthy();
-      expect(screen.getByTestId('you-and-crew-friends-section')).toBeTruthy();
-      expect(screen.getByTestId('inbox-entry-button')).toBeTruthy();
-      expect(screen.getByTestId('sent-entry-button')).toBeTruthy();
-      expect(screen.getByTestId('you-and-crew-settings-section')).toBeTruthy();
-      expect(screen.getByTestId('you-and-crew-logout')).toBeTruthy();
+      expect(await screen.findByTestId('zero-pins-starter-card')).toBeTruthy();
+      expect(screen.getByText('Earn Your First Collectible Pin')).toBeTruthy();
+      expect(screen.queryByTestId('showcase-corkboard-canvas')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('zero-pins-log-ride-cta'));
+      expect(
+        await screen.findByTestId('collection-experience-picker-modal'),
+      ).toBeTruthy();
+    });
+
+    it('renders showcase corkboard (and hides ZeroPinsStarterCard) when totalUnlocked > 0', async () => {
+      renderCollection();
+
+      expect(await screen.findByTestId('showcase-corkboard-canvas')).toBeTruthy();
+      expect(screen.queryByTestId('zero-pins-starter-card')).toBeNull();
     });
   });
 });

@@ -878,6 +878,47 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
     expect(screen.queryByText(/Crowd Favorite/i)).toBeNull();
   });
 
+  test('R9.6–R9.8: Group Favorites with > 5 items shows 5 inline, full count on Favs tab, and opens modal to navigate', async () => {
+    const navigation = makeNavigation();
+    const sevenFavorites = Array.from({ length: 7 }, (_, idx) => ({
+      experienceId: `exp-${idx + 1}`,
+      experienceName: `Favorite Ride ${idx + 1}`,
+      park: idx % 2 === 0 ? 'Magic Kingdom' : 'EPCOT',
+      category: 'Ride',
+      favoritingCount: 2,
+      favoritingDisplayNames: ['Alice', 'Bob'],
+    }));
+
+    apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+      if (path === `/trips/${TRIP_ID}`) return TRIP;
+      if (path === `/trips/${TRIP_ID}/favorites/shared`) {
+        return { items: sevenFavorites };
+      }
+      return [];
+    });
+
+    renderDetail(navigation);
+    await screen.findByTestId('trip-detail-hub');
+
+    const favsTab = await screen.findByTestId('trip-detail-saved-tab-favs');
+    expect(await within(favsTab).findByText('♥ Favs (7)')).toBeTruthy();
+
+    for (let i = 1; i <= 5; i += 1) {
+      expect(await screen.findByTestId(`group-favorite-item-exp-${i}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId('group-favorite-item-exp-6')).toBeNull();
+    expect(screen.queryByTestId('group-favorite-item-exp-7')).toBeNull();
+
+    const seeAllBtn = screen.getByTestId('group-favorites-see-all-btn');
+    fireEvent.press(seeAllBtn);
+
+    const seventhModalItem = await screen.findByTestId('group-favorite-modal-item-exp-7');
+    fireEvent.press(seventhModalItem);
+    expect(navigation.navigate).toHaveBeenCalledWith('ExperienceDetail', {
+      experienceId: 'exp-7',
+    });
+  });
+
   // Feature: dark-mode — the hub repaints with the Twilight palette.
   describe('dark mode', () => {
     afterEach(resetTestScheme);
@@ -1437,6 +1478,110 @@ describe('Trip_Detail_View hub (R18.1, R18.6)', () => {
         expect(screen.getByTestId('trip-detail-hub')).toBeTruthy();
       });
       expect(screen.queryByTestId('trip-detail-mickeys-section')).toBeNull();
+    });
+  });
+
+  describe('First-run onboarding micro-polish (Requirements 9.2–9.4)', () => {
+    test('R9.2: displays single-line subtitles beneath Schedule Builder, Planned List, and Reservations', async () => {
+      apiRequestMock.mockResolvedValue(TRIP);
+      renderDetail(makeNavigation());
+
+      await screen.findByTestId('trip-detail-hub');
+      expect(screen.getByText('Order & optimize each park day')).toBeTruthy();
+      expect(screen.getByText('Must-do rides & dining wish list')).toBeTruthy();
+      expect(screen.getByText('Booked dining & Lightning Lanes')).toBeTruthy();
+    });
+
+    test('R9.3 & R9.4: upcoming trip renders UPCOMING TRIP banner (never VACATION UNDERWAY) and compact empty Saved Lists & Favorites', async () => {
+      const UPCOMING_TRIP: TripDTO = {
+        ...TRIP,
+        status: 'upcoming',
+        startDate: '2099-05-01',
+        endDate: '2099-05-05',
+        foodLists: [],
+        experienceLists: [],
+      };
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return UPCOMING_TRIP;
+        if (path === `/trips/${TRIP_ID}/planned-items`) return [];
+        if (path === `/trips/${TRIP_ID}/favorites/shared`) return { items: [] };
+        if (path === `/trips/${TRIP_ID}/feed`) return [];
+        if (path === `/trips/${TRIP_ID}/members`) return [];
+        return UPCOMING_TRIP;
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      const summaryCard = screen.getByTestId('trip-detail-section-summary');
+      expect(summaryCard).toBeTruthy();
+      expect(screen.getByText(/UPCOMING TRIP/)).toBeTruthy();
+      expect(screen.queryByText(/VACATION UNDERWAY/)).toBeNull();
+      expect(screen.getByText('Preview group stats, countdown & shared picks ›')).toBeTruthy();
+
+      const compactCard = await screen.findByTestId('trip-detail-saved-empty-compact');
+      expect(compactCard).toBeTruthy();
+      const emptyBox = await screen.findByTestId('group-favorites-empty');
+      expect(StyleSheet.flatten(compactCard.props.style)).toMatchObject({ paddingVertical: 6 });
+      expect(StyleSheet.flatten(emptyBox.props.style)).toMatchObject({ paddingVertical: 4 });
+    });
+
+    test('R9.3: upcoming trip with completed items renders TRIP PROGRESS banner (never VACATION UNDERWAY)', async () => {
+      const UPCOMING_TRIP: TripDTO = {
+        ...TRIP,
+        status: 'upcoming',
+        startDate: '2099-05-01',
+        endDate: '2099-05-05',
+      };
+      apiRequestMock.mockImplementation(async (_method: string, path: string) => {
+        if (path === `/trips/${TRIP_ID}`) return UPCOMING_TRIP;
+        if (path === `/trips/${TRIP_ID}/planned-items`) {
+          return [
+            {
+              id: 'item-1',
+              tripId: TRIP_ID,
+              experienceId: 'exp-1',
+              experienceName: 'Space Mountain',
+              park: 'Magic Kingdom',
+              category: 'Ride',
+              priority: 'must_do',
+              status: 'completed',
+              position: 0,
+              plannedDate: null,
+              plannedTime: null,
+              notes: null,
+            },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/feed`) {
+          return [
+            {
+              id: 'feed-1',
+              tripId: TRIP_ID,
+              actorUserId: 'user-1',
+              actorDisplayName: 'Nicholas',
+              actorAvatarPreset: null,
+              type: 'completion_logged',
+              createdAt: '2024-05-02T12:00:00Z',
+              metadata: {
+                experienceId: 'exp-1',
+                experienceName: 'Space Mountain',
+              },
+              reactions: [],
+              comments: [],
+            },
+          ];
+        }
+        if (path === `/trips/${TRIP_ID}/favorites/shared`) return { items: [] };
+        if (path === `/trips/${TRIP_ID}/members`) return [];
+        return UPCOMING_TRIP;
+      });
+
+      renderDetail(makeNavigation());
+      await screen.findByTestId('trip-detail-hub');
+
+      expect(await screen.findByText(/TRIP PROGRESS/)).toBeTruthy();
+      expect(screen.queryByText(/VACATION UNDERWAY/)).toBeNull();
     });
   });
 });

@@ -1,0 +1,875 @@
+import React, { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { isAvatarPresetId, MAX_INLINE_FRIENDS, type ProfileDTO } from '@dwt/shared';
+
+import { ApiError, apiRequest, resolveBaseUrl } from '../../api/client';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../../photos/constants';
+import { makeStyles } from '../../theme/makeStyles';
+import { withAlpha } from '../../theme/theme';
+import { useAppTheme, usePalette } from '../../theme/useAppTheme';
+import { SHARE_ICON } from './YouAndCrewScreen.palette';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  SecondaryButton,
+  SectionLabel,
+} from '../../theme/components';
+import { renderAvatarPreset } from '../../avatars/AvatarPresets';
+import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
+import { ProfileIdentityBlock } from '../ProfileScreen';
+import PushNotificationPreferenceControl from '../PushNotificationPreferenceControl';
+import AppearancePreferenceControl from '../AppearancePreferenceControl';
+import ChangePasswordControl from '../ChangePasswordControl';
+import { invalidatePushRegistration } from '../../hooks/usePushRegistration';
+import { useSessionStore } from '../../state/sessionStore';
+import { friendsErrorMessage } from '../friends/errorMessages';
+import {
+  useOnboardingState,
+  useUpdateOnboarding,
+} from '../onboarding/onboardingApi';
+import { useOnboardingPreviewStore } from '../onboarding/onboardingPreviewStore';
+
+interface MeResponse {
+  readonly user: {
+    readonly id: string;
+    readonly email: string;
+  };
+  readonly profile: {
+    readonly displayName: string;
+    readonly avatarPreset: string | null;
+  };
+}
+
+interface FriendListEntry {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatarPreset: string | null;
+  readonly establishedAt: string;
+}
+
+interface FriendRequestListEntry {
+  readonly id: string;
+  readonly otherUserId: string;
+  readonly otherDisplayName: string;
+}
+
+interface FriendsAndRequests {
+  readonly friends: readonly FriendListEntry[];
+  readonly incomingRequests: readonly FriendRequestListEntry[];
+  readonly outgoingRequests: readonly FriendRequestListEntry[];
+}
+
+export interface YouAndCrewContentProps {
+  readonly embedded?: boolean | undefined;
+}
+
+export function YouAndCrewContent({ embedded = false }: YouAndCrewContentProps): JSX.Element {
+  const styles = useStyles();
+  const t = useAppTheme();
+  const shareIcon = usePalette(SHARE_ICON);
+  const navigation = useNavigation<any>();
+  const queryClient = useQueryClient();
+  const clearToken = useSessionStore((state) => state.clearToken);
+  const onboardingQuery = useOnboardingState();
+  const updateOnboarding = useUpdateOnboarding();
+  const previewStarterChecklist = useOnboardingPreviewStore(
+    (s) => s.previewStarterChecklist,
+  );
+  const enableStarterChecklistPreview = useOnboardingPreviewStore(
+    (s) => s.enableStarterChecklistPreview,
+  );
+  const dismissStarterChecklistPreview = useOnboardingPreviewStore(
+    (s) => s.dismissStarterChecklistPreview,
+  );
+  const onboardingData = onboardingQuery.data;
+  const canRestoreStarterChecklist =
+    typeof onboardingData?.starterChecklistDismissedAt === 'string' &&
+    onboardingData.checklist != null &&
+    (!onboardingData.checklist.loggedFirstExperience ||
+      !onboardingData.checklist.starredFavorite ||
+      !onboardingData.checklist.hasTrip ||
+      !onboardingData.checklist.claimedPin);
+
+  const [friendsExpanded, setFriendsExpanded] = useState(false);
+  const [rowErrors, setRowErrors] = useState<Readonly<Record<string, string>>>({});
+
+  const navigateTarget = useCallback(
+    <K extends keyof YouAndCrewStackParamList>(
+      screen: K,
+      params?: YouAndCrewStackParamList[K],
+    ) => {
+      if (embedded) {
+        navigation.navigate('YouAndCrew', { screen, params });
+      } else {
+        navigation.navigate(screen, params);
+      }
+    },
+    [embedded, navigation],
+  );
+
+  const setRowError = useCallback((userId: string, message: string | null) => {
+    setRowErrors((prev) => {
+      const next = { ...prev };
+      if (message === null) {
+        delete next[userId];
+      } else {
+        next[userId] = message;
+      }
+      return next;
+    });
+  }, []);
+
+  const meQuery = useQuery<MeResponse, ApiError>({
+    queryKey: ['me'],
+    queryFn: () => apiRequest<MeResponse>('GET', '/me'),
+  });
+
+  const ownUserId = meQuery.data?.user.id;
+
+  const profileQuery = useQuery<ProfileDTO, ApiError>({
+    queryKey: ['profile', ownUserId ?? null],
+    enabled: ownUserId !== undefined,
+    queryFn: () =>
+      apiRequest<ProfileDTO>('GET', `/users/${encodeURIComponent(ownUserId!)}/profile`),
+  });
+
+  const friendsQuery = useQuery<FriendsAndRequests, ApiError>({
+    queryKey: ['friends'],
+    queryFn: () => apiRequest<FriendsAndRequests>('GET', '/me/friends'),
+  });
+
+  const removeFriendMutation = useMutation<void, ApiError, string>({
+    mutationFn: async (otherUserId: string) => {
+      await apiRequest<null>('DELETE', `/me/friends/${encodeURIComponent(otherUserId)}`);
+    },
+    onSuccess: (_data, otherUserId) => {
+      setRowError(otherUserId, null);
+      void queryClient.invalidateQueries({ queryKey: ['friends'] });
+    },
+    onError: (err, otherUserId) => {
+      setRowError(otherUserId, friendsErrorMessage(err));
+    },
+  });
+
+  const handleRemoveFriend = useCallback(
+    (friend: { readonly userId: string; readonly displayName: string }) => {
+      Alert.alert(
+        `Remove ${friend.displayName}?`,
+        `Are you sure you want to remove ${friend.displayName} from your crew? You will need to send a new friend request to reconnect.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              setRowError(friend.userId, null);
+              removeFriendMutation.mutate(friend.userId);
+            },
+          },
+        ],
+      );
+    },
+    [removeFriendMutation, setRowError],
+  );
+
+  const logoutMutation = useMutation<void, ApiError, void>({
+    mutationFn: async () => {
+      void invalidatePushRegistration();
+      await apiRequest<null>('POST', '/auth/logout');
+    },
+    onSettled: async () => {
+      await clearToken();
+      queryClient.clear();
+    },
+  });
+
+  const friends = friendsQuery.data?.friends ?? [];
+  const outgoingRequests = friendsQuery.data?.outgoingRequests ?? [];
+  const visibleFriends = friendsExpanded
+    ? friends
+    : friends.slice(0, MAX_INLINE_FRIENDS);
+
+  return (
+    <View style={[styles.content, embedded && styles.embeddedContent]}>
+      {/* Section 1: User Identity (Requirements 7.2, 7.4) */}
+      <View style={styles.section} testID="you-and-crew-identity-section">
+        <SectionLabel>Your Identity</SectionLabel>
+        {profileQuery.isLoading && !profileQuery.data ? (
+          <Card style={styles.loadingCard}>
+            <ActivityIndicator color={t.color.primaryFg} />
+          </Card>
+        ) : profileQuery.data ? (
+          <ProfileIdentityBlock
+            profile={profileQuery.data}
+            isSelf={true}
+          />
+        ) : (
+          <Card style={styles.loadingCard}>
+            <Text style={styles.errorText}>Could not load profile identity.</Text>
+          </Card>
+        )}
+      </View>
+
+      {/* Section 2: Friends & Crew (Requirements 7.2, 7.3, 7.7) */}
+      <View style={styles.section} testID="you-and-crew-friends-section">
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.titleWithBadge}>
+            <SectionLabel>My Friends (Crew)</SectionLabel>
+            {friends.length > 0 ? (
+              <Badge label={String(friends.length)} color={t.color.primaryFg} />
+            ) : null}
+          </View>
+          <Pressable
+            onPress={() => navigateTarget('FriendsSearch')}
+            accessibilityRole="button"
+            accessibilityLabel="Add friends"
+            testID="find-friends-button"
+            hitSlop={8}
+          >
+            <Text style={styles.addFriendsLink}>+ Add Friends</Text>
+          </Pressable>
+        </View>
+
+        {friendsQuery.isLoading && !friendsQuery.data ? (
+          <Card style={styles.loadingCard}>
+            <ActivityIndicator color={t.color.primaryFg} />
+          </Card>
+        ) : friends.length === 0 && outgoingRequests.length === 0 ? (
+          <EmptyState
+            icon="people-outline"
+            title="No friends yet"
+            body="Tap Find Friends to connect with your crew."
+            testID="friends-empty"
+          />
+        ) : (
+          <View style={styles.friendsList}>
+            {visibleFriends.map((friend) => {
+              const err = rowErrors[friend.userId];
+              const isRemoving =
+                removeFriendMutation.isPending &&
+                removeFriendMutation.variables === friend.userId;
+
+              return (
+                <Card
+                  key={friend.userId}
+                  style={styles.friendCard}
+                  testID={`friends-friend-${friend.userId}`}
+                  onPress={() =>
+                    navigateTarget('FriendProfile', {
+                      friendId: friend.userId,
+                      displayName: friend.displayName,
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${friend.displayName}'s profile`}
+                >
+                  <View style={styles.friendRow}>
+                    <View style={styles.friendInfo}>
+                      <View style={styles.friendAvatarWrap}>
+                        {isAvatarPresetId(friend.avatarPreset) ? (
+                          renderAvatarPreset(friend.avatarPreset, 36)
+                        ) : (
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarPlaceholderText}>
+                              {friend.displayName.slice(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.friendDetails}>
+                        <Text style={styles.friendName} numberOfLines={1}>
+                          {friend.displayName}
+                        </Text>
+                        <Text style={styles.friendSubtitle}>Friend</Text>
+                        {err ? <Text style={styles.errorText}>{err}</Text> : null}
+                      </View>
+                    </View>
+
+                    <View style={styles.friendActions}>
+                      <Pressable
+                        style={styles.compareBtn}
+                        onPress={() =>
+                          navigateTarget('FriendProfile', {
+                            friendId: friend.userId,
+                            displayName: friend.displayName,
+                            initialSection: 'comparison',
+                          })
+                        }
+                        testID={`compare-friend-${friend.userId}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Compare progress with ${friend.displayName}`}
+                      >
+                        <Text style={styles.compareBtnText}>Compare Stats</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.removeIconBtn}
+                        disabled={isRemoving}
+                        onPress={() => handleRemoveFriend(friend)}
+                        testID={`remove-friend-${friend.userId}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${friend.displayName}`}
+                        hitSlop={6}
+                      >
+                        <Ionicons
+                          name="person-remove-outline"
+                          size={16}
+                          color={
+                            isRemoving
+                              ? t.color.textSecondary
+                              : t.color.danger
+                          }
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+
+            {friends.length > MAX_INLINE_FRIENDS && (
+              <Pressable
+                style={styles.toggleExpandBtn}
+                onPress={() => setFriendsExpanded((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  friendsExpanded
+                    ? 'Show fewer friends'
+                    : `Show all ${friends.length} friends`
+                }
+                testID="toggle-all-friends-button"
+              >
+                <Text style={styles.toggleExpandText}>
+                  {friendsExpanded
+                    ? 'Show fewer'
+                    : `Show all (${friends.length}) friends \u25BE`}
+                </Text>
+              </Pressable>
+            )}
+
+            {outgoingRequests.length > 0 ? (
+              <View style={styles.outgoingSection}>
+                <Text style={styles.outgoingTitle}>
+                  Outgoing Requests ({outgoingRequests.length})
+                </Text>
+                {outgoingRequests.map((req) => (
+                  <Card
+                    key={req.id}
+                    style={styles.outgoingCard}
+                    testID={`outgoing-request-${req.id}`}
+                  >
+                    <Text style={styles.outgoingName}>{req.otherDisplayName}</Text>
+                    <Badge label="Pending" color={t.color.warning} />
+                  </Card>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        )}
+      </View>
+
+      {/* Section 3: Shared Items Entry Points (Requirement 7.2) */}
+      <View style={styles.section}>
+        <SectionLabel>Shared Items</SectionLabel>
+        <View style={styles.cardsRow}>
+          <Card style={styles.halfCard} testID="you-and-crew-inbox-card">
+            <Pressable
+              style={styles.cardPressable}
+              onPress={() => navigateTarget('Inbox')}
+              accessibilityRole="button"
+              accessibilityLabel="View Shared Inbox"
+              testID="inbox-entry-button"
+            >
+              <View style={[styles.iconCircle, { backgroundColor: shareIcon.inboxBg }]}>
+                <Ionicons name="mail-outline" size={24} color={shareIcon.inboxFg} />
+              </View>
+              <Text style={styles.cardTitle}>Share Inbox</Text>
+              <Text style={styles.cardSubtitle} numberOfLines={2}>
+                Shared with you
+              </Text>
+            </Pressable>
+          </Card>
+
+          <Card style={styles.halfCard} testID="you-and-crew-sent-card">
+            <Pressable
+              style={styles.cardPressable}
+              onPress={() => navigateTarget('Sent')}
+              accessibilityRole="button"
+              accessibilityLabel="View Sent Shares"
+              testID="sent-entry-button"
+            >
+              <View style={[styles.iconCircle, { backgroundColor: shareIcon.sentBg }]}>
+                <Ionicons name="paper-plane-outline" size={24} color={shareIcon.sentFg} />
+              </View>
+              <Text style={styles.cardTitle}>Sent Shares</Text>
+              <Text style={styles.cardSubtitle} numberOfLines={2}>
+                Sent by you
+              </Text>
+            </Pressable>
+          </Card>
+        </View>
+      </View>
+
+      {/* Section 4: Preferences & Security (Requirements 7.2, 7.6) */}
+      <View
+        style={styles.section}
+        testID="you-and-crew-settings-section"
+      >
+        <SectionLabel>Preferences &amp; Security</SectionLabel>
+
+        <Card style={styles.settingsCard}>
+          <View style={styles.settingsCardHeader}>
+            <Ionicons name="notifications-outline" size={16} color={t.color.primaryFg} />
+            <Text style={styles.settingsTitle}>Push Notifications</Text>
+          </View>
+          <PushNotificationPreferenceControl />
+        </Card>
+
+        <Card style={styles.settingsCard}>
+          <View style={styles.settingsCardHeader}>
+            <Ionicons name="color-palette-outline" size={16} color={t.color.primaryFg} />
+            <Text style={styles.settingsTitle}>Appearance</Text>
+          </View>
+          <AppearancePreferenceControl />
+        </Card>
+
+        <Card style={styles.settingsCard}>
+          <View style={styles.settingsCardHeader}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={t.color.primaryFg} />
+            <Text style={styles.settingsTitle}>Account Security</Text>
+          </View>
+          <ChangePasswordControl />
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-app-tour-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => navigation.navigate('OnboardingFlow', { mode: 'replay' })}
+            accessibilityRole="button"
+            accessibilityLabel="App Tour and Quick Guide"
+            testID="settings-app-tour-btn"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="compass-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>App Tour &amp; Quick Guide</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-onboarding-preview-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => navigation.navigate('OnboardingFlow', { mode: 'preview' })}
+            accessibilityRole="button"
+            accessibilityLabel="Preview Full Onboarding"
+            testID="settings-onboarding-preview-btn"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="sparkles-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Preview Full Onboarding</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        {!onboardingData?.showStarterChecklist ? (
+          <Card style={styles.settingsCard} testID="you-and-crew-preview-starter-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => {
+                if (previewStarterChecklist) {
+                  dismissStarterChecklistPreview();
+                } else {
+                  enableStarterChecklistPreview();
+                  navigation.navigate('MainTabs', { screen: 'Home' });
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                previewStarterChecklist
+                  ? 'Hide Start Here preview on Home'
+                  : 'Preview Start Here checklist on Home'
+              }
+              testID="settings-preview-starter-btn"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="checkbox-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>
+                  {previewStarterChecklist
+                    ? 'Hide Start Here Preview on Home'
+                    : 'Preview Start Here Checklist on Home'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+        ) : null}
+
+        {canRestoreStarterChecklist ? (
+          <Card style={styles.settingsCard} testID="you-and-crew-restore-starter-card">
+            <Pressable
+              style={styles.blockedUsersRow}
+              onPress={() => updateOnboarding.mutate({ restoreStarterChecklist: true })}
+              disabled={updateOnboarding.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Show Start Here checklist on Home"
+              testID="settings-restore-starter-btn"
+            >
+              <View style={styles.settingsCardHeader}>
+                <Ionicons name="sparkles-outline" size={16} color={t.color.primaryFg} />
+                <Text style={styles.settingsTitle}>Show Start Here checklist on Home</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+            </Pressable>
+          </Card>
+        ) : null}
+
+        <Card style={styles.settingsCard} testID="you-and-crew-blocked-users-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => navigateTarget('BlockedUsers')}
+            accessibilityRole="button"
+            accessibilityLabel="Manage Blocked Users"
+            testID="blocked-users-entry-button"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="ban-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Blocked Users</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-terms-of-service-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => {
+              const url = TERMS_OF_SERVICE_URL || `${resolveBaseUrl()}/terms`;
+              void Linking.openURL(url);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Terms of Service"
+            testID="terms-of-service-entry-button"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="newspaper-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Terms of Service</Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-privacy-policy-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => {
+              const url = PRIVACY_POLICY_URL || `${resolveBaseUrl()}/privacy`;
+              void Linking.openURL(url);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy Policy"
+            testID="privacy-policy-entry-button"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="document-text-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Privacy Policy</Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-feedback-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => navigateTarget('Feedback')}
+            accessibilityRole="button"
+            accessibilityLabel="Report a problem or send feedback"
+            accessibilityHint="Opens a form to send a bug report or an idea"
+            testID="feedback-entry-button"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="chatbubbles-outline" size={16} color={t.color.primaryFg} />
+              <Text style={styles.settingsTitle}>Report a problem or send feedback</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <Card style={styles.settingsCard} testID="you-and-crew-delete-account-card">
+          <Pressable
+            style={styles.blockedUsersRow}
+            onPress={() => navigateTarget('DeleteAccount')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+            accessibilityHint="Starts the steps to permanently delete your account"
+            testID="delete-account-entry-button"
+          >
+            <View style={styles.settingsCardHeader}>
+              <Ionicons name="trash-outline" size={16} color={t.color.danger} />
+              <Text style={styles.deleteAccountTitle}>Delete account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </Card>
+
+        <View style={styles.logoutBlock}>
+          <SecondaryButton
+            label={logoutMutation.isPending ? 'Logging out\u2026' : 'Log out'}
+            icon="log-out-outline"
+            tone="danger"
+            onPress={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            testID="you-and-crew-logout"
+          />
+        </View>
+
+        <View style={styles.disclaimerBlock} testID="you-and-crew-legal-disclaimer">
+          <Text style={styles.disclaimerText}>
+            Disney World Tracker is an independent, unofficial companion application and is not
+            affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney
+            trademarks, service marks, and trade names are the property of their respective owners.
+            Wait times, park schedules, and price estimates are for personal planning purposes.
+            Lightning Lane prices powered by ThemeParks.wiki. Ticket and menu prices come from
+            Disney's website, are shown before tax, may be out of date or estimated, and final
+            checkout prices may differ; discounted, military, reseller, and special-offer prices
+            are not covered.
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const useStyles = makeStyles((t) => ({
+  content: {
+    padding: t.spacing.md,
+    gap: t.spacing.xl,
+    paddingBottom: t.spacing.xxl,
+  },
+  embeddedContent: {
+    padding: 0,
+  },
+  section: {
+    gap: t.spacing.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  titleWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+  },
+  addFriendsLink: {
+    ...t.typography.button,
+    fontSize: 13,
+    color: t.color.primaryFg,
+    fontWeight: '700',
+  },
+  cardsRow: {
+    flexDirection: 'row',
+    gap: t.spacing.md,
+  },
+  halfCard: {
+    flex: 1,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  cardPressable: {
+    padding: t.spacing.md,
+    alignItems: 'center',
+    gap: t.spacing.xs,
+    width: '100%',
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cardTitle: {
+    ...t.typography.title,
+    fontSize: 16,
+    color: t.color.textPrimary,
+  },
+  cardSubtitle: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+  },
+  loadingCard: {
+    padding: t.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  friendsList: {
+    gap: t.spacing.xs,
+  },
+  friendCard: {
+    padding: 10,
+    backgroundColor: t.color.surfaceAlt,
+    borderRadius: 12,
+  },
+  friendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  friendInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: t.spacing.sm,
+  },
+  friendAvatarWrap: {
+    marginRight: t.spacing.sm,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: t.color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  avatarPlaceholderText: {
+    ...t.typography.subtitle,
+    color: t.color.primaryFg,
+  },
+  friendDetails: {
+    flex: 1,
+  },
+  friendName: {
+    ...t.typography.title,
+    fontSize: 14,
+    color: t.color.textPrimary,
+  },
+  friendSubtitle: {
+    ...t.typography.meta,
+    fontSize: 11,
+    color: t.color.textSecondary,
+    marginTop: 1,
+  },
+  friendActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compareBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: t.color.surface,
+    borderWidth: 1,
+    borderColor: t.color.border,
+  },
+  compareBtnText: {
+    ...t.typography.meta,
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  removeIconBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: withAlpha(t.color.danger, 0.08),
+  },
+  toggleExpandBtn: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleExpandText: {
+    ...t.typography.meta,
+    fontSize: 12,
+    fontWeight: '700',
+    color: t.color.primaryFg,
+  },
+  outgoingSection: {
+    marginTop: t.spacing.md,
+    gap: t.spacing.xs,
+  },
+  outgoingTitle: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    textTransform: 'uppercase',
+  },
+  outgoingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: t.spacing.md,
+  },
+  outgoingName: {
+    ...t.typography.body,
+    fontWeight: '600',
+    color: t.color.textPrimary,
+  },
+  settingsCard: {
+    padding: 14,
+    gap: t.spacing.sm,
+  },
+  settingsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  settingsTitle: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    fontSize: 12,
+    color: t.color.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  blockedUsersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: t.spacing.xs,
+  },
+  deleteAccountTitle: {
+    ...t.typography.meta,
+    fontWeight: '700',
+    fontSize: 12,
+    color: t.color.danger,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  logoutBlock: {
+    marginTop: t.spacing.sm,
+  },
+  errorText: {
+    ...t.typography.meta,
+    color: t.color.danger,
+  },
+  disclaimerBlock: {
+    paddingHorizontal: t.spacing.sm,
+    paddingTop: t.spacing.md,
+    alignItems: 'center',
+  },
+  disclaimerText: {
+    ...t.typography.meta,
+    color: t.color.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+}));

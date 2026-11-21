@@ -32,6 +32,7 @@ import { HOME_FAVORITES } from './HomeFavoritesSection.palette';
 export interface HomeFavoritesSectionProps {
   readonly onSelectExperience?: (experienceId: string) => void;
   readonly onSeeAll?: () => void;
+  readonly onExplore?: () => void;
 }
 
 /** The parks that carry their own accent on a favorite pill; others fall back to primary. */
@@ -188,8 +189,10 @@ function FavoritePill({
 export default function HomeFavoritesSection({
   onSelectExperience,
   onSeeAll,
+  onExplore,
 }: HomeFavoritesSectionProps): JSX.Element | null {
   const styles = useStyles();
+  const t = useAppTheme();
   const pal = usePalette(HOME_FAVORITES);
   const favoritedIds = useFavoritedExperiences();
 
@@ -298,6 +301,39 @@ export default function HomeFavoritesSection({
     });
   }, [favoritedExperiences, liveEntriesByExperienceId]);
 
+  if (favoritedIds.size === 0) {
+    return (
+      <View style={styles.container} testID="home-favorites-section">
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="heart" size={17} color={pal.sectionHeart} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Your Favorites</Text>
+          </View>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Pressable
+            style={({ pressed }) => [styles.emptyCard, pressed && styles.pillPressed]}
+            onPress={onExplore}
+            accessibilityRole="button"
+            accessibilityLabel="Watch your favorite waits. Favorite any ride in Explore to pin its live wait time here"
+            testID="home-favorites-empty"
+          >
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="heart-outline" size={20} color={pal.sectionHeart} />
+            </View>
+            <View style={styles.emptyTextCol}>
+              <Text style={styles.emptyTitle}>Watch your favorite waits</Text>
+              <Text style={styles.emptyBody}>
+                Favorite any ride in Explore to pin its live wait time here
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   if (visibleFavorites.length === 0) {
     return null;
   }
@@ -380,6 +416,39 @@ const useStyles = makeStyles((t) => ({
   emptyContainer: {
     paddingHorizontal: t.spacing.lg,
     paddingVertical: t.spacing.xs,
+  },
+  emptyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.sm,
+    backgroundColor: t.color.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: HOME_FAVORITES[t.scheme].pillBorder,
+    padding: 12,
+  },
+  emptyIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: t.color.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  emptyTitle: {
+    ...t.typography.body,
+    fontSize: 14,
+    fontWeight: '700',
+    color: t.color.textPrimary,
+  },
+  emptyBody: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: t.color.textSecondary,
   },
   pill: {
     width: 178,

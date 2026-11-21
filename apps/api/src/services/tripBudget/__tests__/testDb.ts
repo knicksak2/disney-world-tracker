@@ -162,6 +162,7 @@ export function setupTestDb(): { db: IMemoryDb; pool: DbPool } {
   applyMigration(db, '0020_wait_time_intelligence.sql');
   applyMigration(db, '0023_trip_touring_hours.sql');
   applyMigration(db, '0060_trip_expenses.sql');
+  applyMigration(db, '0079_settlement_notes.sql');
   applyMigration(db, '0013_avatar_presets.sql');
   applyMigration(db, '0064_account_deletion.sql');
   applyMigration(db, '0065_ticket_prices.sql');

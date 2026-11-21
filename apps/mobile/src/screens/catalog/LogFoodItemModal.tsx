@@ -46,6 +46,7 @@ import { usePhotoConfig, useUploadPhotos } from '../../photos/api';
 import { PhotoPickerSheet } from '../../photos/PhotoPickerSheet';
 import type { PreparedImages } from '../../photos/imagePrep';
 import { invalidateAfterLog } from '../logging/invalidateAfterLog';
+import { onboardingKeys } from '../onboarding/onboardingApi';
 
 export interface LogFoodItemModalProps {
   /** The food item being logged. */
@@ -343,6 +344,7 @@ export default function LogFoodItemModal({
       await queryClient.invalidateQueries({
         queryKey: ['food-item-logs', foodItem!.id],
       });
+      void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
       if (foodItem?.experienceId) {
         await queryClient.invalidateQueries({
           queryKey: ['experience-food-items', foodItem.experienceId],

@@ -91,6 +91,7 @@ import { tripDetailKeys } from './tripDetailQueryKeys';
 import { tripPlannedListKeys } from './TripPlannedListScreen';
 import { tripFeedKeys } from './TripFeedScreen';
 import { bookingKeys, fetchPackingList } from './bookingTimelineApi';
+import { deriveTripSummaryBannerCopy } from './tripSummaryCopy';
 
 /** Wire shape of `GET /me`: the caller's identity (to gate the Edit control). */
 interface MeResponse {
@@ -786,6 +787,18 @@ export default function TripDetailScreen({
   const latestFeedItem = feedItems[0] ?? null;
   const latestFeedHeadline = latestFeedItem ? formatFeedPreviewHeadline(latestFeedItem) : null;
   const favsCount = Array.isArray(groupFavsQuery.data?.items) ? groupFavsQuery.data.items.length : 0;
+  const summaryCopy = deriveTripSummaryBannerCopy({
+    status: trip.status,
+    completedCount,
+    plannedCount: plannedItems.length,
+    feedCount: feedItems.length,
+  });
+  const isCompactUpcomingSaved =
+    trip.status === 'upcoming' &&
+    completedCount === 0 &&
+    favsCount === 0 &&
+    trip.foodLists.length === 0 &&
+    trip.experienceLists.length === 0;
 
   return (
     <ScreenContainer>
@@ -1125,7 +1138,12 @@ export default function TripDetailScreen({
                 <View style={[styles.groupedIconWrap, { backgroundColor: `${t.color.primaryLight}18` }]}>
                   <Ionicons name="calendar-outline" size={17} color={t.color.primaryLight} />
                 </View>
-                <Text style={styles.groupedRowTitle}>Schedule Builder</Text>
+                <View style={styles.groupedRowTextCol}>
+                  <Text style={styles.groupedRowTitle}>Schedule Builder</Text>
+                  <Text style={styles.groupedRowSub} numberOfLines={1}>
+                    Order &amp; optimize each park day
+                  </Text>
+                </View>
               </View>
               <View style={styles.groupedRowRight}>
                 <Text style={styles.groupedRowMeta}>
@@ -1146,7 +1164,12 @@ export default function TripDetailScreen({
                 <View style={[styles.groupedIconWrap, { backgroundColor: `${t.color.primary}18` }]}>
                   <Ionicons name="list-outline" size={17} color={t.color.primaryFg} />
                 </View>
-                <Text style={styles.groupedRowTitle}>Planned List</Text>
+                <View style={styles.groupedRowTextCol}>
+                  <Text style={styles.groupedRowTitle}>Planned List</Text>
+                  <Text style={styles.groupedRowSub} numberOfLines={1}>
+                    Must-do rides &amp; dining wish list
+                  </Text>
+                </View>
               </View>
               <View style={styles.groupedRowRight}>
                 <Text style={styles.groupedRowMeta}>{plannedItems.length} items</Text>
@@ -1165,7 +1188,12 @@ export default function TripDetailScreen({
                 <View style={[styles.groupedIconWrap, { backgroundColor: withAlpha(t.color.accent, 0.2) }]}>
                   <Ionicons name="ticket-outline" size={17} color={tile.reservationsIcon} />
                 </View>
-                <Text style={styles.groupedRowTitle}>Reservations</Text>
+                <View style={styles.groupedRowTextCol}>
+                  <Text style={styles.groupedRowTitle}>Reservations</Text>
+                  <Text style={styles.groupedRowSub} numberOfLines={1}>
+                    Booked dining &amp; Lightning Lanes
+                  </Text>
+                </View>
               </View>
               <View style={styles.groupedRowRight}>
                 <Text style={styles.groupedRowMeta}>{reservations.length} booked</Text>
@@ -1305,7 +1333,10 @@ export default function TripDetailScreen({
             <Text style={styles.sectionEyebrow}>SAVED LISTS &amp; FAVORITES</Text>
             <Text style={styles.sectionHeaderMeta}>Shared with crew</Text>
           </View>
-          <View style={styles.savedCard}>
+          <View
+            style={[styles.savedCard, isCompactUpcomingSaved && styles.savedCardCompact]}
+            testID={isCompactUpcomingSaved ? 'trip-detail-saved-empty-compact' : undefined}
+          >
             <View style={styles.segmentedBar}>
               <Pressable
                 style={[styles.segTab, savedListTab === 'favs' && styles.segTabActive]}
@@ -1346,6 +1377,7 @@ export default function TripDetailScreen({
               <GroupFavoritesSection
                 tripId={tripId}
                 embedded
+                compactEmpty={isCompactUpcomingSaved}
                 onSelectExperience={(experienceId) => {
                   (navigation as any).navigate('ExperienceDetail', { experienceId });
                 }}
@@ -1548,20 +1580,16 @@ export default function TripDetailScreen({
                 <View style={styles.summaryTextWrap}>
                   <View style={styles.summaryEyebrowRow}>
                     <Text style={styles.summaryEyebrowText}>
-                      {completedCount > 0
-                        ? 'VACATION MILESTONE'
-                        : 'VACATION UNDERWAY'}
+                      {summaryCopy.eyebrow}
                       {dayText ? ` · ${dayText.toUpperCase()}` : ''}
                     </Text>
                     <Text style={styles.summaryRecapLink}>Recap ›</Text>
                   </View>
                   <Text style={styles.summaryTitle}>
-                    {completedCount > 0
-                      ? `${completedCount} of ${plannedItems.length} completed!`
-                      : `${feedItems.length} magical moment${feedItems.length === 1 ? '' : 's'} logged!`}
+                    {summaryCopy.title}
                   </Text>
                   <Text style={styles.summarySub}>
-                    Tap to see live group superlatives &amp; top ratings ›
+                    {summaryCopy.subtitle}
                   </Text>
                 </View>
                 <Ionicons
@@ -1754,6 +1782,10 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  groupedRowTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
   groupedRowTitle: {
     fontSize: 13.5,
     fontWeight: '700',
@@ -1911,6 +1943,11 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.color.border,
     padding: 10,
     gap: 10,
+  },
+  savedCardCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   segmentedBar: {
     flexDirection: 'row',

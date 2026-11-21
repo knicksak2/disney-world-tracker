@@ -553,7 +553,7 @@ describe('Trip_Members screen', () => {
     renderMembers(makeNavigation());
 
     expect(await screen.findByTestId('trip-guest-g-kid')).toBeTruthy();
-    expect(screen.getByText('Guest · Child (3–9) · Sponsored by Ariel')).toBeTruthy();
+    expect(await screen.findByText('Guest · Child (3–9) · Sponsored by Ariel')).toBeTruthy();
     expect(screen.getByText('Guest · Adult (10+) · Sponsored by Ariel')).toBeTruthy();
 
     await flushPending();

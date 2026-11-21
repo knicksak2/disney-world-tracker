@@ -80,6 +80,7 @@ import {
   SecondaryButton,
 } from '../../theme/components';
 import { calculateCountdownDays } from '../home/countdown';
+import { onboardingKeys } from '../onboarding/onboardingApi';
 import { TRIP_ROW, TRIPS_MODAL } from './TripsListScreen.palette';
 
 // ---------------------------------------------------------------------------
@@ -323,6 +324,7 @@ export default function TripsListScreen({ navigation }: Props): JSX.Element {
       setCreateVisible(false);
       resetCreateForm();
       void queryClient.invalidateQueries({ queryKey: tripsListKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
       // R16.6-style hand-off: drop the User straight into the new Trip's hub.
       navigation.navigate('TripDetail', { tripId: created.id });
     },

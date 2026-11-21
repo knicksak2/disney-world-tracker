@@ -223,6 +223,10 @@ export const DISPOSITIONS: readonly DispositionEntry[] = [
   e('user_feedback', 'user_id', 'delete', 4, ['id'], 'cascade', false, {
     note: 'In-app feedback. Message, optional device info and optional contact email go with the account.',
   }),
+  // -- first-run onboarding (first-run-onboarding spec) ------------------------------------------
+  e('user_onboarding', 'user_id', 'delete', 4, ['user_id'], 'cascade', false, {
+    note: 'First-run onboarding intent, selected park, and starter-checklist dismissal state.',
+  }),
 ];
 
 /**

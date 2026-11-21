@@ -186,6 +186,7 @@ describe('TripBalancesScreen', () => {
           createdByUserId: USER_1,
           amountCents: body.amountCents,
           date: body.date,
+          note: body.note ?? null,
           createdAt: new Date().toISOString(),
         };
         // Update balances
@@ -320,6 +321,70 @@ describe('TripBalancesScreen', () => {
     });
   });
 
+  it('records a settlement with an optional note (Req 7.9)', async () => {
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('open-record-settlement-btn')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('open-record-settlement-btn'));
+
+    await waitFor(() => expect(screen.getByTestId('settlement-modal')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId(`settlement-payer-chip-${USER_2}`));
+    fireEvent.press(screen.getByTestId(`settlement-recipient-chip-${USER_1}`));
+    fireEvent.changeText(screen.getByTestId('settlement-amount-input'), '15.00');
+    fireEvent.changeText(screen.getByTestId('settlement-note-input'), '  Venmo for dining  ');
+
+    fireEvent.press(screen.getByTestId('submit-settlement-button'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('POST', `/trips/${TRIP_ID}/settlements`, {
+        payerId: USER_2,
+        recipientId: USER_1,
+        amountCents: 1500,
+        date: expect.any(String),
+        note: 'Venmo for dining',
+      });
+    });
+  });
+
+  it('renders settlement note in member drill-down and pairwise breakdown modals when present (Req 7.9)', async () => {
+    const drilldownWithNote: BalanceDrillDownEntryDTO[] = [
+      DRILLDOWN_FIXTURE[0]!,
+      {
+        ...DRILLDOWN_FIXTURE[1]!,
+        note: 'Zelle transfer',
+      },
+    ];
+    apiRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/me') return { user: { id: USER_1 } } as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}`) return TRIP_FIXTURE as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/members`) return MEMBERS_FIXTURE as any;
+      if (method === 'GET' && path === `/trips/${TRIP_ID}/balances`) return balancesData as any;
+      if (method === 'GET' && path.includes('/drilldown')) return drilldownWithNote as any;
+      throw new Error(`Unhandled request: ${method} ${path}`);
+    });
+
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId(`net-balance-card-${USER_1}`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId(`net-balance-card-${USER_1}`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('drilldown-entry-note-1')).toHaveTextContent('Zelle transfer');
+    });
+
+    fireEvent.press(screen.getByTestId('close-drilldown-modal'));
+    await waitFor(() => expect(screen.queryByTestId('balance-drilldown-modal')).toBeNull());
+
+    fireEvent.press(screen.getByTestId('toggle-pairwise-balances'));
+    await waitFor(() => expect(screen.getByTestId('open-pairwise-breakdown-0')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('open-pairwise-breakdown-0'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pairwise-entry-note-1')).toHaveTextContent('Zelle transfer');
+    });
+  });
+
   it('tapping pairwise card opens pairwise breakdown modal showing mutual transactions (Req 6.7)', async () => {
     renderScreen();
 
@@ -408,6 +473,7 @@ describe('TripBalancesScreen', () => {
       expect(flat(chip).backgroundColor).toBe(darkTheme.color.primary);
       expect(flat(within(chip).getByText('Ariel')).color).toBe(darkTheme.color.textOnPrimary);
       expect(screen.getByTestId('settlement-amount-input').props.keyboardAppearance).toBe('dark');
+      expect(screen.getByTestId('settlement-note-input').props.keyboardAppearance).toBe('dark');
     });
 
     // Feature: dark-mode polish pass (Requirement 9.12): active toggle reads stronger than idle.

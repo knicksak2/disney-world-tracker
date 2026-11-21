@@ -30,6 +30,8 @@ import HiddenMickeysScreen from '../screens/mickeys/HiddenMickeysScreen';
 import HiddenMickeyDetailScreen from '../screens/mickeys/HiddenMickeyDetailScreen';
 import SubmitMickeyScreen from '../screens/mickeys/SubmitMickeyScreen';
 import MySubmissionsScreen from '../screens/mickeys/MySubmissionsScreen';
+import OnboardingFlowScreen from '../screens/onboarding/OnboardingFlowScreen';
+import OnboardingGate from '../screens/onboarding/OnboardingGate';
 import AccountRestoredNotice from '../components/AccountRestoredNotice';
 import { useClaimablePinsBadge } from '../components/pins/useClaimablePinsBadge';
 import MagicFab from '../screens/quickAction/MagicFab';
@@ -112,6 +114,7 @@ export type RootStackParamList = {
   HiddenMickeyDetail: { mickeyId: string };
   SubmitMickey?: { experienceId?: string };
   MySubmissions: undefined;
+  OnboardingFlow: { mode: 'firstRun' | 'replay' | 'preview' };
 };
 
 declare global {
@@ -153,6 +156,69 @@ const useMainTabsStyles = makeStyles((t) => ({
   root: { flex: 1, backgroundColor: t.color.background },
 }));
 
+export type TabResetTarget = 'Explore' | 'Trips' | 'Collection';
+
+export interface TabPressNavigationLike {
+  navigate: (...args: any[]) => void;
+  getState?: () =>
+    | {
+        readonly routes?: ReadonlyArray<{
+          readonly name: string;
+          readonly params?: unknown;
+          readonly state?: {
+            readonly routes?: ReadonlyArray<{ readonly name: string }>;
+          };
+        }>;
+      }
+    | undefined;
+}
+
+/**
+ * Ensures tapping a bottom tab always lands and stays on that tab's home screen.
+ *
+ * Calls `preventDefault()` so React Navigation's `createNativeStackNavigator` does
+ * not queue a competing `popToTop()` on the next frame, and resets the nested stack
+ * cleanly when it was first initialized onto a deep non-home route (such as `PinBoard`
+ * or `LiveWaits`).
+ */
+export function handleTabPressToHome(
+  navigation: TabPressNavigationLike,
+  tabName: TabResetTarget,
+  homeScreen: string,
+  event?: { readonly preventDefault?: () => void },
+): void {
+  event?.preventDefault?.();
+
+  const tabRoute = navigation
+    .getState?.()
+    ?.routes?.find((r) => r.name === tabName);
+  const childRoutes = tabRoute?.state?.routes;
+  const tabParams = tabRoute?.params as
+    | { readonly screen?: unknown; readonly initial?: unknown }
+    | undefined;
+
+  const hasNonHomeRoot =
+    (Array.isArray(childRoutes) &&
+      childRoutes.length > 0 &&
+      childRoutes[0]?.name !== homeScreen) ||
+    (childRoutes == null &&
+      typeof tabParams?.screen === 'string' &&
+      tabParams.screen !== homeScreen &&
+      tabParams.initial !== false);
+
+  if (hasNonHomeRoot) {
+    navigation.navigate(tabName, {
+      state: {
+        index: 0,
+        routes: [{ name: homeScreen }],
+      },
+    });
+    return;
+  }
+
+  navigation.navigate(tabName, { screen: homeScreen });
+}
+
 /**
  * `AccountRestoredNotice` is the FIRST child so the one-time "welcome back"
  * banner (account-deletion R4.9) sits above the tab content; it renders nothing
@@ -166,6 +232,7 @@ export function MainTabsNavigator(): JSX.Element {
   return (
     <View style={styles.root} testID="main-tabs-root">
       <AccountRestoredNotice />
+      <OnboardingGate />
       <MainTabs.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
@@ -185,9 +252,7 @@ export function MainTabsNavigator(): JSX.Element {
           component={ExploreStack}
           options={{ headerShown: false }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
-              navigation.navigate('Explore', { screen: 'CatalogList' });
-            },
+            tabPress: (e) => handleTabPressToHome(navigation, 'Explore', 'CatalogList', e),
           })}
         />
         <MainTabs.Screen
@@ -207,9 +272,7 @@ export function MainTabsNavigator(): JSX.Element {
           component={TripsStack}
           options={{ headerShown: false }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
-              navigation.navigate('Trips', { screen: 'TripsList' });
-            },
+            tabPress: (e) => handleTabPressToHome(navigation, 'Trips', 'TripsList', e),
           })}
         />
         <MainTabs.Screen
@@ -231,9 +294,7 @@ export function MainTabsNavigator(): JSX.Element {
               : {}),
           }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
-              navigation.navigate('Collection', { screen: 'CollectionHome' });
-            },
+            tabPress: (e) => handleTabPressToHome(navigation, 'Collection', 'CollectionHome', e),
           })}
         />
       </MainTabs.Navigator>
@@ -318,6 +379,11 @@ function RootStackNavigator(): JSX.Element {
         name="MySubmissions"
         component={MySubmissionsScreen}
         options={{ headerShown: false }}
+      />
+      <RootStack.Screen
+        name="OnboardingFlow"
+        component={OnboardingFlowScreen}
+        options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }}
       />
     </RootStack.Navigator>
   );

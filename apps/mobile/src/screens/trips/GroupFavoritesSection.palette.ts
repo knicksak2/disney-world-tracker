@@ -9,9 +9,12 @@ export const GROUP_FAVORITES = definePalette({
     heart: '#e11d48',
     // Count pill background (S).
     countBg: '#ffe4e6',
+    // Modal sheet backdrop scrim.
+    overlayBg: 'rgba(0, 0, 0, 0.45)',
   },
   dark: {
     heart: DARK_TONAL.red.fg,
     countBg: DARK_TONAL.red.tint,
+    overlayBg: 'rgba(0, 0, 0, 0.70)',
   },
 });

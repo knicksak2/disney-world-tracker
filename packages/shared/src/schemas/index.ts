@@ -285,4 +285,16 @@ export type {
   AliasFileEntry,
 } from './Mickeys.js';
 
+// First-run onboarding schemas
+export {
+  onboardingIntentSchema,
+  onboardingParkSchema,
+  onboardingPatchSchema,
+  quickCompletionsInputSchema,
+} from './Onboarding.js';
+export type {
+  OnboardingPatchInput,
+  QuickCompletionsInput,
+} from './Onboarding.js';
+
 

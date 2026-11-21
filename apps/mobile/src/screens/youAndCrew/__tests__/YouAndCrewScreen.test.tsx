@@ -125,11 +125,51 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
 
   function setupApi(overrides?: {
     friendsResponse?: typeof FRIENDS_RESPONSE;
+    onboardingResponse?: {
+      readonly needsOnboarding: boolean;
+      readonly completedAt: string | null;
+      readonly skippedAt: string | null;
+      readonly initialIntent: 'plan' | 'in_park' | 'track_history' | 'explore' | null;
+      readonly selectedPark: 'Magic Kingdom' | 'EPCOT' | 'Hollywood Studios' | 'Animal Kingdom' | null;
+      readonly starterChecklistDismissedAt: string | null;
+      readonly checklist: {
+        readonly loggedFirstExperience: boolean;
+        readonly starredFavorite: boolean;
+        readonly hasTrip: boolean;
+        readonly claimedPin: boolean;
+      };
+      readonly showStarterChecklist: boolean;
+    };
   }): void {
     const friendsData = overrides?.friendsResponse ?? FRIENDS_RESPONSE;
+    const onboardingData = overrides?.onboardingResponse ?? {
+      needsOnboarding: false,
+      completedAt: '2026-11-18T00:00:00Z',
+      skippedAt: null,
+      initialIntent: 'explore',
+      selectedPark: null,
+      starterChecklistDismissedAt: null,
+      checklist: {
+        loggedFirstExperience: true,
+        starredFavorite: false,
+        hasTrip: false,
+        claimedPin: false,
+      },
+      showStarterChecklist: true,
+    };
     apiRequestMock.mockImplementation(async (method: string, path: string) => {
       if (path === '/me') {
         return ME_RESPONSE as never;
+      }
+      if (path === '/me/onboarding' && method === 'GET') {
+        return onboardingData as never;
+      }
+      if (path === '/me/onboarding' && method === 'PATCH') {
+        return {
+          ...onboardingData,
+          starterChecklistDismissedAt: null,
+          showStarterChecklist: true,
+        } as never;
       }
       if (path === '/users/u1/profile') {
         return PROFILE_RESPONSE as never;
@@ -175,6 +215,12 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
             <Stack.Screen
               name="Sent"
               component={() => <DummyScreen testID="screen-sent" />}
+            />
+            <Stack.Screen
+              name={'OnboardingFlow' as any}
+              component={({ route }: any) => (
+                <DummyScreen testID={`screen-onboarding-${route?.params?.mode ?? 'none'}`} />
+              )}
             />
           </Stack.Navigator>
         </NavigationContainer>
@@ -511,6 +557,49 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
       expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
       expect(flat(screen.getByText('Donald Duck')).color).toBe(darkTheme.color.textPrimary);
       expect(iconNamed('mail-outline')?.props.color).toBe(SHARE_ICON.dark.inboxFg);
+    });
+  });
+
+  describe('Onboarding tour & checklist restore settings (Requirements 4.6, 5.5)', () => {
+    it('opens OnboardingFlow in replay mode when tapping App Tour & Quick Guide', async () => {
+      setupApi();
+      renderScreen();
+
+      const btn = await screen.findByTestId('settings-app-tour-btn');
+      expect(screen.queryByTestId('settings-restore-starter-btn')).toBeNull();
+
+      fireEvent.press(btn);
+      expect(await screen.findByTestId('screen-onboarding-replay')).toBeTruthy();
+    });
+
+    it('renders and triggers restore Start Here checklist row when dismissed with incomplete items', async () => {
+      setupApi({
+        onboardingResponse: {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'plan',
+          selectedPark: null,
+          starterChecklistDismissedAt: '2026-11-18T01:00:00Z',
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: false,
+            hasTrip: true,
+            claimedPin: false,
+          },
+          showStarterChecklist: false,
+        },
+      });
+      renderScreen();
+
+      const restoreBtn = await screen.findByTestId('settings-restore-starter-btn');
+      fireEvent.press(restoreBtn);
+
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/onboarding', {
+          restoreStarterChecklist: true,
+        });
+      });
     });
   });
 });

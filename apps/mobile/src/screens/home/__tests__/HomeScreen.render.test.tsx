@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { apiRequest } from '../../../api/client';
 import { useClaimablePinsBadge } from '../../../components/pins/useClaimablePinsBadge';
 import * as navigationRefModule from '../../../navigation/navigationRef';
+import { onboardingKeys } from '../../onboarding/onboardingApi';
 import { getTodayWDW } from '../../trips/TripScheduleScreen';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import { darkTheme } from '../../../theme/theme';
@@ -64,6 +65,23 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         return {
           user: { id: 'user-1', email: 'nicholas@example.com' },
           profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: true,
+            hasTrip: true,
+            claimedPin: true,
+          },
+          showStarterChecklist: false,
         };
       }
       if (path === '/home/highest-rated') {
@@ -254,6 +272,23 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
           profile: { displayName: 'Nicholas K', avatarPreset: null },
         };
       }
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: true,
+            hasTrip: true,
+            claimedPin: true,
+          },
+          showStarterChecklist: false,
+        };
+      }
       if (path === '/me/trips') {
         return [];
       }
@@ -292,11 +327,16 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Trips');
   });
 
-  it('renders the 2x2 Theme Parks grid and handles park navigation to DestinationScreen (Requirement 2.7)', async () => {
+  it('renders the compact 4-park Live Park Pulse strip and handles park navigation (Requirement 6.1)', async () => {
     renderHome();
 
     expect(await screen.findByTestId('home-theme-parks-section')).toBeTruthy();
-    expect(screen.getByTestId('home-parks-grid')).toBeTruthy();
+    expect(screen.getByTestId('home-parks-pulse-strip')).toBeTruthy();
+    expect(screen.getByText('Live Park Pulse')).toBeTruthy();
+    expect(screen.getByText('MK')).toBeTruthy();
+    expect(screen.getByText('EP')).toBeTruthy();
+    expect(screen.getByText('HS')).toBeTruthy();
+    expect(screen.getByText('AK')).toBeTruthy();
 
     const mkCard = await screen.findByTestId('home-park-tile-Magic Kingdom');
     expect(mkCard).toBeTruthy();
@@ -309,25 +349,134 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     });
   });
 
-  it('opens experience picker for Log Ride and Log Food from quick log row (Requirement 2.7)', async () => {
+  it('removes duplicate quick-log buttons on Home while StartHereCard opens the ride picker and dismisses optimistically (Requirements 5.1–5.3, 6.2)', async () => {
+    let dismissed = false;
+    mockApiRequest.mockImplementation(async (method: string, path: string) => {
+      if (path === '/me/onboarding' && method === 'GET') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: dismissed ? '2026-11-18T01:00:00Z' : null,
+          checklist: {
+            loggedFirstExperience: false,
+            starredFavorite: false,
+            hasTrip: false,
+            claimedPin: false,
+          },
+          showStarterChecklist: !dismissed,
+        };
+      }
+      if (path === '/me/onboarding' && method === 'PATCH') {
+        dismissed = true;
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: '2026-11-18T01:00:00Z',
+          checklist: {
+            loggedFirstExperience: false,
+            starredFavorite: false,
+            hasTrip: false,
+            claimedPin: false,
+          },
+          showStarterChecklist: false,
+        };
+      }
+      if (path === '/me') {
+        return {
+          user: { id: 'user-1', email: 'nicholas@example.com' },
+          profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/home/highest-rated') return { entries: [] };
+      if (path === '/me/trips') return [];
+      if (path === '/catalog') return { experiences: [] };
+      if (path.startsWith('/parks/')) {
+        return { park: 'Magic Kingdom', entries: [], retrievedAt: new Date().toISOString(), stale: false };
+      }
+      if (path.startsWith('/crowd-calendar')) return { days: [] };
+      if (path === '/weather/current') return { current: null };
+      return {};
+    });
+
     renderHome();
 
-    // Log Ride
-    const logRideBtn = await screen.findByTestId('home-quick-log-ride');
-    fireEvent.press(logRideBtn);
+    expect(await screen.findByTestId('home-start-here-card')).toBeTruthy();
+    expect(screen.getByTestId('start-here-progress')).toHaveTextContent('0 of 4');
+    expect(screen.queryByTestId('home-quick-log-ride')).toBeNull();
+    expect(screen.queryByTestId('home-quick-log-food')).toBeNull();
 
+    fireEvent.press(screen.getByTestId('start-here-item-log'));
     expect(await screen.findByTestId('home-experience-picker-modal')).toBeTruthy();
     expect(screen.getByTestId('home-picker-title')).toHaveTextContent('Select Attraction to Log');
-
-    // Close picker
     fireEvent.press(screen.getByTestId('home-picker-close-btn'));
 
-    // Log Food
-    const logFoodBtn = screen.getByTestId('home-quick-log-food');
-    fireEvent.press(logFoodBtn);
+    fireEvent.press(screen.getByTestId('start-here-dismiss-btn'));
+    await waitFor(() => {
+      expect(mockApiRequest).toHaveBeenCalledWith('PATCH', '/me/onboarding', {
+        dismissStarterChecklist: true,
+      });
+      expect(screen.queryByTestId('home-start-here-card')).toBeNull();
+    });
+  });
 
-    expect(await screen.findByTestId('home-experience-picker-modal')).toBeTruthy();
-    expect(screen.getByTestId('home-picker-title')).toHaveTextContent('Select Restaurant to Log Food');
+  it('checks off Favorite a ride when onboardingKeys.me is invalidated after favoriting elsewhere', async () => {
+    let hasFavorited = false;
+    mockApiRequest.mockImplementation(async (method: string, path: string) => {
+      if (path === '/me/onboarding' && method === 'GET') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: false,
+            starredFavorite: hasFavorited,
+            hasTrip: false,
+            claimedPin: false,
+          },
+          showStarterChecklist: true,
+        };
+      }
+      if (path === '/me') {
+        return {
+          user: { id: 'user-1', email: 'nicholas@example.com' },
+          profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/home/highest-rated') return { entries: [] };
+      if (path === '/me/trips') return [];
+      if (path === '/catalog') return { experiences: [] };
+      if (path.startsWith('/parks/')) {
+        return { park: 'Magic Kingdom', entries: [], retrievedAt: new Date().toISOString(), stale: false };
+      }
+      if (path.startsWith('/crowd-calendar')) return { days: [] };
+      if (path === '/weather/current') return { current: null };
+      return {};
+    });
+
+    renderHome();
+
+    expect(await screen.findByTestId('start-here-item-favorite')).toBeTruthy();
+    expect(screen.getByTestId('start-here-progress')).toHaveTextContent('0 of 4');
+    expect(screen.getByTestId('start-here-item-favorite').props.accessibilityState?.checked).toBe(false);
+
+    hasFavorited = true;
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('start-here-progress')).toHaveTextContent('1 of 4');
+      expect(screen.getByTestId('start-here-item-favorite').props.accessibilityState?.checked).toBe(true);
+    });
   });
 
   it('navigates to LiveWaits from the Parks section header link (Requirement 2.7)', async () => {
@@ -343,7 +492,7 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     }));
   });
 
-  it('renders Hidden Mickeys scavenger hunt card below quick logging and navigates on tap', async () => {
+  it('keeps Hidden Mickeys scavenger hunt banner off HomeScreen even when enabled (Requirement 6.3)', async () => {
     queryClient.setQueryData(['mickeys', 'config'], {
       enabled: true,
       submissionEnabled: true,
@@ -358,40 +507,26 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
 
     renderHome();
 
-    const card = await screen.findByTestId('home-hidden-mickeys-card');
-    expect(card).toBeTruthy();
-    expect(screen.getByText('HIDDEN MICKEYS HUNT')).toBeTruthy();
-    expect(await screen.findByText('12 of 50 Found')).toBeTruthy();
-
-    fireEvent.press(card);
-    expect(mockNavigate).toHaveBeenCalledWith('HiddenMickeys', expect.objectContaining({
-      initialPark: 'Magic Kingdom',
-    }));
-  });
-
-  it('hides Hidden Mickeys scavenger hunt card when config is disabled', async () => {
-    queryClient.setQueryData(['mickeys', 'config'], {
-      enabled: false,
-      submissionEnabled: false,
-      textScreenEnabled: false,
-      maxClues: 3,
-    });
-
-    renderHome();
-
     await screen.findByTestId('home-theme-parks-section');
     expect(screen.queryByTestId('home-hidden-mickeys-card')).toBeNull();
+    expect(screen.queryByText('HIDDEN MICKEYS HUNT')).toBeNull();
   });
 
-  it('omits Your Favorites section completely when zero favorited experiences exist (Requirements 2.7, 8.3a)', async () => {
+  it('renders a compact 1-card empty Favorites prompt that navigates to Explore when zero favorites exist (Requirement 6.4)', async () => {
     renderHome();
 
-    // The Parks section is rendered
-    expect(await screen.findByTestId('home-theme-parks-section')).toBeTruthy();
+    expect(await screen.findByTestId('home-favorites-section')).toBeTruthy();
+    const emptyCard = await screen.findByTestId('home-favorites-empty');
+    expect(emptyCard).toBeTruthy();
+    expect(screen.getByText('Watch your favorite waits')).toBeTruthy();
+    expect(
+      screen.getByText('Favorite any ride in Explore to pin its live wait time here'),
+    ).toBeTruthy();
 
-    // Your Favorites is completely omitted (no header, no empty state)
-    expect(screen.queryByTestId('home-favorites-section')).toBeNull();
-    expect(screen.queryByTestId('home-favorites-empty')).toBeNull();
+    fireEvent.press(emptyCard);
+    expect(mockNavigate).toHaveBeenCalledWith('Explore', {
+      screen: 'CatalogList',
+    });
   });
 
   it('renders favorited attractions with live wait status and navigates to ExperienceDetail on tap (Requirements 8.2, 8.4)', async () => {
@@ -400,6 +535,23 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         return {
           user: { id: 'user-1', email: 'nicholas@example.com' },
           profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: true,
+            hasTrip: true,
+            claimedPin: true,
+          },
+          showStarterChecklist: false,
         };
       }
       if (path === '/me/favorites') {
@@ -454,6 +606,23 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         return {
           user: { id: 'user-1', email: 'nicholas@example.com' },
           profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: true,
+            hasTrip: true,
+            claimedPin: true,
+          },
+          showStarterChecklist: false,
         };
       }
       if (path === '/me/favorites') {
@@ -552,6 +721,23 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         return {
           user: { id: 'user-1', email: 'nicholas@example.com' },
           profile: { displayName: 'Nicholas K', avatarPreset: null },
+        };
+      }
+      if (path === '/me/onboarding') {
+        return {
+          needsOnboarding: false,
+          completedAt: '2026-11-18T00:00:00Z',
+          skippedAt: null,
+          initialIntent: 'explore',
+          selectedPark: null,
+          starterChecklistDismissedAt: null,
+          checklist: {
+            loggedFirstExperience: true,
+            starredFavorite: true,
+            hasTrip: true,
+            claimedPin: true,
+          },
+          showStarterChecklist: false,
         };
       }
       if (path === '/catalog') {
@@ -993,14 +1179,10 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
       expect(flat(screen.getByTestId('home-hero-title')).color).toBe(darkTheme.color.textOnPrimary);
       expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe(darkTheme.color.accent);
       expect(flat(screen.getByText('See All')).color).toBe(darkTheme.color.primaryFg);
-      const logBtn = flat(await screen.findByTestId('home-quick-log-ride'));
-      expect(logBtn.borderColor).toBe(HOME_THEME_PARKS.dark.logBtnBorder);
-      expect(logBtn.shadowColor).toBe(HOME_THEME_PARKS.dark.logBtnShadow);
-      expect(logBtn.backgroundColor).toBe(HOME_THEME_PARKS.dark.logBtnBg);
 
       const parkCard = flat(await screen.findByTestId('home-park-tile-Magic Kingdom'));
       expect(parkCard.borderColor).toBe(HOME_THEME_PARKS.dark.tileBorder);
-      expect(flat(screen.getByText('Animal Kingdom'))).toBeTruthy();
+      expect(flat(screen.getByText('AK'))).toBeTruthy();
 
       const upcoming = flat(await screen.findByTestId('home-upcoming-trip-card'));
       expect(upcoming.borderColor).toBe(UPCOMING_TRIP_HERO.dark.cardBorder);
@@ -1009,7 +1191,7 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
         UPCOMING_TRIP_HERO.dark.countdownBg,
       );
 
-      expect(flat(screen.getByText('The Parks')).color).toBe(darkTheme.color.textPrimary);
+      expect(flat(screen.getByText('Live Park Pulse')).color).toBe(darkTheme.color.textPrimary);
     });
 
     it('renders a favorite pill status badge with its dark palette values', async () => {
@@ -1050,11 +1232,8 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
       expect(paintedAncestor(header).backgroundColor).toBe('#f5f2fb');
       expect(flat(screen.getByTestId('home-hero-title')).color).toBe('#ffffff');
       expect(flat(screen.getByTestId('home-greeting-pill')).color).toBe('#f6c343');
-      const logBtn = flat(await screen.findByTestId('home-quick-log-ride'));
-      expect(logBtn.borderColor).toBe('#e9d5ff');
-      expect(logBtn.shadowColor).toBe('#5b2a86');
       expect(flat(await screen.findByTestId('home-park-tile-Magic Kingdom'))).toBeTruthy();
-      expect(flat(screen.getByText('The Parks'))).toBeTruthy();
+      expect(flat(screen.getByText('Live Park Pulse'))).toBeTruthy();
       expect(flat(await screen.findByText('UPCOMING VACATION')).color).toBe('#7e57c2');
     });
   });
