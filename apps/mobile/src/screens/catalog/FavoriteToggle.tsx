@@ -16,6 +16,7 @@ import type { FavoritesResponseDTO } from '@dwt/shared';
 import { ApiError, apiRequest } from '../../api/client';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { onboardingKeys } from '../onboarding/onboardingApi';
+import { markStarterChecklistPreviewDone } from '../onboarding/onboardingPreviewStore';
 import { HEART } from './FavoriteToggle.palette';
 import { FAVORITES_QUERY_KEY } from './useFavoritedExperiences';
 
@@ -63,9 +64,12 @@ export default function FavoriteToggle({
         queryClient.setQueryData(FAVORITES_QUERY_KEY, context.previous);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, err, next) => {
       void queryClient.invalidateQueries({ queryKey: FAVORITES_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+      if (!err && next) {
+        markStarterChecklistPreviewDone('starredFavorite');
+      }
     },
   });
 

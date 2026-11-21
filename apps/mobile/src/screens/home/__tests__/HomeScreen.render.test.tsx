@@ -16,6 +16,7 @@ import { apiRequest } from '../../../api/client';
 import { useClaimablePinsBadge } from '../../../components/pins/useClaimablePinsBadge';
 import * as navigationRefModule from '../../../navigation/navigationRef';
 import { onboardingKeys } from '../../onboarding/onboardingApi';
+import { useOnboardingPreviewStore } from '../../onboarding/onboardingPreviewStore';
 import { getTodayWDW } from '../../trips/TripScheduleScreen';
 import { resetTestScheme, setTestScheme } from '../../../test/themeTestUtils';
 import { darkTheme } from '../../../theme/theme';
@@ -477,6 +478,24 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
       expect(screen.getByTestId('start-here-progress')).toHaveTextContent('1 of 4');
       expect(screen.getByTestId('start-here-item-favorite').props.accessibilityState?.checked).toBe(true);
     });
+  });
+
+  it('checks off Claim your first pin on tap when StartHereCard is in preview mode', async () => {
+    useOnboardingPreviewStore.getState().enableStarterChecklistPreview();
+    renderHome();
+
+    const pinItem = await screen.findByTestId('start-here-item-pin');
+    expect(screen.getByTestId('start-here-progress')).toHaveTextContent('0 of 4');
+
+    fireEvent.press(pinItem);
+
+    expect(mockNavigate).toHaveBeenCalledWith('Collection', { screen: 'PinBoard' });
+    expect(useOnboardingPreviewStore.getState().previewChecklist.claimedPin).toBe(true);
+    await waitFor(() => {
+      expect(screen.getByTestId('start-here-progress')).toHaveTextContent('1 of 4');
+    });
+
+    useOnboardingPreviewStore.getState().dismissStarterChecklistPreview();
   });
 
   it('navigates to LiveWaits from the Parks section header link (Requirement 2.7)', async () => {

@@ -4,7 +4,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import { apiRequest } from '../../../api/client';
 import OnboardingFlowScreen from '../OnboardingFlowScreen';
-import { useOnboardingPreviewStore } from '../onboardingPreviewStore';
+import {
+  markStarterChecklistPreviewDone,
+  useOnboardingPreviewStore,
+} from '../onboardingPreviewStore';
 
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
@@ -367,10 +370,15 @@ describe('OnboardingFlowScreen', () => {
     expect(mockApiRequest).not.toHaveBeenCalledWith('PATCH', expect.anything(), expect.anything());
     expect(navigation.navigate).toHaveBeenCalledWith('MainTabs', { screen: 'Home' });
 
-    // StartHereCard preview flag is turned on and can be dismissed and re-enabled
+    // StartHereCard preview flag is turned on and can be checked off, dismissed, and re-enabled
     expect(useOnboardingPreviewStore.getState().previewStarterChecklist).toBe(true);
     expect(useOnboardingPreviewStore.getState().previewChecklist.loggedFirstExperience).toBe(true);
-    useOnboardingPreviewStore.getState().dismissStarterChecklistPreview();
+    markStarterChecklistPreviewDone('starredFavorite');
+    expect(useOnboardingPreviewStore.getState().previewChecklist.starredFavorite).toBe(true);
+    markStarterChecklistPreviewDone('hasTrip');
+    expect(useOnboardingPreviewStore.getState().previewStarterChecklist).toBe(true);
+    markStarterChecklistPreviewDone('claimedPin');
+    // Completing the 4th item auto-hides the preview card just like real new-user behavior
     expect(useOnboardingPreviewStore.getState().previewStarterChecklist).toBe(false);
     useOnboardingPreviewStore.getState().enableStarterChecklistPreview();
     expect(useOnboardingPreviewStore.getState().previewStarterChecklist).toBe(true);

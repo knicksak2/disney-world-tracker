@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { onboardingKeys } from '../onboarding/onboardingApi';
+import { markStarterChecklistPreviewDone } from '../onboarding/onboardingPreviewStore';
 import { tripFeedKeys } from '../trips/tripFeedQueryKeys';
 import { tripsListKeys } from '../trips/TripsListScreen';
 
@@ -51,6 +52,7 @@ export function invalidateAfterLog(
   void qc.invalidateQueries({
     queryKey: onboardingKeys.me,
   });
+  markStarterChecklistPreviewDone('loggedFirstExperience');
 
   // Trip-scoped queries (when linked to a Trip)
   if (a.tripId !== null) {

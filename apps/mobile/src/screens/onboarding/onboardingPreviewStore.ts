@@ -12,6 +12,7 @@ interface OnboardingPreviewState {
   readonly previewStarterChecklist: boolean;
   readonly previewChecklist: StarterChecklistDTO;
   enableStarterChecklistPreview: (overrides?: Partial<StarterChecklistDTO>) => void;
+  markPreviewItemDone: (item: keyof StarterChecklistDTO) => void;
   dismissStarterChecklistPreview: () => void;
 }
 
@@ -31,9 +32,32 @@ export const useOnboardingPreviewStore = create<OnboardingPreviewState>((set) =>
         ...overrides,
       },
     }),
+  markPreviewItemDone: (item) =>
+    set((state) => {
+      if (!state.previewStarterChecklist) return state;
+      const nextChecklist: StarterChecklistDTO = {
+        ...state.previewChecklist,
+        [item]: true,
+      };
+      const allDone =
+        nextChecklist.loggedFirstExperience &&
+        nextChecklist.starredFavorite &&
+        nextChecklist.hasTrip &&
+        nextChecklist.claimedPin;
+      return {
+        previewStarterChecklist: !allDone,
+        previewChecklist: nextChecklist,
+      };
+    }),
   dismissStarterChecklistPreview: () =>
     set({
       previewStarterChecklist: false,
       previewChecklist: DEFAULT_PREVIEW_CHECKLIST,
     }),
 }));
+
+export function markStarterChecklistPreviewDone(
+  item: keyof StarterChecklistDTO,
+): void {
+  useOnboardingPreviewStore.getState().markPreviewItemDone(item);
+}

@@ -58,6 +58,7 @@ import { TIER_COLOR, TIER_LABEL, TRACK_LABEL } from '../../components/pins/pinTi
 import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { onboardingKeys } from '../onboarding/onboardingApi';
+import { markStarterChecklistPreviewDone } from '../onboarding/onboardingPreviewStore';
 import { PIN_BOARD } from './PinBoardScreen.palette';
 import {
   Chip,
@@ -166,6 +167,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
           : prev,
       );
       void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+      markStarterChecklistPreviewDone('claimedPin');
       // The claim landed — this is the celebratory moment (R20, R23.7): a
       // heavier impact immediately, then a success notification shortly
       // after, distinct from a single flat haptic.
@@ -339,6 +341,7 @@ export default function PinBoardScreen({ navigation, route }: Props): JSX.Elemen
         };
       });
       void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+      markStarterChecklistPreviewDone('claimedPin');
     });
   }
 

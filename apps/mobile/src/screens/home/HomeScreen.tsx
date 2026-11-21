@@ -89,7 +89,10 @@ import {
   useOnboardingState,
   useUpdateOnboarding,
 } from '../onboarding/onboardingApi';
-import { useOnboardingPreviewStore } from '../onboarding/onboardingPreviewStore';
+import {
+  markStarterChecklistPreviewDone,
+  useOnboardingPreviewStore,
+} from '../onboarding/onboardingPreviewStore';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -415,9 +418,15 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             onCreateTrip={() =>
               navigation.navigate('Trips', { screen: 'TripsList' } as any)
             }
-            onClaimPin={() =>
-              navigation.navigate('Collection', { screen: 'PinBoard' } as any)
-            }
+            onClaimPin={() => {
+              const isRealStarterChecklist =
+                onboardingQuery.data?.showStarterChecklist === true &&
+                onboardingQuery.data?.checklist != null;
+              if (!isRealStarterChecklist) {
+                markStarterChecklistPreviewDone('claimedPin');
+              }
+              navigation.navigate('Collection', { screen: 'PinBoard' } as any);
+            }}
             onDismiss={() => {
               const isRealStarterChecklist =
                 onboardingQuery.data?.showStarterChecklist === true &&
@@ -606,6 +615,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             setSelectedRideExperience(null);
             void queryClient.invalidateQueries({ queryKey: ['home'] });
             void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+            markStarterChecklistPreviewDone('loggedFirstExperience');
           }}
         />
       )}
@@ -643,6 +653,7 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
             setSelectedDiningExperience(null);
             void queryClient.invalidateQueries({ queryKey: ['home'] });
             void queryClient.invalidateQueries({ queryKey: onboardingKeys.me });
+            markStarterChecklistPreviewDone('loggedFirstExperience');
           }}
         />
       )}
