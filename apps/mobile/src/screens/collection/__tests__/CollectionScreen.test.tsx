@@ -289,6 +289,26 @@ describe('CollectionScreen — Disney Vault Hub', () => {
     expect(screen.queryByTestId('collection-stats-view')).toBeNull();
   });
 
+  it('defers Food, Lists, and Stats API queries until their sub-tabs are activated', () => {
+    renderCollection();
+
+    const initialPaths = mockApiRequest.mock.calls.map((c) => c[1]);
+    expect(initialPaths).not.toContain('/me/food-item-logs');
+    expect(initialPaths).not.toContain('/me/food-lists/collection');
+    expect(initialPaths).not.toContain('/me/experience-lists/collection');
+    expect(initialPaths).not.toContain('/me/stats?percentile=true');
+
+    fireEvent.press(screen.getByTestId('vault-seg-food'));
+    expect(mockApiRequest).toHaveBeenCalledWith('GET', '/me/food-item-logs');
+
+    fireEvent.press(screen.getByTestId('vault-seg-lists'));
+    expect(mockApiRequest).toHaveBeenCalledWith('GET', '/me/food-lists/collection');
+    expect(mockApiRequest).toHaveBeenCalledWith('GET', '/me/experience-lists/collection');
+
+    fireEvent.press(screen.getByTestId('vault-seg-stats'));
+    expect(mockApiRequest).toHaveBeenCalledWith('GET', '/me/stats?percentile=true');
+  });
+
   it('switches between Pins, Food, Lists, and Stats views when segmented tabs are pressed', () => {
     renderCollection();
 

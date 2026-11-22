@@ -158,4 +158,28 @@ describe('getDaySnapshot same-day live wait substitution (R4.5, Property 18)', (
     const actual = await waitAtHour(service, NOW, 12);
     expect(actual).not.toBe(55);
   });
+
+  it('caps concurrent live-wait lookups at 4 in flight for large day snapshots', async () => {
+    const ids = Array.from({ length: 10 }, (_, i) => `exp-${i}`);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const liveService: ThemeParksLiveService = {
+      getLiveDetail: vi.fn(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return {
+          liveDetail: { status: 'Operating' as const, waitMinutes: 42, showtimes: [], operatingHours: [], diningAvailability: [] },
+          retrievedAt: NOW.toISOString(),
+          stale: false,
+        };
+      }),
+    };
+    const service = makeService({ liveService });
+    const snapshot = await service.getDaySnapshot(ids, 'Animal Kingdom', NOW);
+    expect(Object.keys(snapshot)).toHaveLength(10);
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
 });

@@ -730,6 +730,37 @@ describe('HomeScreen (Requirements 2.1–2.5)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-jungle' });
   });
 
+  it('renders a null-park Resort leaderboard entry with a Resort label fallback', async () => {
+    const baseImpl = mockApiRequest.getMockImplementation()!;
+    mockApiRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      if (path === '/home/highest-rated') {
+        return {
+          entries: [
+            {
+              experienceId: 'exp-sanaa',
+              name: 'Sanaa',
+              park: null,
+              category: 'Restaurant',
+              value: 9.6,
+              count: 14,
+            },
+          ],
+        };
+      }
+      return baseImpl(method as never, path, body);
+    });
+
+    renderHome();
+
+    const row = await screen.findByTestId('home-leaderboard-row-exp-sanaa');
+    expect(row).toBeTruthy();
+    expect(screen.getByText('Sanaa')).toBeTruthy();
+    expect(screen.getByText('Resort')).toBeTruthy();
+
+    fireEvent.press(row);
+    expect(mockNavigate).toHaveBeenCalledWith('ExperienceDetail', { experienceId: 'exp-sanaa' });
+  });
+
   it('renders active vacation mode with dynamic header, Day Plan dock tile, and active park highlighting', async () => {
     const navigateToTripScheduleSpy = jest
       .spyOn(navigationRefModule, 'navigateToTripSchedule')

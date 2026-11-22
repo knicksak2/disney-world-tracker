@@ -20,7 +20,7 @@ export const leaderboardEntrySchema = z
   .object({
     experienceId: uuidSchema,
     name: z.string().min(1).max(200),
-    park: parkSchema,
+    park: parkSchema.nullable(),
     category: experienceCategorySchema,
     /** Aggregate mean rendered to one decimal place; in `[1.0, 10.0]`. */
     value: z.number().min(1).max(10),

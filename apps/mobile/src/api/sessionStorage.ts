@@ -22,6 +22,19 @@ import * as SecureStore from 'expo-secure-store';
  */
 export const SESSION_TOKEN_KEY = 'dwt.session.token';
 
+// In-memory cache of the bearer token so every HTTP request does not cross the
+// native expo-secure-store bridge. `undefined` means "not yet loaded from
+// SecureStore"; `null` means "confirmed absent".
+let cachedToken: string | null | undefined = undefined;
+
+/**
+ * Reset the in-memory token cache. Intended for tests that manipulate the
+ * mocked SecureStore directly without going through set/clear helpers.
+ */
+export function resetSessionTokenCacheForTests(): void {
+  cachedToken = undefined;
+}
+
 /**
  * Persist the bearer session token in SecureStore.
  *
@@ -31,6 +44,7 @@ export const SESSION_TOKEN_KEY = 'dwt.session.token';
  */
 export async function setSessionToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
+  cachedToken = token;
 }
 
 /**
@@ -39,7 +53,12 @@ export async function setSessionToken(token: string): Promise<void> {
  * `Authorization: Bearer <token>` header.
  */
 export async function getSessionToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+  if (cachedToken !== undefined) {
+    return cachedToken;
+  }
+  const token = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+  cachedToken = token;
+  return token;
 }
 
 /**
@@ -52,4 +71,5 @@ export async function getSessionToken(): Promise<string | null> {
  */
 export async function clearSessionToken(): Promise<void> {
   await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
+  cachedToken = null;
 }

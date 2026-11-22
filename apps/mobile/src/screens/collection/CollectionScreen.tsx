@@ -185,22 +185,26 @@ export default function CollectionScreen(): JSX.Element {
   const foodLogsQuery = useQuery<readonly FoodItemLogWithContextDTO[]>({
     queryKey: ['me-food-item-logs'],
     queryFn: () => apiRequest<readonly FoodItemLogWithContextDTO[]>('GET', '/me/food-item-logs'),
+    enabled: activeTab === 'food',
   });
 
   const foodListsQuery = useQuery<FoodListCollectionDTO>({
     queryKey: ['food-lists-collection'],
     queryFn: () => apiRequest<FoodListCollectionDTO>('GET', '/me/food-lists/collection'),
+    enabled: activeTab === 'lists',
   });
 
   const experienceListsQuery = useQuery<ExperienceListCollectionDTO>({
     queryKey: ['experience-lists-collection'],
     queryFn: () =>
       apiRequest<ExperienceListCollectionDTO>('GET', '/me/experience-lists/collection'),
+    enabled: activeTab === 'lists',
   });
 
   const statsQuery = useQuery<StatsResponse>({
     queryKey: ['me-stats', { percentile: true }],
     queryFn: () => apiRequest<StatsResponse>('GET', '/me/stats?percentile=true'),
+    enabled: activeTab === 'stats',
   });
 
   // Pin/unpin handlers (Requirement 6 amendment 8c; food-lists Requirement

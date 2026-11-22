@@ -748,4 +748,28 @@ describe('PinRepo (pg-mem)', () => {
     );
     expect(Number(rows.rows[0]?.n)).toBe(1);
   });
+
+  it('reconcileAll loads the active experiences catalog once across all users', async () => {
+    const userA = await seedUser(fx.pool);
+    const userB = await seedUser(fx.pool);
+    const ride = await seedExperience(fx.pool, { ...RIDE, park: 'Magic Kingdom', name: 'Shared' });
+    await complete(fx.pool, userA, ride);
+    await complete(fx.pool, userB, ride);
+
+    let catalogQueries = 0;
+    const origQuery = fx.pool.query.bind(fx.pool);
+    const countingPool = {
+      query: (sql: string, params?: unknown[]) => {
+        if (/FROM\s+experiences\s+WHERE\s+active\s*=\s*TRUE/i.test(sql) && !/JOIN/i.test(sql)) {
+          catalogQueries += 1;
+        }
+        return origQuery(sql, params as never);
+      },
+    } as unknown as DbPool;
+
+    const repo = createPinRepo(countingPool);
+    const res = await repo.reconcileAll();
+    expect(res.usersProcessed).toBe(2);
+    expect(catalogQueries).toBe(1);
+  });
 });

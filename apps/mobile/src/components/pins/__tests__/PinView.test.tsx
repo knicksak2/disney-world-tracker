@@ -102,4 +102,23 @@ describe('PinView', () => {
     fireEvent.press(getByTestId('tap'));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+
+  it('queries AccessibilityInfo.isReduceMotionEnabled only once across multiple animated pins', async () => {
+    const spy = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    spy.mockClear();
+
+    render(
+      <>
+        <PinView pinId={pinIdForTier('prism')} tier="prism" unlocked />
+        <PinView pinId={pinIdForTier('pearl')} tier="pearl" unlocked />
+        <PinView pinId={pinIdForTier('mythic')} tier="mythic" unlocked />
+      </>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
 });

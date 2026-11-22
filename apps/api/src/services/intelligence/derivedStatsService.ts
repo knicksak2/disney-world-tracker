@@ -634,15 +634,22 @@ export function createDerivedStatsService(deps: DerivedStatsServiceDeps): Derive
 
   async function recomputePercentiles() {
     const thirtyDaysAgo = new Date(clock().getTime() - 30 * 24 * 60 * 60 * 1000);
-    const percentiles = await repo.getRecentPercentiles(thirtyDaysAgo);
-    
-    const exps = await repo.getExperiencesWithUpstreamIds();
+    const [percentiles, exps] = await Promise.all([
+      repo.getRecentPercentiles(thirtyDaysAgo),
+      repo.getExperiencesWithUpstreamIds(),
+    ]);
+
     const expIds = exps.map(e => e.id);
     const currentShapes = await repo.getRideShapes(expIds);
-    
+
+    const percentileByKey = new Map<string, (typeof percentiles)[number]>();
+    for (const p of percentiles) {
+      percentileByKey.set(`${p.experience_id}|${p.day_of_week}|${p.hour}`, p);
+    }
+
     const updatedShapes = [];
     for (const s of currentShapes) {
-      const p = percentiles.find(p => p.experience_id === s.experience_id && p.day_of_week === s.day_of_week && p.hour === s.hour);
+      const p = percentileByKey.get(`${s.experience_id}|${s.day_of_week}|${s.hour}`);
       if (p) {
         s.p50_wait = p.p50_wait;
         s.p90_wait = p.p90_wait;

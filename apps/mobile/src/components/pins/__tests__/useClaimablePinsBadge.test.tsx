@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react-native';
+import { act, renderHook } from '@testing-library/react-native';
 
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
@@ -27,9 +27,10 @@ jest.mock('../../../api/client', () => {
   return { __esModule: true, ...actual, apiRequest: jest.fn() };
 });
 
-import { useClaimablePinsBadge } from '../useClaimablePinsBadge';
+import { PIN_BADGE_BACKSTOP_POLL_MS, useClaimablePinsBadge } from '../useClaimablePinsBadge';
 import { apiRequest as mockedApiRequest } from '../../../api/client';
 import { pinBoardKey } from '../../../screens/profile/PinBoardScreen';
+import { useSessionStore } from '../../../state/sessionStore';
 import { PINS, type PinBoardDTO, type UserPinProgressDTO } from '@dwt/shared';
 
 const apiRequestMock = mockedApiRequest as jest.MockedFunction<typeof mockedApiRequest>;
@@ -79,9 +80,10 @@ function renderWithSeededBoard(pins: UserPinProgressDTO[]) {
 }
 
 beforeEach(() => {
+  useSessionStore.setState({ token: null });
   apiRequestMock.mockReset();
-  // The hook's own queryFn would refetch in the background; resolve it to an
-  // empty board so no "data cannot be undefined" warning fires mid-test.
+  // The hook's own queryFn would refetch in the background when authenticated;
+  // resolve it to an empty board so no "data cannot be undefined" warning fires.
   apiRequestMock.mockResolvedValue(boardOf([]) as never);
 });
 
@@ -135,5 +137,54 @@ describe('useClaimablePinsBadge', () => {
     });
     expect(after.current.count).toBe(0);
     expect(after.current.display).toBe('hidden');
+  });
+
+  it('does not fetch /me/pins when unauthenticated (token is null)', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    renderHook(() => useClaimablePinsBadge(), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    expect(apiRequestMock).not.toHaveBeenCalled();
+  });
+
+  it('fetches /me/pins when authenticated (token is set)', () => {
+    useSessionStore.setState({ token: 'session-tok' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    renderHook(() => useClaimablePinsBadge(), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    expect(apiRequestMock).toHaveBeenCalledWith('GET', '/me/pins');
+  });
+
+  it('uses a 5-minute auth-gated backstop poll (does not poll at 60s, refetches at 5m)', async () => {
+    jest.useFakeTimers();
+    try {
+      expect(PIN_BADGE_BACKSTOP_POLL_MS).toBe(5 * 60_000);
+      useSessionStore.setState({ token: 'session-tok' });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+      renderHook(() => useClaimablePinsBadge(), {
+        wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+      });
+
+      // Let the initial fetch + TanStack Query's notifyManager tick settle.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1);
+      });
+      expect(apiRequestMock).toHaveBeenCalledTimes(1);
+
+      // Advance 60s — no refetch yet (old 60s poll is gone).
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60_000);
+      });
+      expect(apiRequestMock).toHaveBeenCalledTimes(1);
+
+      // Advance the remaining 4m (total 5m) — backstop poll fires once.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(4 * 60_000);
+      });
+      expect(apiRequestMock).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

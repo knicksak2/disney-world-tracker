@@ -228,60 +228,95 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
     async getDaySnapshot(experienceIds: string[], park: string, date: Date): Promise<Record<string, WaitSnapshot>> {
       if (experienceIds.length === 0) return {};
       
+      const targetDateStr = date.toISOString().split('T')[0]!;
+      const targetDateEastern = new Date(`${targetDateStr}T12:00:00-04:00`);
+      const dow = targetDateEastern.getDay();
+
       // R15: tier 1 divides the forecast by the season bucket's own embedded
       // crowd level, so `selectTier` needs the RAW (unclamped) ratio — clamping
       // first would distort that quotient. `multiplier` is still derived here
       // for the single-rider projection, which scales a shape directly.
-      const rawForecast = await computeRawForecast(park, date);
+      // Run independent DB & weather reads concurrently.
+      const snapshotClock = clock();
+      const snapshotClockDateStr = wdwToday(snapshotClock);
+      const isTodayWithLive = Boolean(deps.liveService && targetDateStr === snapshotClockDateStr);
+
+      const [
+        rawForecast,
+        shapes,
+        seasons,
+        signals,
+        weatherResult,
+        dailyRows,
+        patternRows,
+        liveResults,
+      ] = await Promise.all([
+        computeRawForecast(park, date),
+        repo.getRideShapes(experienceIds),
+        repo.getSeasonHours(experienceIds),
+        repo.getExperienceSignals(experienceIds),
+        Promise.resolve()
+          .then(() => deps.weatherClient.getWDWWeather())
+          .catch(() => null),
+        Promise.resolve()
+          .then(() => repo.getExperienceDailySignals(experienceIds, new Date(targetDateStr)))
+          .catch(() => []),
+        Promise.resolve()
+          .then(() => repo.getShowTimePatterns(experienceIds, dow))
+          .catch(() => []),
+        isTodayWithLive && deps.liveService
+          ? (async () => {
+              const MAX_LIVE_CONCURRENCY = 4;
+              const results: Array<readonly [string, Awaited<ReturnType<ThemeParksLiveService['getLiveDetail']>> | null]> = [];
+              let cursor = 0;
+              async function worker(): Promise<void> {
+                while (cursor < experienceIds.length) {
+                  const id = experienceIds[cursor++]!;
+                  try {
+                    const live = await deps.liveService!.getLiveDetail(id, snapshotClock);
+                    results.push([id, live] as const);
+                  } catch {
+                    results.push([id, null] as const);
+                  }
+                }
+              }
+              const workerCount = Math.min(MAX_LIVE_CONCURRENCY, experienceIds.length);
+              await Promise.all(Array.from({ length: workerCount }, () => worker()));
+              return results;
+            })()
+          : Promise.resolve([] as ReadonlyArray<readonly [string, null]>),
+      ]);
+
       const multiplier = crowdMultiplier(rawForecast, 1.0);
-      const shapes = await repo.getRideShapes(experienceIds);
-      const seasons = await repo.getSeasonHours(experienceIds);
-      const signals = await repo.getExperienceSignals(experienceIds);
-      
-      const targetDateStr = date.toISOString().split('T')[0]!;
-      const targetDateEastern = new Date(`${targetDateStr}T12:00:00-04:00`);
-      const dow = targetDateEastern.getDay(); 
-      
-      // Fetch forecast weather condition for the target date
-      let forecastCondition: string | undefined;
-      try {
-        const weather = await deps.weatherClient.getWDWWeather();
-        forecastCondition = weather.forecast.find(f => f.date.toISOString().split('T')[0] === targetDateStr)?.condition;
-      } catch (_err) {
-        // proceed without weather if failed
-      }
-      
+
+      // Forecast weather condition for the target date
+      const forecastCondition = weatherResult?.forecast.find(
+        (f) => f.date.toISOString().split('T')[0] === targetDateStr,
+      )?.condition;
+
       // Batch-fetch weather sensitivities for the forecast condition
-      let weatherSensMap = new Map<string, number>();
+      const weatherSensMap = new Map<string, number>();
       if (forecastCondition) {
         const sensRows = await repo.getWeatherSensitivities(experienceIds, forecastCondition);
         for (const row of sensRows) {
           weatherSensMap.set(row.experience_id, row.wait_multiplier);
         }
       }
-      
+
       // Per-date signals (showtimes, Lightning Lane) — populated for near-term/past dates;
       // empty for far-future dates (shows then fall back to typical showtimes).
       const dailyByExp = new Map<string, { showtimes: unknown; ll_price_cents: number | null; ll_available: boolean | null }>();
-      try {
-        const dailyRows = await repo.getExperienceDailySignals(experienceIds, new Date(targetDateStr));
-        for (const d of dailyRows) dailyByExp.set(d.experience_id, d);
-      } catch (_err) {
-        // proceed without per-date signals
-      }
+      for (const d of dailyRows) dailyByExp.set(d.experience_id, d);
 
       // Pattern fallback for typical showtimes when per-date showtimes are absent
       const patternsByExp = new Map<string, ShowTimePatternRow[]>();
-      try {
-        const patternRows = await repo.getShowTimePatterns(experienceIds, dow);
-        for (const p of patternRows) {
-          const list = patternsByExp.get(p.experience_id) ?? [];
-          list.push(p);
-          patternsByExp.set(p.experience_id, list);
-        }
-      } catch (_err) {
-        // proceed without pattern fallback
+      for (const p of patternRows) {
+        const list = patternsByExp.get(p.experience_id) ?? [];
+        list.push(p);
+        patternsByExp.set(p.experience_id, list);
       }
+
+      const liveByExp = new Map(liveResults);
 
       const result: Record<string, WaitSnapshot> = {};
       
@@ -372,24 +407,18 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
         // model-driven, since a live reading says nothing about the future.
         // Best-effort: any Live_Service failure/miss silently falls back to
         // the model value already computed above (mirrors R4.4).
-        const snapshotClockDateStr = wdwToday(clock());
-        if (deps.liveService && targetDateStr === snapshotClockDateStr) {
-          try {
-            const live = await deps.liveService.getLiveDetail(id, clock());
-            if (
-              !live.stale &&
-              live.liveDetail.status === 'Operating' &&
-              typeof live.liveDetail.waitMinutes === 'number'
-            ) {
-              const nowMinutes = wdwMinutesFromMidnight(snapshotClockDateStr, clock().toISOString());
-              const currentHour = Math.floor(nowMinutes / 60);
-              const currentEntry = waits.find((w) => w.hour === currentHour);
-              if (currentEntry) {
-                currentEntry.predictedWaitMinutes = Math.max(0, Math.round(live.liveDetail.waitMinutes));
-              }
-            }
-          } catch (_err) {
-            // Best-effort — fall back to the model value already in `waits`.
+        const live = liveByExp.get(id);
+        if (
+          live &&
+          !live.stale &&
+          live.liveDetail.status === 'Operating' &&
+          typeof live.liveDetail.waitMinutes === 'number'
+        ) {
+          const nowMinutes = wdwMinutesFromMidnight(snapshotClockDateStr, snapshotClock.toISOString());
+          const currentHour = Math.floor(nowMinutes / 60);
+          const currentEntry = waits.find((w) => w.hour === currentHour);
+          if (currentEntry) {
+            currentEntry.predictedWaitMinutes = Math.max(0, Math.round(live.liveDetail.waitMinutes));
           }
         }
 
@@ -549,33 +578,33 @@ export function createPredictionService(deps: PredictionServiceDeps): Prediction
 
       // R6.2: per-park comparison across all 4 theme parks on this date
       const WDW_THEME_PARKS: Park[] = ['Magic Kingdom', 'EPCOT', 'Hollywood Studios', 'Animal Kingdom'];
-      const allParks: ParkCrowdSummary[] = [];
-      for (const p of WDW_THEME_PARKS) {
-        if (p === park) {
-          allParks.push({
-            park: p,
-            forecastIndex: displayLevel(rawForecast),
-            expectedAvgWaitMinutes,
-          });
-        } else {
+      const allParks: ParkCrowdSummary[] = await Promise.all(
+        WDW_THEME_PARKS.map(async (p) => {
+          if (p === park) {
+            return {
+              park: p,
+              forecastIndex: displayLevel(rawForecast),
+              expectedAvgWaitMinutes,
+            };
+          }
           try {
             const pForecast = await computeCalibratedForecast(p, date);
             const pBase = PARK_TYPICAL_STANDBY_MINUTES[p] ?? 30;
             const pWait = Math.round(pBase * crowdMultiplier(pForecast, 1.0));
-            allParks.push({
+            return {
               park: p,
               forecastIndex: displayLevel(pForecast),
               expectedAvgWaitMinutes: pWait,
-            });
+            };
           } catch (_err) {
-            allParks.push({
+            return {
               park: p,
               forecastIndex: 5,
               expectedAvgWaitMinutes: PARK_TYPICAL_STANDBY_MINUTES[p] ?? 30,
-            });
+            };
           }
-        }
-      }
+        }),
+      );
 
       // R10.5: forecast weather for dates within the near-term horizon (~14 days)
       let weather: { tempMaxF: number; tempMinF: number; condition: string; precipProbability?: number } | undefined;

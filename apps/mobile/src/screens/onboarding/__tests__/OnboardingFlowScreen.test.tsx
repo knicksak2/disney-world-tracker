@@ -206,6 +206,7 @@ describe('OnboardingFlowScreen', () => {
   });
 
   it('track_history intent: selects rides, shows First Pin Ready banner, posts quick-completions, and finishes to Home', async () => {
+    const invalidateSpy = jest.spyOn(QueryClient.prototype, 'invalidateQueries');
     mockApiRequest.mockImplementation(async (method: string, path: string) => {
       if (method === 'GET' && path === '/catalog') {
         return { experiences: SAMPLE_RIDES } as never;
@@ -251,6 +252,8 @@ describe('OnboardingFlowScreen', () => {
     });
 
     expect(await screen.findByTestId('onboarding-step3-pin-awarded')).toBeTruthy();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['me', 'pins'] });
+    invalidateSpy.mockRestore();
     expect(screen.getByText('Quick Actions')).toBeTruthy();
     expect(screen.getByTestId('onboarding-fab-icon').props.name).toBe('sparkles');
     expect(screen.queryByText(/MagicFab/i)).toBeNull();

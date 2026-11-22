@@ -16,7 +16,8 @@ import type { ExperienceCategory, Park } from '../enums.js';
 export interface LeaderboardEntryDTO {
   readonly experienceId: string;
   readonly name: string;
-  readonly park: Park;
+  /** Theme park, or `null` for parkless Resort / Disney Springs experiences. */
+  readonly park: Park | null;
   readonly category: ExperienceCategory;
 
   /** Aggregate mean to one decimal place, in `[1.0, 10.0]`. */

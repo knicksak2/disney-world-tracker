@@ -131,6 +131,7 @@ describe('Planned List Completion Sync — migration / schema is unchanged', () 
         // `completion_logged` above so the guard still catches a genuine
         // planned-completion column/state without false-positiving on them.
         .replace(/\bcompletions\b/giu, '')
+        .replace(/\bcompletions_(?:experience_id|user_id)_idx\b/giu, '')
         .replace(/\bcompleted_on\b/giu, '')
         .replace(/\bcompleted_at\b/giu, '')
         // 0064 (account-deletion): the purge ledger's `outcome` column holds the

@@ -448,6 +448,7 @@ describe('LogExperienceSheet', () => {
   });
 
   it('opens PinCelebrationModal when newlyAwardedPinIds is present in response', async () => {
+    const invalidateSpy = jest.spyOn(QueryClient.prototype, 'invalidateQueries');
     renderSheet();
 
     await waitFor(() => {
@@ -462,6 +463,8 @@ describe('LogExperienceSheet', () => {
     await waitFor(() => {
       expect(screen.getByTestId(`pin-celebration-${pinId}`)).toBeTruthy();
     });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['me', 'pins'] });
+    invalidateSpy.mockRestore();
   });
 
   it('shows inline retry when members fail to load and still allows submit', async () => {

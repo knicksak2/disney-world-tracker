@@ -1441,12 +1441,17 @@ export function makeSessionDbAdapter(pool: DbPool): SessionDbAdapter {
       return row ?? null;
     },
     async updateActivity(sessionId, now, absoluteExpiresAt) {
+      // Throttle last_seen_at writes to at most once per 60 seconds so parallel
+      // mobile requests don't serialize on the same sessions row, while still
+      // writing immediately whenever a burst rollover extends absolute_expires_at.
+      const throttleCutoff = new Date(now.getTime() - 60_000);
       await pool.query(
         `UPDATE sessions
             SET last_seen_at = $2,
                 absolute_expires_at = $3
-          WHERE id = $1`,
-        [sessionId, now, absoluteExpiresAt],
+          WHERE id = $1
+            AND (last_seen_at <= $4 OR absolute_expires_at <> $3)`,
+        [sessionId, now, absoluteExpiresAt, throttleCutoff],
       );
     },
   };

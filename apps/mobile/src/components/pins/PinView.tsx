@@ -29,6 +29,60 @@ const SHIMMER_MS: Partial<Record<PinTier, number>> = {
   mythic: 3200, // bespoke capstone sheen
 };
 
+// Shared module-level reduce-motion state so mounting N animated pins only
+// queries AccessibilityInfo.isReduceMotionEnabled() once and shares a single
+// change subscription. Cleans up automatically when the last listener unmounts.
+let cachedReduceMotion: boolean | null = null;
+let reduceMotionRequest: Promise<boolean> | null = null;
+let reduceMotionSubscription: { remove?: () => void } | null = null;
+const reduceMotionListeners = new Set<(value: boolean) => void>();
+
+function subscribeReduceMotion(listener: (value: boolean) => void): () => void {
+  reduceMotionListeners.add(listener);
+  if (cachedReduceMotion !== null) {
+    listener(cachedReduceMotion);
+  } else if (!reduceMotionRequest) {
+    try {
+      const sub = AccessibilityInfo?.addEventListener?.('reduceMotionChanged', (v) => {
+        cachedReduceMotion = !!v;
+        for (const fn of reduceMotionListeners) fn(cachedReduceMotion);
+      });
+      if (sub && typeof sub.remove === 'function') {
+        reduceMotionSubscription = sub;
+      }
+    } catch {
+      // Ignore environments without addEventListener
+    }
+    try {
+      const p = AccessibilityInfo?.isReduceMotionEnabled?.();
+      if (p && typeof (p as Promise<boolean>).then === 'function') {
+        reduceMotionRequest = (p as Promise<boolean>)
+          .then((v) => !!v)
+          .catch(() => false);
+      } else {
+        reduceMotionRequest = Promise.resolve(false);
+      }
+    } catch {
+      reduceMotionRequest = Promise.resolve(false);
+    }
+    void reduceMotionRequest.then((val) => {
+      if (reduceMotionListeners.size === 0) return;
+      cachedReduceMotion = val;
+      for (const fn of reduceMotionListeners) fn(val);
+    });
+  }
+
+  return () => {
+    reduceMotionListeners.delete(listener);
+    if (reduceMotionListeners.size === 0) {
+      reduceMotionSubscription?.remove?.();
+      reduceMotionSubscription = null;
+      cachedReduceMotion = null;
+      reduceMotionRequest = null;
+    }
+  };
+}
+
 export interface PinViewProps {
   /** Pin id used to look up the baked art in `PIN_ART`. */
   readonly pinId?: string;
@@ -92,22 +146,7 @@ export function PinView({
 
   useEffect(() => {
     if (!animates) return undefined;
-    let mounted = true;
-    try {
-      const p = AccessibilityInfo?.isReduceMotionEnabled?.();
-      if (p && typeof (p as Promise<boolean>).then === 'function') {
-        (p as Promise<boolean>)
-          .then((v) => mounted && setReduceMotion(!!v))
-          .catch(() => mounted && setReduceMotion(false));
-      } else if (mounted) {
-        setReduceMotion(false);
-      }
-    } catch {
-      if (mounted) setReduceMotion(false);
-    }
-    return () => {
-      mounted = false;
-    };
+    return subscribeReduceMotion(setReduceMotion);
   }, [animates]);
 
   useEffect(() => {

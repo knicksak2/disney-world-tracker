@@ -32,6 +32,7 @@ import { makeStyles } from '../../theme/makeStyles';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
 import { DESTINATION_VISUALS } from '../catalog/destinationVisuals';
 import { calculateParkWaitAverage } from '../home/pulseCalculations';
+import { pinBoardKey } from '../profile/PinBoardScreen';
 import { tripsListKeys } from '../trips/TripsListScreen';
 import { ONBOARDING_FLOW } from './OnboardingFlowScreen.palette';
 import {
@@ -337,6 +338,9 @@ export default function OnboardingFlowScreen({
           userTz: resolveUserTimeZone(),
         });
         setAwardedPinCount(result.newlyAwardedPinIds.length);
+        if (result.newlyAwardedPinIds.length > 0) {
+          void queryClient.invalidateQueries({ queryKey: pinBoardKey });
+        }
         setStep(3);
       } catch (err) {
         const msg =

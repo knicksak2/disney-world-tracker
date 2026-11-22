@@ -294,7 +294,7 @@ function noopLogger(_event: LeaderboardCacheWriteFailure): void {
 interface LeaderboardRow {
   readonly id: string;
   readonly name: string;
-  readonly park: string;
+  readonly park: string | null;
   readonly category: string;
   readonly value: number;
   readonly count: number;
@@ -304,7 +304,8 @@ interface LeaderboardRow {
  * Run the leaderboard SQL and project rows onto the wire DTO.
  *
  * Filters: `e.active = TRUE` (R11.2 catalog gate) and `ar.count_ratings
- *  >= 3` (R11.2 sample-size gate).
+ *  >= 3` (R11.2 sample-size gate). Resort / Disney Springs experiences
+ * carry `e.park IS NULL` and are admitted alongside theme-park rows.
  *
  * Ordering: `ar.mean_x10 DESC, ar.count_ratings DESC, lower(e.name) ASC`
  * matches R11.3 verbatim. The `aggregate_ratings_leaderboard_idx`
@@ -337,21 +338,28 @@ async function readFromDb(
                lower(e.name) ASC
       LIMIT ${LEADERBOARD_LIMIT}`,
   );
-  return result.rows.map(rowToDto);
+  const entries: LeaderboardEntryDTO[] = [];
+  for (const row of result.rows) {
+    const dto = rowToDto(row);
+    if (dto !== null) entries.push(dto);
+  }
+  return entries;
 }
 
 /**
- * Translate a raw row into the wire DTO. The column-to-field mapping is
- * exhaustive and total; any row whose `park` or `category` does not
- * match the shared enum is dropped silently because the DTO has no
- * place for it. This mirrors the defense-in-depth pattern used in
+ * Translate a raw row into the wire DTO. `park` may be `null` for parkless
+ * resort / Disney Springs experiences; any row whose non-null `park` or
+ * `category` does not match the shared enum is dropped silently because the
+ * DTO has no place for it. This mirrors the defense-in-depth pattern used in
  * `services/stats/repo.ts`.
  */
-function rowToDto(row: LeaderboardRow): LeaderboardEntryDTO {
+function rowToDto(row: LeaderboardRow): LeaderboardEntryDTO | null {
+  if (row.park !== null && !PARK_SET.has(row.park)) return null;
+  if (!CATEGORY_SET.has(row.category)) return null;
   return {
     experienceId: row.id,
     name: row.name,
-    park: row.park as Park,
+    park: row.park as Park | null,
     category: row.category as ExperienceCategory,
     value: row.value,
     count: row.count,
@@ -410,7 +418,10 @@ function validateEntry(candidate: unknown): LeaderboardEntryDTO | null {
   const obj = candidate as Record<string, unknown>;
   if (typeof obj['experienceId'] !== 'string') return null;
   if (typeof obj['name'] !== 'string' || obj['name'].length === 0) return null;
-  if (typeof obj['park'] !== 'string' || !PARK_SET.has(obj['park'])) {
+  if (
+    obj['park'] !== null &&
+    (typeof obj['park'] !== 'string' || !PARK_SET.has(obj['park']))
+  ) {
     return null;
   }
   if (
@@ -437,7 +448,7 @@ function validateEntry(candidate: unknown): LeaderboardEntryDTO | null {
   return {
     experienceId: obj['experienceId'],
     name: obj['name'],
-    park: obj['park'] as Park,
+    park: obj['park'] as Park | null,
     category: obj['category'] as ExperienceCategory,
     value: obj['value'],
     count: obj['count'],

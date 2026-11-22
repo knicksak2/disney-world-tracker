@@ -44,6 +44,7 @@ import { AppTheme } from '../../theme/theme';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useKeyboardBottomInset } from '../../hooks/useKeyboardBottomInset';
 import FoodItemPickerModal from '../catalog/FoodItemPickerModal';
+import { pinBoardKey } from '../profile/PinBoardScreen';
 import PinCelebrationModal from '../profile/PinCelebrationModal';
 import { invalidateAfterLog } from './invalidateAfterLog';
 import { useLogToastStore } from './logToastStore';
@@ -441,6 +442,7 @@ export default function LogExperienceSheet({
       onClose();
 
       if (Array.isArray(newPins) && newPins.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: pinBoardKey });
         setCelebratingPinIds(newPins);
       }
     } catch (err) {

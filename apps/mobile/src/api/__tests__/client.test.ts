@@ -27,13 +27,20 @@ jest.mock('expo-secure-store', () => ({
   }),
 }));
 
+import * as SecureStore from 'expo-secure-store';
 import {
   ApiError,
   apiFetchText,
   apiRequest,
   setOnUnauthorizedCallback,
 } from '../client';
-import { SESSION_TOKEN_KEY } from '../sessionStorage';
+import {
+  clearSessionToken,
+  getSessionToken,
+  resetSessionTokenCacheForTests,
+  SESSION_TOKEN_KEY,
+  setSessionToken,
+} from '../sessionStorage';
 
 describe('API client (client.ts)', () => {
   const originalFetch = global.fetch;
@@ -41,6 +48,8 @@ describe('API client (client.ts)', () => {
 
   beforeEach(() => {
     mockSecureStore.clear();
+    resetSessionTokenCacheForTests();
+    (SecureStore.getItemAsync as jest.Mock).mockClear();
     onUnauthorizedMock.mockReset();
     setOnUnauthorizedCallback(onUnauthorizedMock);
   });
@@ -229,6 +238,23 @@ describe('API client (client.ts)', () => {
       await expect(apiFetchText('/protected-text')).rejects.toThrow(ApiError);
       expect(mockSecureStore.get(SESSION_TOKEN_KEY)).toBe('token-123');
       expect(onUnauthorizedMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sessionStorage in-memory cache', () => {
+    it('reads SecureStore once and serves subsequent getSessionToken calls from memory', async () => {
+      mockSecureStore.set(SESSION_TOKEN_KEY, 'cached-tok');
+      expect(await getSessionToken()).toBe('cached-tok');
+      expect(await getSessionToken()).toBe('cached-tok');
+      expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
+
+      await setSessionToken('updated-tok');
+      expect(await getSessionToken()).toBe('updated-tok');
+      expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
+
+      await clearSessionToken();
+      expect(await getSessionToken()).toBeNull();
+      expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
     });
   });
 });

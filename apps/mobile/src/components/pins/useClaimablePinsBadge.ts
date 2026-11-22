@@ -17,25 +17,35 @@
 import { useQuery } from '@tanstack/react-query';
 import { badgeDisplayFor, type BadgeDisplay, type PinBoardDTO } from '@dwt/shared';
 
-import { ApiError, apiRequest } from '../../api/client';
-import { POLLING_INTERVAL_MS } from '../../features/notifications/useAttention';
+import { type ApiError, apiRequest } from '../../api/client';
 import { isReadyToClaim, pinBoardKey } from '../../screens/profile/PinBoardScreen';
+import { useSessionStore } from '../../state/sessionStore';
 
 export interface UseClaimablePinsBadgeResult {
   readonly display: BadgeDisplay;
   readonly count: number;
 }
 
+const PIN_BADGE_STALE_TIME_MS = 60_000;
+export const PIN_BADGE_BACKSTOP_POLL_MS = 5 * 60_000;
+
 /**
  * Observe the claimable-pin badge without opening the Pin Board. Reads the same cache under the
  * same query key the board itself populates, so the tab icon and the open board can never
  * disagree (Requirement 22.4).
+ *
+ * Local log/onboarding mutations invalidate `pinBoardKey` immediately when new pins are awarded;
+ * the 5-minute auth-gated `refetchInterval` serves as a low-cost backstop for out-of-band
+ * awards (reconcile cron, confirmed rode-with tags).
  */
 export function useClaimablePinsBadge(): UseClaimablePinsBadgeResult {
+  const token = useSessionStore((s) => s.token);
   const board = useQuery<PinBoardDTO, ApiError>({
     queryKey: pinBoardKey,
     queryFn: () => apiRequest<PinBoardDTO>('GET', '/me/pins'),
-    refetchInterval: POLLING_INTERVAL_MS,
+    enabled: token !== null,
+    staleTime: PIN_BADGE_STALE_TIME_MS,
+    refetchInterval: PIN_BADGE_BACKSTOP_POLL_MS,
   });
 
   const count = (board.data?.pins ?? []).filter(isReadyToClaim).length;

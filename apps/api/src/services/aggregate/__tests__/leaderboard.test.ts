@@ -462,4 +462,63 @@ describe('leaderboard module defaults', () => {
     const cachedResult = await service.getLeaderboard();
     expect(cachedResult).toEqual(result);
   });
+
+  it('admits null-park resort experiences, drops unknown parks, and round-trips Redis cache cleanly', async () => {
+    const rows = [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: "Disney's Grand Floridian Resort & Spa",
+        park: null,
+        category: 'Resort',
+        value: 9.8,
+        count: 12,
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        name: 'Space Mountain',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        value: 9.1,
+        count: 25,
+      },
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        name: 'Unknown Park Row',
+        park: 'Not A Real Park',
+        category: 'Ride',
+        value: 9.0,
+        count: 10,
+      },
+    ];
+
+    const redis = new FakeRedis();
+    const pool = makePool(rows);
+    const service = createLeaderboard({ pool: asPool(pool), redis });
+
+    const first = await service.getLeaderboard();
+    expect(pool.calls).toHaveLength(1);
+    expect(first).toEqual([
+      {
+        experienceId: '11111111-1111-4111-8111-111111111111',
+        name: "Disney's Grand Floridian Resort & Spa",
+        park: null,
+        category: 'Resort',
+        value: 9.8,
+        count: 12,
+      },
+      {
+        experienceId: '22222222-2222-4222-8222-222222222222',
+        name: 'Space Mountain',
+        park: 'Magic Kingdom',
+        category: 'Ride',
+        value: 9.1,
+        count: 25,
+      },
+    ]);
+
+    // Second call must hit Redis without falling through to Postgres again.
+    const second = await service.getLeaderboard();
+    expect(second).toEqual(first);
+    expect(pool.calls).toHaveLength(1);
+  });
 });

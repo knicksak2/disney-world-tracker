@@ -678,16 +678,18 @@ function LeaderboardRow({ rank, entry, land, onPress }: LeaderboardRowProps): JS
   const meanLabel = entry.value.toFixed(1);
   const countLabel = `${entry.count} ${entry.count === 1 ? 'rating' : 'ratings'}`;
   const visual = t.categoryVisual[entry.category];
+  const parkLabel = entry.park ?? 'Resort';
+  const accentColor = entry.park ? t.parkAccent[entry.park] : visual.tint;
   return (
     <Card
       onPress={onPress}
-      accentColor={t.parkAccent[entry.park]}
+      accentColor={accentColor}
       style={styles.row}
       testID={`home-leaderboard-row-${entry.experienceId}`}
     >
       <View
         style={styles.rowInner}
-        accessibilityLabel={`${entry.name}, ${entry.park}${land ? `, ${land}` : ''}, ${formatCategory(
+        accessibilityLabel={`${entry.name}, ${parkLabel}${land ? `, ${land}` : ''}, ${formatCategory(
           entry.category,
         )}, rated ${meanLabel} from ${countLabel}`}
       >
@@ -699,7 +701,7 @@ function LeaderboardRow({ rank, entry, land, onPress }: LeaderboardRowProps): JS
             {entry.name}
           </Text>
           <Text style={styles.rowPark} numberOfLines={1}>
-            {entry.park}{land ? ` • ${land}` : ''}
+            {parkLabel}{land ? ` • ${land}` : ''}
           </Text>
           <View style={styles.rowTags}>
             <Badge

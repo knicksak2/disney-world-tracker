@@ -204,6 +204,19 @@ interface DayExperienceRow extends ExperienceRow {
 // Snapshot assembly
 // ---------------------------------------------------------------------------
 
+/** Load the active experience catalog once for pin evaluation. */
+export async function loadEvalCatalog(pool: DbPool): Promise<EvalExperience[]> {
+  const catalogRes = await pool.query<ExperienceRow>(
+    `SELECT upstream_entity_id AS upstream_id, category, park, land,
+            world_showcase_country, grouped_facets, name
+       FROM experiences
+      WHERE active = TRUE`,
+  );
+  return catalogRes.rows
+    .filter((r): r is ExperienceRow & { upstream_id: string } => r.upstream_id !== null)
+    .map(toEvalExperience);
+}
+
 /**
  * Read one User's full activity and fold it into a `PinActivitySnapshot`.
  *
@@ -215,15 +228,11 @@ interface DayExperienceRow extends ExperienceRow {
 export async function buildSnapshot(
   pool: DbPool,
   userId: string,
+  preloadedCatalog?: readonly EvalExperience[],
 ): Promise<PinActivitySnapshot> {
-  const [catalogRes, completedRes, dayRes, friendRes, ratingRes, noteRes, tripRes, festivalTaggedRes] =
+  const [catalog, completedRes, dayRes, countsRes, festivalTaggedRes] =
     await Promise.all([
-      pool.query<ExperienceRow>(
-        `SELECT upstream_entity_id AS upstream_id, category, park, land,
-                world_showcase_country, grouped_facets, name
-           FROM experiences
-          WHERE active = TRUE`,
-      ),
+      preloadedCatalog ? Promise.resolve(preloadedCatalog) : loadEvalCatalog(pool),
       pool.query<{ upstream_id: string | null }>(
         `SELECT e.upstream_entity_id AS upstream_id
            FROM completions c
@@ -241,29 +250,22 @@ export async function buildSnapshot(
           ORDER BY l.visited_on`,
         [userId],
       ),
-      pool.query<{ n: string | number }>(
-        `SELECT COUNT(*) AS n FROM rode_with_tags
-          WHERE tagged_member_id = $1 AND state = 'confirmed'`,
-        [userId],
-      ),
-      pool.query<{ n: string | number }>(
-        `SELECT COUNT(*) AS n FROM ratings WHERE user_id = $1`,
-        [userId],
-      ),
-      pool.query<{ n: string | number }>(
-        `SELECT COUNT(*) AS n FROM notes WHERE user_id = $1`,
-        [userId],
-      ),
-      pool.query<{ n: string | number }>(
-        `SELECT COUNT(*) AS n FROM trip_memberships WHERE user_id = $1`,
+      pool.query<{
+        friend_rides: string | number;
+        ratings: string | number;
+        notes: string | number;
+        trips: string | number;
+      }>(
+        `SELECT
+           (SELECT COUNT(*) FROM rode_with_tags
+             WHERE tagged_member_id = $1 AND state = 'confirmed') AS friend_rides,
+           (SELECT COUNT(*) FROM ratings WHERE user_id = $1) AS ratings,
+           (SELECT COUNT(*) FROM notes WHERE user_id = $1) AS notes,
+           (SELECT COUNT(*) FROM trip_memberships WHERE user_id = $1) AS trips`,
         [userId],
       ),
       pool.query<PinQualifyingVisitSignalRow>(PIN_QUALIFYING_VISIT_SIGNAL_SQL, [userId]),
     ]);
-
-  const catalog = catalogRes.rows
-    .filter((r): r is ExperienceRow & { upstream_id: string } => r.upstream_id !== null)
-    .map(toEvalExperience);
 
   const completed = new Set<string>();
   for (const r of completedRes.rows) {
@@ -271,15 +273,16 @@ export async function buildSnapshot(
   }
 
   const festivalTaggedCompletedIds = toFestivalTaggedCompletedIds(festivalTaggedRes.rows);
+  const counts = countsRes.rows[0];
 
   return {
     catalog,
     completed,
     days: groupDays(dayRes.rows),
-    friendRides: toCount(friendRes.rows[0]?.n),
-    ratings: toCount(ratingRes.rows[0]?.n),
-    notes: toCount(noteRes.rows[0]?.n),
-    trips: toCount(tripRes.rows[0]?.n),
+    friendRides: toCount(counts?.friend_rides),
+    ratings: toCount(counts?.ratings),
+    notes: toCount(counts?.notes),
+    trips: toCount(counts?.trips),
     festivalTaggedCompletedIds,
   };
 }
@@ -425,14 +428,18 @@ async function readAwarded(pool: DbPool, userId: string): Promise<Map<string, Aw
 // Award insert
 // ---------------------------------------------------------------------------
 
-async function awardNewly(pool: DbPool, userId: string): Promise<string[]> {
+async function awardNewly(
+  pool: DbPool,
+  userId: string,
+  preloadedCatalog?: readonly EvalExperience[],
+): Promise<string[]> {
   const res = await pool.query<{ pin_id: string }>(
     `SELECT pin_id FROM user_pins WHERE user_id = $1`,
     [userId],
   );
   const alreadyAwarded = new Set(res.rows.map((r) => r.pin_id));
 
-  const snapshot = await buildSnapshot(pool, userId);
+  const snapshot = await buildSnapshot(pool, userId, preloadedCatalog);
   const toAward = newlyAwardedPinIds(snapshot, alreadyAwarded);
   if (toAward.length === 0) return [];
 
@@ -503,11 +510,15 @@ async function claimPin(pool: DbPool, userId: string, pinId: string): Promise<Cl
  */
 async function reconcileAll(pool: DbPool): Promise<{ usersProcessed: number; pinsAwarded: number }> {
   // Only active accounts are reconciled: a pending, purging or tombstone account is neither awarded pins nor
-  // costs database time (account-deletion R5.1).
-  const users = await pool.query<{ id: string }>(`SELECT id FROM users WHERE deletion_state = 'active'`);
+  // costs database time (account-deletion R5.1). Load the shared active catalog once up front so we don't
+  // re-scan `experiences` for every user.
+  const [users, catalog] = await Promise.all([
+    pool.query<{ id: string }>(`SELECT id FROM users WHERE deletion_state = 'active'`),
+    loadEvalCatalog(pool),
+  ]);
   let pinsAwarded = 0;
   for (const { id } of users.rows) {
-    const awarded = await awardNewly(pool, id);
+    const awarded = await awardNewly(pool, id, catalog);
     pinsAwarded += awarded.length;
   }
   return { usersProcessed: users.rows.length, pinsAwarded };
