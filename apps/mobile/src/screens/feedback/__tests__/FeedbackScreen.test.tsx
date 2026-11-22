@@ -38,6 +38,7 @@ jest.mock('../../../env/notifications', () => ({
 
 import Constants from 'expo-constants';
 import YouAndCrewScreen from '../../youAndCrew/YouAndCrewScreen';
+import SettingsScreen from '../../youAndCrew/SettingsScreen';
 import FeedbackScreen, {
   GENERIC_SEND_ERROR,
   MESSAGE_LABEL,
@@ -110,6 +111,7 @@ describe('In-app feedback', () => {
         <NavigationContainer ref={navRef}>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="YouAndCrewMain" component={YouAndCrewScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Feedback" component={FeedbackScreen} />
           </Stack.Navigator>
         </NavigationContainer>
@@ -117,9 +119,15 @@ describe('In-app feedback', () => {
     );
   }
 
-  async function openFeedback(): Promise<void> {
+  async function openSettings(): Promise<void> {
     renderApp();
     await screen.findByTestId('profile-display-name');
+    fireEvent.press(screen.getByTestId('header-settings-button'));
+    await screen.findByTestId('settings-screen');
+  }
+
+  async function openFeedback(): Promise<void> {
+    await openSettings();
     fireEvent.press(screen.getByTestId('feedback-entry-button'));
     await screen.findByTestId('feedback-form');
   }
@@ -143,10 +151,9 @@ describe('In-app feedback', () => {
     resetTestScheme();
   });
 
-  describe('entry row on YouAndCrewScreen (R1.1)', () => {
+  describe('entry row on SettingsScreen (R1.1, R1.8)', () => {
     it('is a labelled button above Delete account, and pressing it opens the Feedback screen without any request', async () => {
-      renderApp();
-      await screen.findByTestId('profile-display-name');
+      await openSettings();
       const entry = screen.getByTestId('feedback-entry-button');
       expect(entry.props.accessibilityRole).toBe('button');
       expect(entry.props.accessibilityLabel).toBe('Report a problem or send feedback');
@@ -286,13 +293,13 @@ describe('In-app feedback', () => {
       expect(Object.keys(lastBody()).sort()).toEqual(['contactOk', 'device', 'kind', 'message']);
     });
 
-    it('Done on the confirmation returns to You & Crew', async () => {
+    it('Done on the confirmation returns to Settings', async () => {
       await openFeedback();
       type('all good');
       fireEvent.press(screen.getByTestId('feedback-send'));
       await screen.findByTestId('feedback-confirmation');
       fireEvent.press(screen.getByTestId('feedback-done'));
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
       expect(await screen.findByTestId('feedback-entry-button')).toBeTruthy();
     });
 
@@ -303,7 +310,7 @@ describe('In-app feedback', () => {
       fireEvent.press(screen.getByTestId('feedback-send'));
       await screen.findByTestId('feedback-confirmation');
       fireEvent.press(screen.getByTestId('feedback-done'));
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
       fireEvent.press(await screen.findByTestId('feedback-entry-button'));
       await screen.findByTestId('feedback-form');
       expect(screen.getByTestId('feedback-message').props.value).toBe('');

@@ -401,7 +401,7 @@ describe('Task 21.5 / Property 13: Trip report counting and autohide', () => {
       INSERT INTO profiles (user_id, display_name, avatar_preset) VALUES
         ('${organizerId}', 'Organizer User', 'castle'),
         ('${member1Id}', 'Member One', 'wishing-star'),
-        ('${member2Id}', 'Member Two', 'ear-balloon'),
+        ('${member2Id}', 'Member Two', 'carousel'),
         ('${friendNonMemberId}', 'Friend NonMember', 'fireworks');
 
       INSERT INTO trips (id, creator_id, name, description, start_date, end_date) VALUES

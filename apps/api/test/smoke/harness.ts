@@ -612,6 +612,8 @@ async function applyMigration(db: IMemoryDb): Promise<void> {
     // 0055 adds experience_festival_tags.match_kind + festival_editions +
     // food_item_festival_tags, read by the stats/pins Qualifying_Visit query.
     '0055_festival_edition_and_dish_tags.sql',
+    // 0080 replaces retired trademarked avatar presets and expands the CHECK to 24 presets.
+    '0080_expand_avatar_presets.sql',
   ];
   for (const name of migrations) {
     const migrationPath = resolve(here, '..', '..', 'migrations', name);

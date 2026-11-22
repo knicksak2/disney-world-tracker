@@ -214,6 +214,7 @@ Discover-only action are otherwise unchanged.
 4. You_And_Crew SHALL preserve the existing behavior, validation, and error handling of AvatarPicker, the display-name PATCH flow, FriendsListScreen, FriendsSearchScreen, InboxScreen, SentSharesScreen, PushNotificationPreferenceControl, and ChangePasswordControl unchanged; this feature relocates their entry points only.
 5. THE App SHALL NOT present Friends or Profile as a selectable Main_Tab.
 6. [Retired: Settings controls are rendered inline directly below Shared Items; the header shortcut is omitted to avoid duplicate navigation affordances.]
+6a. *(Amendment — Dedicated Settings Screen):* Settings, preferences, account security, help/tour, legal links, feedback, account deletion, and sign-out controls are relocated out of inline `YouAndCrewContent` onto a dedicated, grouped `SettingsScreen` (`Settings` route in `YouAndCrewStack`), opened via the top-right header gear button (`testID="header-settings-button"`) on `YouAndCrewScreen`. `YouAndCrewMain` retains Identity, Friends/Crew, and Shared Items.
 7. WHILE the user has more than `MAX_INLINE_FRIENDS` (constant value 3) friends, You_And_Crew SHALL display at most `MAX_INLINE_FRIENDS` friends inline and SHALL present an expand/collapse control that toggles between the capped list and the full friends list.
 
 ### Requirement 8: Notification Center Relocation

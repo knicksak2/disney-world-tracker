@@ -42,6 +42,7 @@ Out of scope: crash reporting, notifying a user when a report is resolved, scree
 5. THE message field label or placeholder SHALL ask the user to say which screen they were on and what they expected to happen.
 6. WHEN a submission succeeds, THE App SHALL replace the form with a confirmation state ("Thanks, we got it") and a Done button that returns to You & Crew, and SHALL clear the message.
 7. EVERY control of the screen SHALL carry an `accessibilityLabel`, and THE selected Kind SHALL be conveyed by `accessibilityState` and not by color alone.
+8. *(Amendment — Dedicated Settings Screen Relocation):* The "Report a problem or send feedback" row (`feedback-entry-button`) now lives in the Help & Legal section of `SettingsScreen` (`YouAndCrewStack` › `Settings`, above `delete-account-entry-button`), and Done returns to `Settings`.
 
 ### Requirement 2: Submit endpoint
 

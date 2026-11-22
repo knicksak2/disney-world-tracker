@@ -102,6 +102,7 @@ This spec adds a **First-Run Onboarding & App Clarity** package that guides new 
    - `in_park` → calls `PATCH /me/onboarding` (`complete: true`, `selectedPark`) and navigates to `Explore › LiveWaits` for the chosen park.
    - `track_history` or `explore` → calls `PATCH /me/onboarding` (`complete: true`) and navigates to `Home`.
 6. THE App SHALL provide an **"App Tour & Quick Guide"** entry in `YouAndCrewScreen` (Settings) that opens `OnboardingFlow` in read-only `replay` mode, displaying **Step 3 (the 4-tab + `MagicFab` map) only** with a close CTA (`"Got it"`), performing zero API mutations (no trip creation, no quick-completions, no `PATCH /me/onboarding`).
+6a. *(Amendment — Settings Screen Relocation & `__DEV__` Gating):* The **"App Tour & Quick Guide"** row (`settings-app-tour-btn`) lives on `SettingsScreen` (`YouAndCrewStack` › `Settings`, opened from the `YouAndCrewScreen` header gear button). Any QA onboarding preview entries (`Preview Full Onboarding` and `HomeSearchBar`'s `Preview Onboarding` shortcut) SHALL be gated behind `__DEV__`.
 
 ### Requirement 5: Cold-Start "Start Here" Checklist on Home
 
@@ -118,6 +119,7 @@ This spec adds a **First-Run Onboarding & App Clarity** package that guides new 
 3. WHEN the User taps `Dismiss` on `StartHereCard`, THE App SHALL call `PATCH /me/onboarding` with `{ dismissStarterChecklist: true }`, optimistically hide the card, and invalidate `['me', 'onboarding']`.
 4. WHEN all 4 checklist items become `true`, THE `StartHereCard` SHALL cease rendering automatically on the next refresh/invalidation without requiring manual dismissal.
 5. THE `YouAndCrewScreen` Settings section SHALL include a **"Show Start Here checklist on Home"** action whenever `starterChecklistDismissedAt !== null` and at least one item remains incomplete, calling `PATCH /me/onboarding` with `{ restoreStarterChecklist: true }`.
+5a. *(Amendment — Settings Screen Relocation & `__DEV__` Gating):* The **"Show Start Here checklist on Home"** action (`settings-restore-starter-btn`) lives in the Help & Legal group on `SettingsScreen` (`YouAndCrewStack` › `Settings`), and the QA **"Preview Start Here Checklist on Home"** toggle (`settings-preview-starter-btn`) SHALL be gated behind `__DEV__`.
 
 ### Requirement 6: Home Screen Declutter and Clear Surface Ownership
 

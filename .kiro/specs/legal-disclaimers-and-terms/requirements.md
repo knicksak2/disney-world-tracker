@@ -88,6 +88,7 @@ This feature implements the lean, in-place legal compliance architecture (Option
 3. THE `YouAndCrewScreen` SHALL display an in-app legal disclaimer section containing the concise Disney non-affiliation notice and nominative fair use statement.
 4. THE "Terms of Service" row SHALL expose accessibility attributes: `accessibilityRole="link"`, `accessibilityLabel="Terms of Service"`, and `testID="terms-of-service-entry-button"`.
 5. THE settings card SHALL expose `testID="you-and-crew-terms-of-service-card"`.
+6. *(Amendment — Dedicated Settings Screen Relocation):* The Terms of Service row (`terms-of-service-entry-button` inside `you-and-crew-terms-of-service-card`), Privacy Policy row (`privacy-policy-entry-button`), and in-app legal disclaimer (`you-and-crew-legal-disclaimer`) now live on `SettingsScreen` (`YouAndCrewStack` › `Settings`, reachable from the header gear button on `YouAndCrewScreen`), preserving all `testID`s, accessibility attributes, and disclaimer copy intact.
 
 ### Requirement 5: Configuration & Build Profiles
 

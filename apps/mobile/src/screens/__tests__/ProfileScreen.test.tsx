@@ -31,7 +31,14 @@ jest.mock('expo-constants', () => ({
 
 jest.mock('../../api/client', () => {
   const actual = jest.requireActual('../../api/client');
-  return { __esModule: true, ...actual, apiRequest: jest.fn() };
+  const apiRequest = jest.fn();
+  return {
+    __esModule: true,
+    ...actual,
+    apiRequest,
+    setAvatarPreset: (avatarPreset: unknown) =>
+      apiRequest('PUT', '/me/profile/avatar', { avatarPreset }),
+  };
 });
 
 jest.mock('../../env/notifications', () => ({
@@ -77,6 +84,14 @@ describe('ProfileScreen — Identity Block (Requirements 7.3, 7.4)', () => {
           userId: 'u1',
           displayName: 'Mickey Mouse',
           avatarPreset: null,
+        } as never;
+      }
+      if (path === '/me/profile/avatar') {
+        return {
+          userId: 'u1',
+          displayName,
+          avatarPreset: 'teacup',
+          overallCompletionPercent: 10,
         } as never;
       }
       return {} as never;
@@ -127,6 +142,35 @@ describe('ProfileScreen — Identity Block (Requirements 7.3, 7.4)', () => {
       expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/profile', {
         displayName: 'Mickey Mouse',
       });
+    });
+  });
+
+  it('updates avatar via PUT /me/profile/avatar and preserves ProfileQueryResult cache shape', async () => {
+    setupApi('Mickey');
+
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByTestId('profile-display-name');
+    fireEvent.press(screen.getByTestId('change-avatar-button'));
+    expect(screen.getByTestId('avatar-picker-grid')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Teacup ride'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PUT', '/me/profile/avatar', {
+        avatarPreset: 'teacup',
+      });
+      expect(screen.queryByTestId('avatar-picker-grid')).toBeNull();
+      expect(screen.getByTestId('profile-avatar')).toBeTruthy();
+      expect(screen.getByTestId('profile-display-name')).toHaveTextContent('Mickey');
     });
   });
 

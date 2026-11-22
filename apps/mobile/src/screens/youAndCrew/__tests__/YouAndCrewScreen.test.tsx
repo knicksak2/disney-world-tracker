@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -48,7 +48,14 @@ jest.mock('expo-constants', () => ({
 
 jest.mock('../../../api/client', () => {
   const actual = jest.requireActual('../../../api/client');
-  return { __esModule: true, ...actual, apiRequest: jest.fn() };
+  const apiRequest = jest.fn();
+  return {
+    __esModule: true,
+    ...actual,
+    apiRequest,
+    setAvatarPreset: (avatarPreset: unknown) =>
+      apiRequest('PUT', '/me/profile/avatar', { avatarPreset }),
+  };
 });
 
 jest.mock('../../../env/notifications', () => ({
@@ -184,6 +191,14 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
           avatarPreset: null,
         } as never;
       }
+      if (path === '/me/profile/avatar' && method === 'PUT') {
+        return {
+          userId: 'u1',
+          displayName: 'Mickey Mouse',
+          avatarPreset: 'castle',
+          overallCompletionPercent: 25,
+        } as never;
+      }
       if (path === '/me/friends/f1' && method === 'DELETE') {
         return null as never;
       }
@@ -217,10 +232,8 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
               component={() => <DummyScreen testID="screen-sent" />}
             />
             <Stack.Screen
-              name={'OnboardingFlow' as any}
-              component={({ route }: any) => (
-                <DummyScreen testID={`screen-onboarding-${route?.params?.mode ?? 'none'}`} />
-              )}
+              name="Settings"
+              component={() => <DummyScreen testID="screen-settings" />}
             />
           </Stack.Navigator>
         </NavigationContainer>
@@ -239,7 +252,7 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     expect(screen.getByText('CHANGE')).toBeTruthy();
   });
 
-  it('toggles avatar picker grid when tapping avatar', async () => {
+  it('toggles avatar picker grid when tapping avatar and updates identity avatar & preserves display name on selection', async () => {
     setupApi();
     renderScreen();
 
@@ -248,6 +261,17 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     fireEvent.press(changeAvatarBtn);
 
     expect(screen.getByTestId('avatar-picker-grid')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Magic castle'));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('PUT', '/me/profile/avatar', {
+        avatarPreset: 'castle',
+      });
+      expect(screen.getByTestId('profile-avatar')).toBeTruthy();
+      expect(screen.queryByTestId('avatar-picker-grid')).toBeNull();
+      expect(screen.getByTestId('profile-display-name')).toHaveTextContent('Mickey Mouse');
+    });
   });
 
   it('allows editing display name via inline editor and calls PATCH /me/profile', async () => {
@@ -270,6 +294,7 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
         displayName: 'Mickey Renamed',
       });
     });
+    expect(screen.getByTestId('profile-display-name')).toHaveTextContent('Mickey Renamed');
   });
 
   it('navigates to Inbox and Sent when shared cards are pressed', async () => {
@@ -404,64 +429,27 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
     expect(screen.getByText('No friends yet')).toBeTruthy();
   });
 
-  it('renders settings controls and executes logout', async () => {
+  it('exposes the header settings gear button and navigates to Settings while keeping settings off Profile & Crew', async () => {
     setupApi();
-    renderScreen();
+    const navRef = createNavigationContainerRef<YouAndCrewStackParamList>();
+    renderScreen(navRef);
 
     await screen.findByTestId('profile-display-name');
 
-    // Settings titles
-    expect(screen.getByText('Push Notifications')).toBeTruthy();
-    expect(screen.getAllByText('Appearance').length).toBeGreaterThan(0);
-    expect(screen.getByText('Account Security')).toBeTruthy();
+    expect(screen.queryByTestId('you-and-crew-settings-section')).toBeNull();
+    expect(screen.queryByTestId('you-and-crew-logout')).toBeNull();
+    expect(screen.queryByTestId('delete-account-entry-button')).toBeNull();
+    expect(screen.queryByTestId('settings-onboarding-preview-btn')).toBeNull();
 
-    // Logout button
-    const logoutBtn = screen.getByTestId('you-and-crew-logout');
-    fireEvent.press(logoutBtn);
+    const settingsBtn = screen.getByTestId('header-settings-button');
+    expect(settingsBtn.props.accessibilityRole).toBe('button');
+    expect(settingsBtn.props.accessibilityLabel).toBe('Settings');
 
+    fireEvent.press(settingsBtn);
     await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalledWith('POST', '/auth/logout');
-      expect(useSessionStore.getState().token).toBeNull();
+      expect(navRef.getCurrentRoute()?.name).toBe('Settings');
     });
-  });
-
-  // Feature: dark-mode — Requirement 4 (Appearance control reachable from
-  // the real You & Crew screen; moved here from the unreachable
-  // ProfileScreen.tsx default export, which is not wired as a navigator route).
-  describe('Appearance control (dark-mode, Requirement 4)', () => {
-    it('renders the Appearance card with all three selectable options', async () => {
-      setupApi();
-      renderScreen();
-
-      await screen.findByTestId('profile-display-name');
-
-      expect(screen.getByTestId('appearance-preference-control')).toBeTruthy();
-      expect(screen.getByTestId('appearance-option-system')).toBeTruthy();
-      expect(screen.getByTestId('appearance-option-light')).toBeTruthy();
-      expect(screen.getByTestId('appearance-option-dark')).toBeTruthy();
-    });
-
-    it('pressing a different option updates the theme store and persists to AsyncStorage', async () => {
-      setupApi();
-      renderScreen();
-
-      await screen.findByTestId('profile-display-name');
-
-      fireEvent.press(screen.getByTestId('appearance-option-dark'));
-
-      await waitFor(() => {
-        expect(useThemeStore.getState().preference).toBe('dark');
-      });
-    });
-  });
-
-  it('omits redundant header settings shortcut and displays settings directly in content (Requirement 7.6)', async () => {
-    setupApi();
-    renderScreen();
-
-    await screen.findByTestId('profile-display-name');
-    expect(screen.queryByTestId('header-settings-button')).toBeNull();
-    expect(screen.getByTestId('you-and-crew-settings-section')).toBeTruthy();
+    expect(await screen.findByTestId('screen-settings')).toBeTruthy();
   });
 
   it('caps inline friends list to MAX_INLINE_FRIENDS (3) and toggles expansion (Requirement 7.7)', async () => {
@@ -543,7 +531,7 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
       );
     });
 
-    it('repaints live when the user picks Dark in the Appearance control (no remount)', async () => {
+    it('repaints live when the theme preference switches to dark (no remount)', async () => {
       setupApi();
       renderScreen();
       await screen.findByText('Donald Duck');
@@ -551,55 +539,14 @@ describe('YouAndCrewScreen (Requirements 7.3, 7.4)', () => {
       expect(flat(root).backgroundColor).toBe('#f5f2fb');
       expect(iconNamed('mail-outline')?.props.color).toBe('#1976d2');
 
-      fireEvent.press(screen.getByTestId('appearance-option-dark'));
+      await act(async () => {
+        await useThemeStore.getState().setPreference('dark');
+      });
 
       expect(screen.getByTestId('you-and-crew-screen')).toBe(root);
       expect(flat(root).backgroundColor).toBe(darkTheme.color.background);
       expect(flat(screen.getByText('Donald Duck')).color).toBe(darkTheme.color.textPrimary);
       expect(iconNamed('mail-outline')?.props.color).toBe(SHARE_ICON.dark.inboxFg);
-    });
-  });
-
-  describe('Onboarding tour & checklist restore settings (Requirements 4.6, 5.5)', () => {
-    it('opens OnboardingFlow in replay mode when tapping App Tour & Quick Guide', async () => {
-      setupApi();
-      renderScreen();
-
-      const btn = await screen.findByTestId('settings-app-tour-btn');
-      expect(screen.queryByTestId('settings-restore-starter-btn')).toBeNull();
-
-      fireEvent.press(btn);
-      expect(await screen.findByTestId('screen-onboarding-replay')).toBeTruthy();
-    });
-
-    it('renders and triggers restore Start Here checklist row when dismissed with incomplete items', async () => {
-      setupApi({
-        onboardingResponse: {
-          needsOnboarding: false,
-          completedAt: '2026-11-18T00:00:00Z',
-          skippedAt: null,
-          initialIntent: 'plan',
-          selectedPark: null,
-          starterChecklistDismissedAt: '2026-11-18T01:00:00Z',
-          checklist: {
-            loggedFirstExperience: true,
-            starredFavorite: false,
-            hasTrip: true,
-            claimedPin: false,
-          },
-          showStarterChecklist: false,
-        },
-      });
-      renderScreen();
-
-      const restoreBtn = await screen.findByTestId('settings-restore-starter-btn');
-      fireEvent.press(restoreBtn);
-
-      await waitFor(() => {
-        expect(apiRequestMock).toHaveBeenCalledWith('PATCH', '/me/onboarding', {
-          restoreStarterChecklist: true,
-        });
-      });
     });
   });
 });

@@ -13,6 +13,7 @@ import TripRecapAlbumScreen from '../screens/share/TripRecapAlbumScreen';
 import FriendFoodHistoryScreen from '../screens/friends/FriendFoodHistoryScreen';
 import PinShowcaseScreen from '../screens/profile/PinShowcaseScreen';
 import YouAndCrewScreen from '../screens/youAndCrew/YouAndCrewScreen';
+import SettingsScreen from '../screens/youAndCrew/SettingsScreen';
 import BlockedUsersScreen from '../screens/youAndCrew/BlockedUsersScreen';
 import DeleteAccountScreen from '../screens/youAndCrew/DeleteAccountScreen';
 import FeedbackScreen from '../screens/feedback/FeedbackScreen';
@@ -36,6 +37,7 @@ export type YouAndCrewStackParamList = {
   /** Read-only album of every approved Trip photo behind a shared recap (photo-uploads R15.31, D35). */
   TripRecapAlbum: { shareId: string; tripName?: string };
   FriendsList?: undefined;
+  Settings: undefined;
   BlockedUsers: undefined;
   /** Self-service account deletion: review, re-authenticate, confirm (account-deletion R1). */
   DeleteAccount: undefined;
@@ -97,6 +99,11 @@ export default function YouAndCrewStack(): JSX.Element {
         name="FriendFoodHistory"
         component={FriendFoodHistoryScreen}
         options={{ title: 'Food History' }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
       />
       <Stack.Screen
         name="BlockedUsers"

@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   Text,
   View,
@@ -12,8 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { isAvatarPresetId, MAX_INLINE_FRIENDS, type ProfileDTO } from '@dwt/shared';
 
-import { ApiError, apiRequest, resolveBaseUrl } from '../../api/client';
-import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../../photos/constants';
+import { ApiError, apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
 import { withAlpha } from '../../theme/theme';
 import { useAppTheme, usePalette } from '../../theme/useAppTheme';
@@ -22,23 +20,12 @@ import {
   Badge,
   Card,
   EmptyState,
-  SecondaryButton,
   SectionLabel,
 } from '../../theme/components';
 import { renderAvatarPreset } from '../../avatars/AvatarPresets';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import { ProfileIdentityBlock } from '../ProfileScreen';
-import PushNotificationPreferenceControl from '../PushNotificationPreferenceControl';
-import AppearancePreferenceControl from '../AppearancePreferenceControl';
-import ChangePasswordControl from '../ChangePasswordControl';
-import { invalidatePushRegistration } from '../../hooks/usePushRegistration';
-import { useSessionStore } from '../../state/sessionStore';
 import { friendsErrorMessage } from '../friends/errorMessages';
-import {
-  useOnboardingState,
-  useUpdateOnboarding,
-} from '../onboarding/onboardingApi';
-import { useOnboardingPreviewStore } from '../onboarding/onboardingPreviewStore';
 
 interface MeResponse {
   readonly user: {
@@ -80,26 +67,6 @@ export function YouAndCrewContent({ embedded = false }: YouAndCrewContentProps):
   const shareIcon = usePalette(SHARE_ICON);
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
-  const clearToken = useSessionStore((state) => state.clearToken);
-  const onboardingQuery = useOnboardingState();
-  const updateOnboarding = useUpdateOnboarding();
-  const previewStarterChecklist = useOnboardingPreviewStore(
-    (s) => s.previewStarterChecklist,
-  );
-  const enableStarterChecklistPreview = useOnboardingPreviewStore(
-    (s) => s.enableStarterChecklistPreview,
-  );
-  const dismissStarterChecklistPreview = useOnboardingPreviewStore(
-    (s) => s.dismissStarterChecklistPreview,
-  );
-  const onboardingData = onboardingQuery.data;
-  const canRestoreStarterChecklist =
-    typeof onboardingData?.starterChecklistDismissedAt === 'string' &&
-    onboardingData.checklist != null &&
-    (!onboardingData.checklist.loggedFirstExperience ||
-      !onboardingData.checklist.starredFavorite ||
-      !onboardingData.checklist.hasTrip ||
-      !onboardingData.checklist.claimedPin);
 
   const [friendsExpanded, setFriendsExpanded] = useState(false);
   const [rowErrors, setRowErrors] = useState<Readonly<Record<string, string>>>({});
@@ -182,17 +149,6 @@ export function YouAndCrewContent({ embedded = false }: YouAndCrewContentProps):
     },
     [removeFriendMutation, setRowError],
   );
-
-  const logoutMutation = useMutation<void, ApiError, void>({
-    mutationFn: async () => {
-      void invalidatePushRegistration();
-      await apiRequest<null>('POST', '/auth/logout');
-    },
-    onSettled: async () => {
-      await clearToken();
-      queryClient.clear();
-    },
-  });
 
   const friends = friendsQuery.data?.friends ?? [];
   const outgoingRequests = friendsQuery.data?.outgoingRequests ?? [];
@@ -419,234 +375,6 @@ export function YouAndCrewContent({ embedded = false }: YouAndCrewContentProps):
           </Card>
         </View>
       </View>
-
-      {/* Section 4: Preferences & Security (Requirements 7.2, 7.6) */}
-      <View
-        style={styles.section}
-        testID="you-and-crew-settings-section"
-      >
-        <SectionLabel>Preferences &amp; Security</SectionLabel>
-
-        <Card style={styles.settingsCard}>
-          <View style={styles.settingsCardHeader}>
-            <Ionicons name="notifications-outline" size={16} color={t.color.primaryFg} />
-            <Text style={styles.settingsTitle}>Push Notifications</Text>
-          </View>
-          <PushNotificationPreferenceControl />
-        </Card>
-
-        <Card style={styles.settingsCard}>
-          <View style={styles.settingsCardHeader}>
-            <Ionicons name="color-palette-outline" size={16} color={t.color.primaryFg} />
-            <Text style={styles.settingsTitle}>Appearance</Text>
-          </View>
-          <AppearancePreferenceControl />
-        </Card>
-
-        <Card style={styles.settingsCard}>
-          <View style={styles.settingsCardHeader}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={t.color.primaryFg} />
-            <Text style={styles.settingsTitle}>Account Security</Text>
-          </View>
-          <ChangePasswordControl />
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-app-tour-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => navigation.navigate('OnboardingFlow', { mode: 'replay' })}
-            accessibilityRole="button"
-            accessibilityLabel="App Tour and Quick Guide"
-            testID="settings-app-tour-btn"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="compass-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>App Tour &amp; Quick Guide</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-onboarding-preview-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => navigation.navigate('OnboardingFlow', { mode: 'preview' })}
-            accessibilityRole="button"
-            accessibilityLabel="Preview Full Onboarding"
-            testID="settings-onboarding-preview-btn"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="sparkles-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>Preview Full Onboarding</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        {!onboardingData?.showStarterChecklist ? (
-          <Card style={styles.settingsCard} testID="you-and-crew-preview-starter-card">
-            <Pressable
-              style={styles.blockedUsersRow}
-              onPress={() => {
-                if (previewStarterChecklist) {
-                  dismissStarterChecklistPreview();
-                } else {
-                  enableStarterChecklistPreview();
-                  navigation.navigate('MainTabs', { screen: 'Home' });
-                }
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                previewStarterChecklist
-                  ? 'Hide Start Here preview on Home'
-                  : 'Preview Start Here checklist on Home'
-              }
-              testID="settings-preview-starter-btn"
-            >
-              <View style={styles.settingsCardHeader}>
-                <Ionicons name="checkbox-outline" size={16} color={t.color.primaryFg} />
-                <Text style={styles.settingsTitle}>
-                  {previewStarterChecklist
-                    ? 'Hide Start Here Preview on Home'
-                    : 'Preview Start Here Checklist on Home'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-            </Pressable>
-          </Card>
-        ) : null}
-
-        {canRestoreStarterChecklist ? (
-          <Card style={styles.settingsCard} testID="you-and-crew-restore-starter-card">
-            <Pressable
-              style={styles.blockedUsersRow}
-              onPress={() => updateOnboarding.mutate({ restoreStarterChecklist: true })}
-              disabled={updateOnboarding.isPending}
-              accessibilityRole="button"
-              accessibilityLabel="Show Start Here checklist on Home"
-              testID="settings-restore-starter-btn"
-            >
-              <View style={styles.settingsCardHeader}>
-                <Ionicons name="sparkles-outline" size={16} color={t.color.primaryFg} />
-                <Text style={styles.settingsTitle}>Show Start Here checklist on Home</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-            </Pressable>
-          </Card>
-        ) : null}
-
-        <Card style={styles.settingsCard} testID="you-and-crew-blocked-users-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => navigateTarget('BlockedUsers')}
-            accessibilityRole="button"
-            accessibilityLabel="Manage Blocked Users"
-            testID="blocked-users-entry-button"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="ban-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>Blocked Users</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-terms-of-service-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => {
-              const url = TERMS_OF_SERVICE_URL || `${resolveBaseUrl()}/terms`;
-              void Linking.openURL(url);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel="Terms of Service"
-            testID="terms-of-service-entry-button"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="newspaper-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>Terms of Service</Text>
-            </View>
-            <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-privacy-policy-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => {
-              const url = PRIVACY_POLICY_URL || `${resolveBaseUrl()}/privacy`;
-              void Linking.openURL(url);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel="Privacy Policy"
-            testID="privacy-policy-entry-button"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="document-text-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>Privacy Policy</Text>
-            </View>
-            <Ionicons name="open-outline" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-feedback-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => navigateTarget('Feedback')}
-            accessibilityRole="button"
-            accessibilityLabel="Report a problem or send feedback"
-            accessibilityHint="Opens a form to send a bug report or an idea"
-            testID="feedback-entry-button"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="chatbubbles-outline" size={16} color={t.color.primaryFg} />
-              <Text style={styles.settingsTitle}>Report a problem or send feedback</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <Card style={styles.settingsCard} testID="you-and-crew-delete-account-card">
-          <Pressable
-            style={styles.blockedUsersRow}
-            onPress={() => navigateTarget('DeleteAccount')}
-            accessibilityRole="button"
-            accessibilityLabel="Delete account"
-            accessibilityHint="Starts the steps to permanently delete your account"
-            testID="delete-account-entry-button"
-          >
-            <View style={styles.settingsCardHeader}>
-              <Ionicons name="trash-outline" size={16} color={t.color.danger} />
-              <Text style={styles.deleteAccountTitle}>Delete account</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.color.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <View style={styles.logoutBlock}>
-          <SecondaryButton
-            label={logoutMutation.isPending ? 'Logging out\u2026' : 'Log out'}
-            icon="log-out-outline"
-            tone="danger"
-            onPress={() => logoutMutation.mutate()}
-            disabled={logoutMutation.isPending}
-            testID="you-and-crew-logout"
-          />
-        </View>
-
-        <View style={styles.disclaimerBlock} testID="you-and-crew-legal-disclaimer">
-          <Text style={styles.disclaimerText}>
-            Disney World Tracker is an independent, unofficial companion application and is not
-            affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney
-            trademarks, service marks, and trade names are the property of their respective owners.
-            Wait times, park schedules, and price estimates are for personal planning purposes.
-            Lightning Lane prices powered by ThemeParks.wiki. Ticket and menu prices come from
-            Disney's website, are shown before tax, may be out of date or estimated, and final
-            checkout prices may differ; discounted, military, reseller, and special-offer prices
-            are not covered.
-          </Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -822,54 +550,8 @@ const useStyles = makeStyles((t) => ({
     fontWeight: '600',
     color: t.color.textPrimary,
   },
-  settingsCard: {
-    padding: 14,
-    gap: t.spacing.sm,
-  },
-  settingsCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  settingsTitle: {
-    ...t.typography.meta,
-    fontWeight: '700',
-    fontSize: 12,
-    color: t.color.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  blockedUsersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: t.spacing.xs,
-  },
-  deleteAccountTitle: {
-    ...t.typography.meta,
-    fontWeight: '700',
-    fontSize: 12,
-    color: t.color.danger,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  logoutBlock: {
-    marginTop: t.spacing.sm,
-  },
   errorText: {
     ...t.typography.meta,
     color: t.color.danger,
-  },
-  disclaimerBlock: {
-    paddingHorizontal: t.spacing.sm,
-    paddingTop: t.spacing.md,
-    alignItems: 'center',
-  },
-  disclaimerText: {
-    ...t.typography.meta,
-    color: t.color.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 }));

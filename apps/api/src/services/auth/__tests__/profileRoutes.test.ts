@@ -281,25 +281,60 @@ describe('PUT /me/profile/avatar', () => {
     expect(updateCall?.params[0]).toBeNull();
   });
 
-  it('rejects an unknown preset id with avatar_invalid and does not write', async () => {
+  it('rejects an unknown or retired preset id with avatar_invalid and does not write', async () => {
     const pool = makeFakePool(() => ({ rows: [] }));
+    const { app } = await buildApp({ pool });
+
+    for (const badPreset of ['not-a-real-preset', 'ear-balloon', 'ice-cream-bar']) {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/me/profile/avatar',
+        headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
+        payload: { avatarPreset: badPreset },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { code: string } }).error.code).toBe(
+        'avatar_invalid',
+      );
+    }
+    // No UPDATE on rejection — the prior avatar is preserved.
+    expect(
+      pool.calls.find((c) => c.text.startsWith('UPDATE profiles')),
+    ).toBeUndefined();
+  });
+
+  it('accepts newly added preset ids such as pineapple-whip', async () => {
+    const pool = makeFakePool((call) => {
+      if (call.text.startsWith('UPDATE profiles')) {
+        return {
+          rows: [
+            {
+              user_id: 'u-1',
+              display_name: 'Alice',
+              avatar_preset: call.params[0] as string | null,
+            },
+          ],
+        };
+      }
+      if (call.text.includes('completions')) {
+        return { rows: [{ completed: '0', total: '0' }] };
+      }
+      return { rows: [] };
+    });
     const { app } = await buildApp({ pool });
 
     const res = await app.inject({
       method: 'PUT',
       url: '/me/profile/avatar',
       headers: { 'x-test-user-id': 'u-1', 'content-type': 'application/json' },
-      payload: { avatarPreset: 'not-a-real-preset' },
+      payload: { avatarPreset: 'pineapple-whip' },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: { code: string } }).error.code).toBe(
-      'avatar_invalid',
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { avatarPreset: string | null }).avatarPreset).toBe(
+      'pineapple-whip',
     );
-    // No UPDATE on rejection — the prior avatar is preserved.
-    expect(
-      pool.calls.find((c) => c.text.startsWith('UPDATE profiles')),
-    ).toBeUndefined();
   });
 
   it('rejects a body with unexpected extra keys (strict schema)', async () => {

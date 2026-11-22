@@ -1,9 +1,10 @@
 /**
  * Avatar preset catalog.
  *
- * The Profile avatar is chosen from a fixed set of original, Disney-themed
- * illustrations bundled with the mobile app rather than an uploaded image.
- * This module is the single source of truth for the set of valid preset ids:
+ * The Profile avatar is chosen from a fixed set of original, park- and
+ * magic-themed illustrations bundled with the mobile app rather than an uploaded
+ * image. This module is the single source of truth for the set of valid preset
+ * ids:
  *
  *   - The API validates `PUT /me/profile/avatar` bodies against this list and
  *     stores the chosen id in `profiles.avatar_preset` (the DB CHECK
@@ -29,16 +30,28 @@
 export const AVATAR_PRESET_IDS = [
   'castle',
   'wishing-star',
-  'ear-balloon',
   'fireworks',
   'magic-wand',
+  'royal-crown',
+  'crystal-ball',
+  'enchanted-rose',
+  'sky-lantern',
+  'roller-coaster',
+  'ferris-wheel',
   'teacup',
   'carousel',
-  'hot-air-balloon',
-  'popcorn',
+  'pirate-ship',
+  'steam-train',
   'monorail',
+  'hot-air-balloon',
+  'rocket-ship',
+  'safari-lion',
+  'sea-turtle',
+  'tropical-hibiscus',
+  'pineapple-whip',
+  'pretzel',
+  'popcorn',
   'turkey-leg',
-  'ice-cream-bar',
 ] as const;
 
 /** The closed union of valid avatar preset ids. */

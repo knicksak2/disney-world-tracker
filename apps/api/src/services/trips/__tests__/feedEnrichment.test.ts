@@ -292,7 +292,7 @@ describe('Task 20.2: Feed Enrichment (FeedPhotoPort & GET /trips/:id/feed)', () 
       INSERT INTO profiles (user_id, display_name, avatar_preset) VALUES
         ('${organizerId}', 'Organizer User', 'castle'),
         ('${authorMemberId}', 'Author User', 'wishing-star'),
-        ('${otherMemberId}', 'Other Member', 'ear-balloon');
+        ('${otherMemberId}', 'Other Member', 'carousel');
 
       INSERT INTO trips (id, creator_id, name, description, start_date, end_date) VALUES
         ('${tripId}', '${organizerId}', 'Enrichment Trip', 'Notes', '2026-11-01', '2026-11-07');

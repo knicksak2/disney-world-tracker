@@ -2,7 +2,7 @@
 
 What the app does, grouped by area, with where each feature lives and which spec owns it. This is a map, not a spec. The specs in `.kiro/specs/` are the source of truth for exact behavior.
 
-**Snapshot:** commit `73bb5b5` base + `first-run-onboarding` (2026-11-18). 51 specs, 78 API migrations.
+**Snapshot:** commit `ab60f90` base + `SettingsScreen` relocation (2026-11-21). 51 specs, 80 API migrations.
 
 **Keeping it current:** update this file in the same change that ships, removes or re-statuses a feature (rule in `.kiro/steering/tech-conventions.md`, "Keep `docs/features.md` current"). Bump the snapshot line when you do.
 
@@ -23,7 +23,7 @@ Related docs: [`README.md`](../README.md) (setup and ops), [`hosting.md`](./host
 Defined in `apps/mobile/src/navigation/`.
 
 - **Bottom tabs:** Home, Explore, a center action button (`MagicFab`), Trips, Collection (labelled "You").
-- **You & Crew** is reached from the unified header pill on both Home and You, not from the tab bar or a Collection segment. It holds friends, identity, account settings (including App Tour replay & starter checklist restore), feedback, blocked users and account deletion.
+- **You & Crew** is reached from the unified header pill on both Home and You, not from the tab bar or a Collection segment. It holds identity, friends, and sharing, with a top-right header gear button opening **Settings** (`SettingsScreen`, holding preferences, account security, App Tour replay & starter checklist restore, feedback, blocked users, legal links/disclaimer, account deletion, log out, and `__DEV__`-only onboarding preview triggers).
 - **Root-stack screens above the tabs:** Onboarding Flow (`OnboardingFlow` — first-run wizard & read-only Quick Guide replay), Experience Detail, Menu, Share Composer, Food List and Experience List detail and discovery, Notification Center, Pin Showcase, Hidden Mickeys (list, detail, submit, my submissions).
 - **Auth stack:** Login, Register, Forgot Password, Reset Password.
 

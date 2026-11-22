@@ -46,6 +46,7 @@ jest.mock('../../../env/notifications', () => ({
 }));
 
 import YouAndCrewScreen from '../YouAndCrewScreen';
+import SettingsScreen from '../SettingsScreen';
 import DeleteAccountScreen, {
   PASSWORD_INCORRECT_MESSAGE,
   REAUTH_EXPIRED_MESSAGE,
@@ -137,6 +138,7 @@ describe('Delete account: entry and three-step flow', () => {
         <NavigationContainer ref={navRef}>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="YouAndCrewMain" component={YouAndCrewScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
           </Stack.Navigator>
         </NavigationContainer>
@@ -144,10 +146,16 @@ describe('Delete account: entry and three-step flow', () => {
     );
   }
 
-  /** Open the real screen through the real entry row, then advance to a step. */
-  async function openDeleteAccount(): Promise<void> {
+  async function openSettings(): Promise<void> {
     renderApp();
     await screen.findByTestId('profile-display-name');
+    fireEvent.press(screen.getByTestId('header-settings-button'));
+    await screen.findByTestId('settings-screen');
+  }
+
+  /** Open the real screen through the real entry row, then advance to a step. */
+  async function openDeleteAccount(): Promise<void> {
+    await openSettings();
     fireEvent.press(screen.getByTestId('delete-account-entry-button'));
     await screen.findByTestId('delete-account-step-review');
   }
@@ -183,10 +191,9 @@ describe('Delete account: entry and three-step flow', () => {
 
   afterEach(resetTestScheme);
 
-  describe('entry row on YouAndCrewScreen (R1.1, R1.2)', () => {
+  describe('entry row on SettingsScreen (R1.1, R1.2, R1.17)', () => {
     it('is a labelled button with a trash icon and the words "Delete account"', async () => {
-      renderApp();
-      await screen.findByTestId('profile-display-name');
+      await openSettings();
 
       const entry = screen.getByTestId('delete-account-entry-button');
       expect(entry.props.accessibilityRole).toBe('button');
@@ -199,8 +206,7 @@ describe('Delete account: entry and three-step flow', () => {
     });
 
     it('sits below Blocked Users and above Log out', async () => {
-      renderApp();
-      await screen.findByTestId('profile-display-name');
+      await openSettings();
 
       const order: string[] = [];
       const wanted = new Set([
@@ -244,8 +250,7 @@ describe('Delete account: entry and three-step flow', () => {
     it('renders the Privacy Policy link row and opens the hosted privacy policy URL when pressed (R20.5)', async () => {
       const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
       try {
-        renderApp();
-        await screen.findByTestId('profile-display-name');
+        await openSettings();
 
         const privacyLink = screen.getByTestId('privacy-policy-entry-button');
         expect(privacyLink.props.accessibilityRole).toBe('link');
@@ -262,8 +267,7 @@ describe('Delete account: entry and three-step flow', () => {
     it('renders the Terms of Service link row, opens the hosted terms URL when pressed, and renders the in-app Disney disclaimer (R4.1-R4.5)', async () => {
       const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
       try {
-        renderApp();
-        await screen.findByTestId('profile-display-name');
+        await openSettings();
 
         const termsLink = screen.getByTestId('terms-of-service-entry-button');
         expect(termsLink.props.accessibilityRole).toBe('link');
@@ -314,10 +318,10 @@ describe('Delete account: entry and three-step flow', () => {
       expect(screen.queryByText(/after \d+ days/)).toBeNull();
     });
 
-    it('Cancel returns to You & Crew', async () => {
+    it('Cancel returns to Settings', async () => {
       await openDeleteAccount();
       fireEvent.press(screen.getByTestId('delete-account-cancel'));
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
     });
 
     it('Continue moves to the password step without calling the API', async () => {
@@ -428,13 +432,13 @@ describe('Delete account: entry and three-step flow', () => {
   });
 
   describe('leaving the password step (R1.12)', () => {
-    it('Cancel returns to You & Crew without calling the API and stays signed in', async () => {
+    it('Cancel returns to Settings without calling the API and stays signed in', async () => {
       await goToPasswordStep();
       fireEvent.changeText(screen.getByTestId('delete-account-password'), 'half-typed');
 
       fireEvent.press(screen.getByTestId('delete-account-cancel'));
 
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
       expect(callsTo('POST', REAUTH_PATH)).toHaveLength(0);
       expect(callsTo('POST', DELETE_PATH)).toHaveLength(0);
       expect(useSessionStore.getState().token).toBe('token-abc');
@@ -447,7 +451,7 @@ describe('Delete account: entry and three-step flow', () => {
 
       fireEvent.press(back);
 
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
       expect(callsTo('POST', REAUTH_PATH)).toHaveLength(0);
       expect(useSessionStore.getState().token).toBe('token-abc');
     });
@@ -456,7 +460,7 @@ describe('Delete account: entry and three-step flow', () => {
       await goToPasswordStep();
       fireEvent.changeText(screen.getByTestId('delete-account-password'), 'half-typed');
       fireEvent.press(screen.getByTestId('delete-account-cancel'));
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
 
       fireEvent.press(screen.getByTestId('delete-account-entry-button'));
       await screen.findByTestId('delete-account-step-review');
@@ -649,7 +653,7 @@ describe('Delete account: entry and three-step flow', () => {
     it('Cancel on the confirm step leaves without sending the deletion', async () => {
       await goToConfirmStep();
       fireEvent.press(screen.getByTestId('delete-account-cancel'));
-      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('YouAndCrewMain'));
+      await waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Settings'));
       expect(callsTo('POST', DELETE_PATH)).toHaveLength(0);
       expect(useSessionStore.getState().token).toBe('token-abc');
     });

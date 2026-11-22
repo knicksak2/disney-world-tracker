@@ -21,7 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { displayNameSchema, type ProfileDTO } from '@dwt/shared';
+import { displayNameSchema, isAvatarPresetId, type ProfileDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../api/client';
 import { makeStyles } from '../theme/makeStyles';
@@ -66,6 +66,16 @@ export type ProfileQueryResult =
   | { readonly kind: 'ok'; readonly profile: ProfileDTO }
   | { readonly kind: 'forbidden' };
 
+function isProfileQueryResult(value: unknown): value is ProfileQueryResult {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'kind' in value &&
+    ((value as { kind?: unknown }).kind === 'ok' ||
+      (value as { kind?: unknown }).kind === 'forbidden')
+  );
+}
+
 const DISPLAY_NAME_INVALID_MESSAGE =
   'Display name must be 1-50 characters with at least one non-whitespace character.';
 
@@ -103,10 +113,10 @@ export function ProfileIdentityBlock({
     mutationFn: (displayName: string) =>
       apiRequest<ProfileDTO>('PATCH', '/me/profile', { displayName }),
     onSuccess: (updated) => {
-      const next: ProfileQueryResult = { kind: 'ok', profile: updated };
-      queryClient.setQueryData<ProfileQueryResult>(
+      queryClient.setQueryData<ProfileQueryResult | ProfileDTO>(
         ['profile', updated.userId],
-        next,
+        (prev) =>
+          isProfileQueryResult(prev) ? { kind: 'ok', profile: updated } : updated,
       );
       queryClient.setQueryData<MeResponse>(['me'], (prev) =>
         prev
@@ -148,10 +158,10 @@ export function ProfileIdentityBlock({
   };
 
   const handleAvatarChanged = (updated: ProfileDTO) => {
-    const next: ProfileQueryResult = { kind: 'ok', profile: updated };
-    queryClient.setQueryData<ProfileQueryResult>(
+    queryClient.setQueryData<ProfileQueryResult | ProfileDTO>(
       ['profile', updated.userId],
-      next,
+      (prev) =>
+        isProfileQueryResult(prev) ? { kind: 'ok', profile: updated } : updated,
     );
     queryClient.setQueryData<MeResponse>(['me'], (prev) =>
       prev
@@ -186,7 +196,7 @@ export function ProfileIdentityBlock({
             style={styles.avatarPressable}
           >
             <View style={styles.avatarRing}>
-              {profile.avatarPreset !== null ? (
+              {isAvatarPresetId(profile.avatarPreset) ? (
                 <View
                   style={styles.avatar}
                   accessibilityLabel={`${profile.displayName}'s avatar`}
@@ -200,7 +210,7 @@ export function ProfileIdentityBlock({
                   testID="profile-avatar-placeholder"
                 >
                   <Text style={styles.avatarPlaceholderText}>
-                    {profile.displayName.slice(0, 1).toUpperCase()}
+                    {(profile.displayName ?? '').slice(0, 1).toUpperCase()}
                   </Text>
                 </View>
               )}
@@ -212,7 +222,7 @@ export function ProfileIdentityBlock({
         ) : (
           <View style={styles.avatarPressable}>
             <View style={styles.avatarRing}>
-              {profile.avatarPreset !== null ? (
+              {isAvatarPresetId(profile.avatarPreset) ? (
                 <View
                   style={styles.avatar}
                   accessibilityLabel={`${profile.displayName}'s avatar`}
@@ -226,7 +236,7 @@ export function ProfileIdentityBlock({
                   testID="profile-avatar-placeholder"
                 >
                   <Text style={styles.avatarPlaceholderText}>
-                    {profile.displayName.slice(0, 1).toUpperCase()}
+                    {(profile.displayName ?? '').slice(0, 1).toUpperCase()}
                   </Text>
                 </View>
               )}

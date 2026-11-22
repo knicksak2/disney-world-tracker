@@ -254,7 +254,7 @@ describe('Food Photo Read Routes (Task 9.2)', () => {
       INSERT INTO profiles (user_id, display_name, avatar_preset)
       VALUES ('${viewerId}', 'Viewer User', 'castle'),
              ('${friendId}', 'BestFriendBob', 'wishing-star'),
-             ('${strangerId}', 'StrangerSamSentinel', 'ear-balloon'),
+             ('${strangerId}', 'StrangerSamSentinel', 'carousel'),
              ('${blockedUploaderId}', 'BlockedUser', 'fireworks'),
              ('${blockingUploaderId}', 'BlockingUser', 'magic-wand');
 

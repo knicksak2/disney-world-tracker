@@ -114,7 +114,7 @@ describe('AdminRepo Photo Queue & Moderation (Task 10.1)', () => {
       INSERT INTO profiles (user_id, display_name, avatar_preset)
       VALUES ('${uploader1Id}', 'Alice Wonderland', 'castle'),
              ('${uploader2Id}', 'Bob Builder', 'wishing-star'),
-             ('${reporterId}', 'Carol Critic', 'ear-balloon');
+             ('${reporterId}', 'Carol Critic', 'carousel');
     `);
 
     repo = createAdminRepo(pool, redis);

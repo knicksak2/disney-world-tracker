@@ -714,6 +714,16 @@ export function HomeSearchBar(): JSX.Element {
         onPress: () => navigation.navigate('YouAndCrew', { screen: 'YouAndCrewMain' }),
       },
       {
+        id: 'tool-app-settings',
+        title: 'Settings',
+        subtitle: 'Notifications, appearance, security, legal & logout',
+        breadcrumb: 'You › Crew & Settings › Settings',
+        keywords: 'settings preferences notifications appearance dark mode light mode theme password security logout terms privacy legal delete account tour guide',
+        icon: 'settings-outline',
+        tag: 'You',
+        onPress: () => navigation.navigate('YouAndCrew', { screen: 'Settings' }),
+      },
+      {
         id: 'tool-blocked',
         title: 'Blocked Users',
         subtitle: 'Manage blocked accounts & privacy',
@@ -723,16 +733,20 @@ export function HomeSearchBar(): JSX.Element {
         tag: 'You',
         onPress: () => navigation.navigate('YouAndCrew', { screen: 'BlockedUsers' }),
       },
-      {
-        id: 'tool-onboarding-preview',
-        title: 'Preview Onboarding',
-        subtitle: 'Test the 3-step welcome flow & Home Start Here card',
-        breadcrumb: 'You › Crew & Settings › Onboarding Preview',
-        keywords: 'onboarding tour welcome guide preview start here',
-        icon: 'sparkles-outline',
-        tag: 'You',
-        onPress: () => navigation.navigate('OnboardingFlow', { mode: 'preview' }),
-      },
+      ...(__DEV__
+        ? [
+            {
+              id: 'tool-onboarding-preview',
+              title: 'Preview Onboarding',
+              subtitle: 'Test the 3-step welcome flow & Home Start Here card',
+              breadcrumb: 'You › Crew & Settings › Settings › Developer',
+              keywords: 'onboarding tour welcome guide preview start here',
+              icon: 'sparkles-outline' as const,
+              tag: 'You',
+              onPress: () => navigation.navigate('OnboardingFlow', { mode: 'preview' }),
+            },
+          ]
+        : []),
       {
         id: 'tool-feedback',
         title: 'Send Feedback',

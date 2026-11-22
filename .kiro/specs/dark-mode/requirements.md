@@ -141,6 +141,7 @@ my other preferences, so that it's where I'd expect to look for it.
    See design.md's corrected "`YouAndCrewScreen.tsx` (modified)" section and tasks.md tasks 5.2/5.5
    for the corrected file/test references. This note is additive; criterion 4.1's original text is
    left in place rather than rewritten, per the repo's spec-editing convention.
+   *(Further relocation note: `AppearancePreferenceControl` now lives in the Preferences card on `SettingsScreen` (`YouAndCrewStack` › `Settings`), reached from the header gear button on `YouAndCrewScreen`.)*
 2. THE Appearance control SHALL present exactly three selectable options corresponding to
    `'system'`, `'light'`, and `'dark'`, with the currently-active option visibly indicated.
 3. WHEN the User selects a different Appearance option, THE App SHALL update the Active theme

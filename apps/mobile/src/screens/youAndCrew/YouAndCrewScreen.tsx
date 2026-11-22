@@ -4,14 +4,17 @@
  */
 
 import React from 'react';
-import { ScrollView } from 'react-native';
+import { Pressable, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import type { ProfileDTO } from '@dwt/shared';
 
 import { ApiError, apiRequest } from '../../api/client';
 import { makeStyles } from '../../theme/makeStyles';
+import { withAlpha } from '../../theme/theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { GradientHeader, ScreenContainer } from '../../theme/components';
 import type { YouAndCrewStackParamList } from '../../navigation/YouAndCrewStack';
 import { YouAndCrewContent } from './YouAndCrewContent';
@@ -31,6 +34,7 @@ interface MeResponse {
 
 export default function YouAndCrewScreen(): JSX.Element {
   const styles = useStyles();
+  const t = useAppTheme();
   const navigation = useNavigation<NavigationProp>();
 
   const meQuery = useQuery<MeResponse, ApiError>({
@@ -59,6 +63,22 @@ export default function YouAndCrewScreen(): JSX.Element {
         subtitle="Manage your profile, friends & sharing"
         icon="people"
         {...(navigation?.canGoBack?.() ? { onBack: () => navigation.goBack() } : {})}
+        right={
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            accessibilityHint="Opens app preferences, account security, help and legal"
+            testID="header-settings-button"
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.headerSettingsBtn,
+              pressed && styles.headerSettingsBtnPressed,
+            ]}
+          >
+            <Ionicons name="settings-outline" size={20} color={t.color.textOnPrimary} />
+          </Pressable>
+        }
       />
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -68,8 +88,20 @@ export default function YouAndCrewScreen(): JSX.Element {
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
+  },
+  headerSettingsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: withAlpha(t.color.textOnPrimary, 0.16),
+  },
+  headerSettingsBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
   },
 }));

@@ -164,13 +164,19 @@ describe('HomeSearchBar', () => {
     });
   });
 
-  it('routes Profile, Crew & Settings directly to YouAndCrew and Shared Inbox to Inbox', () => {
+  it('routes Profile, Crew & Settings directly to YouAndCrew, Settings to Settings, and Shared Inbox to Inbox', () => {
     renderSearchBar();
 
     fireEvent.changeText(screen.getByTestId('home-search-input'), 'settings');
     fireEvent.press(screen.getByTestId('home-search-result-tool-settings'));
     expect(mockNavigate).toHaveBeenCalledWith('YouAndCrew', {
       screen: 'YouAndCrewMain',
+    });
+
+    fireEvent.changeText(screen.getByTestId('home-search-input'), 'settings');
+    fireEvent.press(screen.getByTestId('home-search-result-tool-app-settings'));
+    expect(mockNavigate).toHaveBeenCalledWith('YouAndCrew', {
+      screen: 'Settings',
     });
 
     fireEvent.changeText(screen.getByTestId('home-search-input'), 'inbox');
@@ -302,5 +308,18 @@ describe('HomeSearchBar', () => {
     fireEvent.changeText(screen.getByTestId('home-search-input'), 'onboard');
     fireEvent.press(screen.getByTestId('home-search-result-tool-onboarding-preview'));
     expect(mockNavigate).toHaveBeenCalledWith('OnboardingFlow', { mode: 'preview' });
+  });
+
+  it('omits Preview Onboarding tool shortcut when __DEV__ is false', () => {
+    const g = global as unknown as { __DEV__: boolean };
+    const originalDev = g.__DEV__;
+    g.__DEV__ = false;
+    try {
+      renderSearchBar();
+      fireEvent.changeText(screen.getByTestId('home-search-input'), 'onboard');
+      expect(screen.queryByTestId('home-search-result-tool-onboarding-preview')).toBeNull();
+    } finally {
+      g.__DEV__ = originalDev;
+    }
   });
 });

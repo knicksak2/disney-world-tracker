@@ -445,7 +445,7 @@ describe('listFriendsAndRequests', () => {
             {
               friend_id: OTHER,
               display_name: 'Goofy',
-              avatar_preset: 'ear-balloon',
+              avatar_preset: 'carousel',
               established_at: established,
             },
           ],
@@ -477,7 +477,7 @@ describe('listFriendsAndRequests', () => {
         {
           userId: OTHER,
           displayName: 'Goofy',
-          avatarPreset: 'ear-balloon',
+          avatarPreset: 'carousel',
           establishedAt: established.toISOString(),
         },
       ],

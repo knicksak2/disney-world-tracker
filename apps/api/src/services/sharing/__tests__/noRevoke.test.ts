@@ -248,7 +248,7 @@ describe('Task 21.2: No sender revoke; recipient delete ends access (decision D2
       INSERT INTO profiles (user_id, display_name, avatar_preset) VALUES
         ('${senderId}', 'Alice Sender', 'castle'),
         ('${recipient1Id}', 'Bob Recipient', 'wishing-star'),
-        ('${recipient2Id}', 'Charlie Recipient', 'ear-balloon');
+        ('${recipient2Id}', 'Charlie Recipient', 'carousel');
 
       INSERT INTO trips (id, creator_id, name, description, start_date, end_date) VALUES
         ('${tripId}', '${senderId}', 'Magic Kingdom Trip', 'Trip Notes', '2026-10-20', '2026-10-25');
