@@ -25,7 +25,7 @@ accurate and unaffected; only the mobile navigation surface it drives has moved 
 - **Catalog_Sync**: The existing orchestrator that fetches Disney Facility_Documents, classifies and enriches them, reconciles the result against the Catalog_Cache within one transaction, and records the run outcome. Reused unchanged except to additionally resolve and persist Land.
 - **Catalog_Cache**: The existing local persisted catalog (the `experiences` table and Resort persistence) plus its sync metadata.
 - **API**: The API-side Catalog_Service that serves catalog reads (`GET /catalog`, `GET /catalog/:experienceId`, `GET /resorts`) to the App.
-- **App**: The Disney World Tracker mobile application (`apps/mobile`).
+- **App**: The ParkHQ mobile application (`apps/mobile`).
 - **Facility_Document**: One Disney entity document, carrying an ancestor chain used to resolve the owning Area (and now the Land).
 - **Ancestor_Chain**: The ordered set of ancestor references on a Facility_Document that `resolveArea` walks. The App-side adapter synthesizes it from the flat `ancestor*` fields, including an `ancestorLand`/`ancestorLandId` pair.
 - **Land_Ancestor**: The entry in a Facility_Document's Ancestor_Chain whose ancestor Facility_Type is `land` (e.g. Fantasyland, Tomorrowland). Present only for Experiences within a theme park or water park.

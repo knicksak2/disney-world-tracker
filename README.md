@@ -1,4 +1,4 @@
-# Disney World Tracker
+# ParkHQ
 
 A mobile app for tracking Walt Disney World experiences (attractions, shows, restaurants, parades, character meets, and more) and checking live wait times, show times, Lightning Lane state, and boarding groups, backed by a Fastify API and a shared TypeScript package. Beyond tracking, it covers shared group trips (day planning, reservations, budget, expenses, dining-plan calculator), friends and sharing, a collectible pin system, Hidden Mickeys, a crowd calendar with wait forecasts, and photo uploads. For the full list with status and owning specs, see [`docs/features.md`](./docs/features.md).
 

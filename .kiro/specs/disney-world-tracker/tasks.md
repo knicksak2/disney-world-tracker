@@ -1,4 +1,4 @@
-# Implementation Plan: Disney World Tracker
+# Implementation Plan: ParkHQ
 
 ## Overview
 

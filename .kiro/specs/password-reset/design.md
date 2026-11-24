@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Password Reset feature provides a secure, multi-channel password recovery flow for Disney World Tracker. It is designed around the mobile-first use case with a 6-digit numeric verification code entered directly in the mobile app, alongside an email-linked web fallback form rendered by the Fastify API.
+The Password Reset feature provides a secure, multi-channel password recovery flow for ParkHQ. It is designed around the mobile-first use case with a 6-digit numeric verification code entered directly in the mobile app, alongside an email-linked web fallback form rendered by the Fastify API.
 
 Key pillars of this design:
 1. **Zero Plaintext Storage**: Both the 6-digit verification code and the web reset token are hashed via SHA-256 before storage in PostgreSQL (`password_reset_tokens`).
@@ -184,7 +184,7 @@ export interface PasswordResetRepo {
 | `SMTP_PASS` | `""` | SMTP password or Google App Password. |
 | `SMTP_SERVICE` | `""` | Shorthand SMTP service (e.g. `"gmail"`). |
 | `SMTP_SECURE` | `"false"` | Use direct TLS/SSL connection (`true` for port 465). |
-| `MAIL_FROM` | `"Disney World Tracker <auth@disneytracker.app>"` | Sender name and address for transactional emails. |
+| `MAIL_FROM` | `"ParkHQ <auth@disneytracker.app>"` | Sender name and address for transactional emails. |
 | `PASSWORD_RESET_EXPIRY_MINUTES` | `15` | Expiration time for reset codes and tokens. |
 | `PASSWORD_RESET_MAX_ATTEMPTS` | `5` | Maximum failed verification attempts before invalidation. |
 | `API_PUBLIC_URL` | `"https://dwt-api.onrender.com"` | Base URL used to formulate the fallback web reset link. |

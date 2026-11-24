@@ -18,11 +18,11 @@
 > spec-editing convention. See also design.md's Overview corrective note and tasks.md's note
 > on the stale mobile tab list (~line 587).
 
-The Disney World Tracker is a mobile application that provides a comprehensive catalog of experiences available at Walt Disney World, including attractions, shows, restaurants, parades, character meet-and-greets, and other activities. The catalog is sourced from the public ThemeParks.wiki API. Users can track which experiences they have completed, view completion statistics, rate experiences, and record personal notes. The application also surfaces userbase aggregate ratings, highlights highest-rated experiences on the home screen, and supports user profiles, a friends system, and the ability to share progress and recommendations with friends.
+ParkHQ is a mobile application that provides a comprehensive catalog of experiences available at Walt Disney World, including attractions, shows, restaurants, parades, character meet-and-greets, and other activities. The catalog is sourced from the public ThemeParks.wiki API. Users can track which experiences they have completed, view completion statistics, rate experiences, and record personal notes. The application also surfaces userbase aggregate ratings, highlights highest-rated experiences on the home screen, and supports user profiles, a friends system, and the ability to share progress and recommendations with friends.
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **Home_Screen**: The default landing screen of the App displayed to an authenticated User.
 - **Experience**: An individual catalog item at Walt Disney World, such as a ride, show, restaurant, parade, character meet-and-greet, or other activity.
 - **Experience_Category**: The classification of an Experience. Allowed values are Ride, Show, Restaurant, Parade, Character_Meet, and Other.

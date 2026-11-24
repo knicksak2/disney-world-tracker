@@ -27,7 +27,7 @@ themselves and, under the existing authorization rules, for their Friends.
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **User**: An authenticated account holder of the App.
 - **Experience**: An individual catalog item at Walt Disney World, such as a
   ride, show, restaurant, parade, character meet-and-greet, tour, recreation

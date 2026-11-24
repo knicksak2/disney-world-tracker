@@ -20,7 +20,7 @@
 > described below and in `tasks.md` are stale. This note is additive; the Overview's original text
 > is left in place rather than rewritten, per the repo's spec-editing convention.
 
-The Disney World Tracker is a mobile application backed by a hosted multi-service backend that catalogs Walt Disney World Experiences sourced from the public ThemeParks.wiki API, lets authenticated Users track Completions, Ratings, and Notes, surfaces personal completion statistics, computes anonymous aggregate ratings, exposes a friends graph with sharing, and highlights the highest-rated Experiences on the Home_Screen.
+ParkHQ is a mobile application backed by a hosted multi-service backend that catalogs Walt Disney World Experiences sourced from the public ThemeParks.wiki API, lets authenticated Users track Completions, Ratings, and Notes, surfaces personal completion statistics, computes anonymous aggregate ratings, exposes a friends graph with sharing, and highlights the highest-rated Experiences on the Home_Screen.
 
 The design treats the backend as a single deployable service composed of seven cohesive modules — `Auth_Service`, `Catalog_Service`, `Tracking_Service`, `Stats_Service`, `Friends_Service`, `Sharing_Service`, and `Aggregate_Ratings_Service` — each with a clear API and storage boundary. This monolith-with-clear-modules approach keeps deployment and operations simple for a first release while leaving each module independently extractable.
 

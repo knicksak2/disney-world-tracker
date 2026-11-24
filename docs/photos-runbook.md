@@ -1,6 +1,6 @@
 # User Photos Operations & Launch Runbook
 
-This runbook covers operational procedures, security configurations, monitoring, launch gates, and disaster recovery for the photo uploads pipeline in Disney World Tracker.
+This runbook covers operational procedures, security configurations, monitoring, launch gates, and disaster recovery for the photo uploads pipeline in ParkHQ.
 
 ---
 

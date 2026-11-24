@@ -613,7 +613,7 @@ function formatSummaryShareText(summary: TripSummaryDTO): string {
     });
   }
 
-  lines.push('', 'Tracked with Disney World Tracker ✨');
+  lines.push('', 'Tracked with ParkHQ ✨');
   return lines.join('\n');
 }
 

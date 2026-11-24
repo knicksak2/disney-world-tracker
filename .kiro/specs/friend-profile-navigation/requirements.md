@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Friend Profile Navigation feature reorganizes the existing Friend_Profile_View in the Disney World Tracker mobile application so a User can browse an accepted Friend's progress through an intuitive, tab-based navigation instead of a single straight-through scroll. Today the Friend_Profile_View renders the Friend's Profile summary, completion statistics, and a flat list of completed Experiences stacked in one scroll. This feature keeps all of that information but surfaces it through a View_Selector — a row of icon-and-label tabs — that lets the User switch between an Overview, the Friend's progress organized by Park, the Friend's progress organized by Experience_Category, and the full list of individual completed Experiences.
+The Friend Profile Navigation feature reorganizes the existing Friend_Profile_View in the ParkHQ mobile application so a User can browse an accepted Friend's progress through an intuitive, tab-based navigation instead of a single straight-through scroll. Today the Friend_Profile_View renders the Friend's Profile summary, completion statistics, and a flat list of completed Experiences stacked in one scroll. This feature keeps all of that information but surfaces it through a View_Selector — a row of icon-and-label tabs — that lets the User switch between an Overview, the Friend's progress organized by Park, the Friend's progress organized by Experience_Category, and the full list of individual completed Experiences.
 
 This feature is a presentation and in-screen navigation enhancement only. It reuses the data already served by the existing Friend_Viewing_Services (the Auth_Service Profile read, the Stats_Service statistics read, and the Tracking_Service Completions read introduced by the friend-stats-viewing feature) and the established Owner_Or_Friend_Rule authorization model. It does not change those services, their authorization behavior, or the data they return.
 
@@ -16,7 +16,7 @@ Superseded by `stats-experience-redesign` (Own side only) / stale stack name (do
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **User**: An authenticated account holder of the App, whether viewing a Friend's profile in the Friend_Profile_View or their own statistics in the Own_Stats_View.
 - **Friend**: A User who has an accepted, mutual relationship with the viewing User.
 - **Profile**: The public-facing account information for a Friend, including display name, avatar image, and overall completion percentage.

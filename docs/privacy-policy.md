@@ -3,7 +3,7 @@
 **Effective Date:** October 18, 2026  
 **Last Updated:** November 13, 2026
 
-Welcome to **Disney World Tracker** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our [Terms of Service](/terms).
+Welcome to **ParkHQ** ("the App"). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our [Terms of Service](/terms).
 
 ---
 
@@ -78,7 +78,7 @@ We retain data only as long as necessary to provide our services and maintain co
 
 ## 6. User-Generated Content & Code of Conduct
 
-Disney World Tracker is a community dedicated to celebrating visits to Walt Disney World.
+ParkHQ is a community dedicated to celebrating visits to Walt Disney World.
 
 ### Objectionable Content Policy
 Objectionable content is strictly prohibited. You may not upload photos or content that is:
@@ -99,4 +99,4 @@ If you have questions about this Privacy Policy, wish to appeal a content decisi
 
 ## 7. Disclaimer & Non-Affiliation
 
-Disney World Tracker is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our [Terms of Service](/terms).
+ParkHQ is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our [Terms of Service](/terms).

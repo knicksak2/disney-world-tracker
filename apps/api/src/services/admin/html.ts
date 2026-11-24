@@ -1488,7 +1488,7 @@ export function renderPage(title: string, bodyHtml: string, currentPath?: string
         <a class="brand-link" href="/admin">
           <span class="brand-icon">🏰</span>
           <div class="brand-titles">
-            <span class="brand-name">Disney World Tracker</span>
+            <span class="brand-name">ParkHQ</span>
             <span class="brand-tag">Operator Console</span>
           </div>
         </a>

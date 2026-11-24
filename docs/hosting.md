@@ -1,6 +1,6 @@
 # Hosting Plan
 
-This document explains how the Disney World Tracker backend will be hosted using free-tier services. It is meant for a side-project budget — every piece below has a free tier that does not expire, with no credit card surprises at month 13.
+This document explains how the ParkHQ backend will be hosted using free-tier services. It is meant for a side-project budget — every piece below has a free tier that does not expire, with no credit card surprises at month 13.
 
 The full architecture from `design.md` calls for three self-hosted moving pieces:
 

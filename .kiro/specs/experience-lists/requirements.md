@@ -59,7 +59,7 @@ catalog search.
 
 ## Glossary
 
-- **App**: The mobile client and web interfaces of the Disney World Tracker.
+- **App**: The mobile client and web interfaces of ParkHQ.
 - **User**: An authenticated user of the App.
 - **Experience**: A catalog entry with an `ExperienceCategory` (`Ride`, `Show`, `Restaurant`,
   `Parade`, `Character_Meet`, `Walkthrough`, `PlayArea`, `Game`, `Tour`, `Recreation`, `Spa`,

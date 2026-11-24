@@ -242,7 +242,7 @@ export function TripGuestManagementModal({
           </View>
 
           <Text style={styles.subtitle}>
-            Guests represent party members (such as kids or partners) without a Disney World Tracker account. They carry through to Stays, Dining Plan, Budget, and Expenses.
+            Guests represent party members (such as kids or partners) without a ParkHQ account. They carry through to Stays, Dining Plan, Budget, and Expenses.
           </Text>
 
           {errorMessage ? (

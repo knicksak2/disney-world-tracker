@@ -2,13 +2,13 @@
 
 ## Introduction
 
-The Friend Stats Viewing feature lets a User open one of the User's accepted Friends and view that Friend's progress: the Friend's Profile summary, completion statistics (overall, per-Park, and per-Experience_Category completion percentages), and the list of Experiences the Friend has completed. The feature builds on the existing friends infrastructure and the established owner-or-friend authorization model in the Disney World Tracker application rather than introducing a parallel one.
+The Friend Stats Viewing feature lets a User open one of the User's accepted Friends and view that Friend's progress: the Friend's Profile summary, completion statistics (overall, per-Park, and per-Experience_Category completion percentages), and the list of Experiences the Friend has completed. The feature builds on the existing friends infrastructure and the established owner-or-friend authorization model in the ParkHQ application rather than introducing a parallel one.
 
 Specifically, the Stats_Service already exposes a friend-or-self statistics summary, the Auth_Service already exposes an owner-or-friend Profile read, and both already deny non-friend reads with a `profile_forbidden` authorization error without recording the attempt. This feature reuses that authorization rule and those computations, and adds a Friend-scoped Completions read (which does not exist today) plus a single App screen, the Friend_Profile_View, that surfaces a Friend's Profile, statistics, and Completions together.
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **User**: An authenticated account holder of the App.
 - **Profile**: The public-facing account information for a User, including display name and avatar image, plus the User's overall completion percentage.
 - **Friend**: A User who has an accepted, mutual relationship with another User via the Friends_Service.

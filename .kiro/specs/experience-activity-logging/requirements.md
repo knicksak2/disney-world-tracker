@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Experience Activity Logging enhances the Disney World Tracker by enabling Users to log multiple visits and repeat rides for any Experience over time, attach visit-specific ratings (1–10) and notes to each visit, and view a rich chronological visit history on the Experience Detail screen.
+Experience Activity Logging enhances ParkHQ by enabling Users to log multiple visits and repeat rides for any Experience over time, attach visit-specific ratings (1–10) and notes to each visit, and view a rich chronological visit history on the Experience Detail screen.
 
 Previously, an Experience could only be marked completed once in the `completions` table with a single static rating in `ratings`. This made it impossible for returning visitors and annual passholders to record riding an attraction again on subsequent park days or trips, or to record changing opinions over time (e.g., rating a restaurant 10/10 on one vacation and 7/10 on another).
 
@@ -10,7 +10,7 @@ This feature introduces the `experience_logs` event stream while preserving the 
 
 ## Glossary
 
-- **App**: The mobile client and web interfaces of the Disney World Tracker.
+- **App**: The mobile client and web interfaces of ParkHQ.
 - **User**: An authenticated user of the App.
 - **Experience**: An individual attraction, show, restaurant, parade, character meet, or resort in the catalog.
 - **Experience_Log**: An individual record of a User experiencing an attraction on a specific calendar date and timestamp, with an optional per-visit Rating (1–10) and visit Note.

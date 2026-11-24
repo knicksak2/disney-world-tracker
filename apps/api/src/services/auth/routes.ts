@@ -899,7 +899,7 @@ async function handleGetResetPasswordWeb(
     reply.send(
       renderWebMessageHtml(
         'Invalid Request',
-        'No reset token was provided. Please request a new link in the Disney World Tracker app.',
+        'No reset token was provided. Please request a new link in the ParkHQ app.',
         true,
       ),
     );
@@ -914,7 +914,7 @@ async function handleGetResetPasswordWeb(
     reply.send(
       renderWebMessageHtml(
         'Link Expired or Invalid',
-        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        'This password reset link is invalid or has expired. Please open the ParkHQ app and request a new code.',
         true,
       ),
     );
@@ -963,7 +963,7 @@ async function handlePostResetPasswordWeb(
     reply.send(
       renderWebMessageHtml(
         'Link Expired or Invalid',
-        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        'This password reset link is invalid or has expired. Please open the ParkHQ app and request a new code.',
         true,
       ),
     );
@@ -1003,7 +1003,7 @@ async function handlePostResetPasswordWeb(
     reply.send(
       renderWebMessageHtml(
         'Link Expired or Invalid',
-        'This password reset link is invalid or has expired. Please open the Disney World Tracker app and request a new code.',
+        'This password reset link is invalid or has expired. Please open the ParkHQ app and request a new code.',
         true,
       ),
     );
@@ -1016,7 +1016,7 @@ async function handlePostResetPasswordWeb(
     reply.send(
       renderWebMessageHtml(
         'Password Updated and Account Restored',
-        'Your password has been reset and your scheduled account deletion was cancelled, so your account has been restored. You can now return to the Disney World Tracker app and sign in with your new password.',
+        'Your password has been reset and your scheduled account deletion was cancelled, so your account has been restored. You can now return to the ParkHQ app and sign in with your new password.',
         false,
       ),
     );
@@ -1027,7 +1027,7 @@ async function handlePostResetPasswordWeb(
   reply.send(
     renderWebMessageHtml(
       'Password Updated!',
-      'Your password has been successfully reset. You can now return to the Disney World Tracker app and sign in with your new password.',
+      'Your password has been successfully reset. You can now return to the ParkHQ app and sign in with your new password.',
       false,
     ),
   );
@@ -1052,7 +1052,7 @@ function renderWebResetFormHtml(token: string, errorMessage?: string): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Your Password | Disney World Tracker</title>
+  <title>Reset Your Password | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; }
     .card { max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
@@ -1072,7 +1072,7 @@ function renderWebResetFormHtml(token: string, errorMessage?: string): string {
   <div class="card">
     <div class="header">
       <h1 class="title">Choose a New Password</h1>
-      <p class="subtitle">Disney World Tracker</p>
+      <p class="subtitle">ParkHQ</p>
     </div>
     ${errorAlert}
     <form method="POST" action="/auth/reset-password-web">
@@ -1108,7 +1108,7 @@ function renderWebMessageHtml(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)} | Disney World Tracker</title>
+  <title>${escapeHtml(title)} | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; }
     .card { max-width: 440px; margin: 40px auto; background: #ffffff; border-radius: 16px; padding: 40px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; text-align: center; }

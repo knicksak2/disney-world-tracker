@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Experience Detail Navigation feature lets a User open an Experience's detail page directly from a completed-Experience row, whether that row appears on the User's own Stats page or on a Friend's profile. Today the Disney World Tracker mobile application renders every completed-Experience entry through a single shared Completion_Row component that is purely presentational — it shows the Experience name, contextual metadata, the Rating, and the shared Note, but tapping it does nothing. This feature makes that row a navigation affordance: tapping a completed-Experience row navigates the App to the existing Experience_Detail_View for that Experience.
+The Experience Detail Navigation feature lets a User open an Experience's detail page directly from a completed-Experience row, whether that row appears on the User's own Stats page or on a Friend's profile. Today the ParkHQ mobile application renders every completed-Experience entry through a single shared Completion_Row component that is purely presentational — it shows the Experience name, contextual metadata, the Rating, and the shared Note, but tapping it does nothing. This feature makes that row a navigation affordance: tapping a completed-Experience row navigates the App to the existing Experience_Detail_View for that Experience.
 
 The destination screen already exists. The Experience_Detail_View is registered in the Catalog tab's stack and is addressed by an Experience_Id. Cross-stack navigation is already supported by the navigation typing, so the Stats tab and the Friends tab can dispatch a navigation into the Catalog tab's Experience_Detail_View. The presentational row and the destination screen are both in place; what is missing is the data and the wiring that connect them.
 
@@ -18,7 +18,7 @@ Requirements 8 (default collapsed on first display) and 10 (in-memory, per-Scree
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **User**: An authenticated account holder of the App, whether viewing their own Stats_View or a Friend's Friend_Profile_View.
 - **Friend**: A User who has an accepted, mutual relationship with the viewing User.
 - **Experience**: An individual catalog item at Walt Disney World, such as a ride, show, restaurant, parade, character meet-and-greet, or other activity.

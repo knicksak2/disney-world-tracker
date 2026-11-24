@@ -4,7 +4,7 @@
 
 The Friend Stats Viewing feature lets a User open one of their accepted Friends and view that Friend's progress in a single screen, the **Friend_Profile_View**: the Friend's Profile summary, completion statistics (overall, per-Park, per-Experience_Category), and the list of Experiences the Friend has completed.
 
-The feature is deliberately **additive** to the existing Disney World Tracker backend. The owner-or-friend authorization model and the percentage computations already exist and are reused rather than re-implemented:
+The feature is deliberately **additive** to the existing ParkHQ backend. The owner-or-friend authorization model and the percentage computations already exist and are reused rather than re-implemented:
 
 - `Auth_Service` already serves an owner-or-friend Profile read at `GET /users/:userId/profile` (`apps/api/src/services/auth/profileRoutes.ts`), including the Friend's overall completion percentage via `computePercent`.
 - `Stats_Service` already serves a friend-or-self statistics summary at `GET /me/stats/summary?for=<userId>` (`apps/api/src/services/stats/routes.ts`).

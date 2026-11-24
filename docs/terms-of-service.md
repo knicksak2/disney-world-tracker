@@ -3,7 +3,7 @@
 **Effective Date:** October 23, 2026  
 **Last Updated:** November 4, 2026
 
-Welcome to **Disney World Tracker** ("the App", "we", "us", or "our"). These Terms of Service ("Terms") govern your access to and use of the Disney World Tracker mobile application, website endpoints, and related services.
+Welcome to **ParkHQ** ("the App", "we", "us", or "our"). These Terms of Service ("Terms") govern your access to and use of the ParkHQ mobile application, website endpoints, and related services.
 
 By creating an account, downloading, or using the App, you agree to be bound by these Terms. If you do not agree to these Terms, do not use the App.
 
@@ -11,7 +11,7 @@ By creating an account, downloading, or using the App, you agree to be bound by 
 
 ## 1. Unofficial Companion App & Disney Trademark Disclaimer
 
-**Disney World Tracker is an independent, unofficial companion application created by park enthusiasts. It is not affiliated with, authorized by, endorsed by, or in any way officially connected with The Walt Disney Company, Disney Enterprises, Inc., or any of their subsidiaries or affiliates. The official Disney website can be found at [https://disney.com](https://disney.com).**
+**ParkHQ is an independent, unofficial companion application created by park enthusiasts. It is not affiliated with, authorized by, endorsed by, or in any way officially connected with The Walt Disney Company, Disney Enterprises, Inc., or any of their subsidiaries or affiliates. The official Disney website can be found at [https://disney.com](https://disney.com).**
 
 - All Disney-related marks, names, character names, park names, attraction names, logos, and emblems (including Walt Disney World, Magic Kingdom, EPCOT, Disney's Hollywood Studios, Disney's Animal Kingdom, and Lightning Lane) are registered trademarks or copyrights of The Walt Disney Company or its respective affiliates.
 - Any references to Disney trademarks, attraction names, or copyrighted works within the App are used strictly for informational, identification, and **nominative fair use** purposes.
@@ -95,7 +95,7 @@ WE DO NOT WARRANT THAT THE APP WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE, OR 
 
 ## 8. Limitation of Liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL DISNEY WORLD TRACKER, ITS OPERATORS, OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE APP.
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL PARKHQ, ITS OPERATORS, OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE APP.
 
 ---
 

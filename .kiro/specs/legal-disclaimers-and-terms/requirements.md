@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Disney World Tracker is an unofficial companion application for Walt Disney World Resort visitors. To comply with Apple App Store Review Guidelines (Guideline 1.2 for User-Generated Content, Guideline 5.1.1 for Privacy, and Guideline 5.2 for Intellectual Property / Trademarks) and Google Play Developer Policies (Impersonation, User-Generated Content, and Privacy), the application requires explicit legal disclaimers, a Terms of Service (EULA), and third-party data attribution.
+ParkHQ is an unofficial companion application for Walt Disney World Resort visitors. To comply with Apple App Store Review Guidelines (Guideline 1.2 for User-Generated Content, Guideline 5.1.1 for Privacy, and Guideline 5.2 for Intellectual Property / Trademarks) and Google Play Developer Policies (Impersonation, User-Generated Content, and Privacy), the application requires explicit legal disclaimers, a Terms of Service (EULA), and third-party data attribution.
 
 This feature implements the lean, in-place legal compliance architecture (Option 1):
 1. **Disney Trademark & Legal Disclaimer**: A clear nominative fair use statement, explicit declaration of non-affiliation with The Walt Disney Company, trademark ownership notices, and an operational data accuracy disclaimer.

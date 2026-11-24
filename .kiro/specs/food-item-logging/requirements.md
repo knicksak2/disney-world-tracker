@@ -10,7 +10,7 @@ This feature introduces a durable, per-restaurant dish catalog (`food_items`) se
 
 ## Glossary
 
-- **App**: The mobile client and web interfaces of the Disney World Tracker.
+- **App**: The mobile client and web interfaces of ParkHQ.
 - **User**: An authenticated user of the App.
 - **Restaurant_Experience**: An `experiences` row with `category = 'Restaurant'` (table-service, quick-service, or a festival booth carrying a `Festival Kiosk` facet per `festival-booth-tagging`).
 - **Food_Item**: A single named dish/menu entry scoped to one Restaurant_Experience, persisted in `food_items`. Sourced either from a Menu_Service menu fetch (`source = 'menu_sync'`) or, when no synced item matches, from direct User submission (`source = 'user_submitted'`).

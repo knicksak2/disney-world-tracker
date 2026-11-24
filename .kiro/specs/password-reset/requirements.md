@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Currently, user authentication in the Disney World Tracker only allows password changes via `POST /auth/change-password`, which requires an active, authenticated session and knowledge of the existing password. When a user forgets their password, they cannot establish a session and are permanently locked out of their account, their trip itineraries, experience favorites, food lists, and pin collections.
+Currently, user authentication in ParkHQ only allows password changes via `POST /auth/change-password`, which requires an active, authenticated session and knowledge of the existing password. When a user forgets their password, they cannot establish a session and are permanently locked out of their account, their trip itineraries, experience favorites, food lists, and pin collections.
 
 This feature introduces a complete, secure password recovery mechanism designed specifically for the mobile-first nature of this application:
 1. **In-App 6-Digit Code (Primary Mobile Flow)**: The user requests a password reset from the login screen, receives an email with a 6-digit numeric verification code, enters the code and their new password inside the app, and is immediately logged in upon verification.
@@ -12,7 +12,7 @@ This feature introduces a complete, secure password recovery mechanism designed 
 
 ## Glossary
 
-- **App**: The React Native mobile client (`apps/mobile`) for Disney World Tracker.
+- **App**: The React Native mobile client (`apps/mobile`) for ParkHQ.
 - **Auth_Service**: The Fastify-based authentication backend service (`apps/api/src/services/auth/`).
 - **Mail_Service**: The transactional email service responsible for dispatching system notifications and reset emails.
 - **Verification Code**: A 6-digit numeric code (e.g. `482195`) valid for 15 minutes, entered in the mobile app to verify identity.

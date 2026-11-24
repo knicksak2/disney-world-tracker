@@ -52,7 +52,7 @@ Experience_Lists; the two concepts do not read from or write to each other's tab
 
 ## Glossary
 
-- **App**: The mobile client (`apps/mobile`) of the Disney World Tracker.
+- **App**: The mobile client (`apps/mobile`) of ParkHQ.
 - **User**: An authenticated user of the App.
 - **Experience**: An existing catalog item of any `ExperienceCategory` (`Ride`, `Show`,
   `Restaurant`, `Parade`, `Character_Meet`, `Walkthrough`, `PlayArea`, `Game`, `Tour`,

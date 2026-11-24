@@ -2,7 +2,7 @@
 
 ## Overview
 
-First-Run Onboarding & App Clarity adds a lightweight, account-synced onboarding and clarity layer across the monorepo (`packages/shared`, `apps/api`, `apps/mobile`) so brand-new users immediately understand what Disney World Tracker does, complete one high-value action in 20 seconds, and land on a calm, non-duplicative Home screen.
+First-Run Onboarding & App Clarity adds a lightweight, account-synced onboarding and clarity layer across the monorepo (`packages/shared`, `apps/api`, `apps/mobile`) so brand-new users immediately understand what ParkHQ does, complete one high-value action in 20 seconds, and land on a calm, non-duplicative Home screen.
 
 The design follows five core constraints established with the owner:
 

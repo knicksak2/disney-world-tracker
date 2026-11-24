@@ -83,7 +83,7 @@ const apiBaseUrl =
   (process.env.NODE_ENV === 'production' ? HOSTED_DEFAULT : LOCAL_DEFAULT);
 
 const config: ExpoConfig = {
-  name: 'Disney World Tracker',
+  name: 'ParkHQ',
   slug: 'disney-tracker',
   owner: 'knicksak2s-team',
   version: '0.1.0',

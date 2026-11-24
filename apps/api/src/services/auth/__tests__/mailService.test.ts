@@ -33,7 +33,7 @@ describe('MailService', () => {
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'guest@example.com',
-        subject: 'Your Disney World Tracker reset code: 231 109',
+        subject: 'Your ParkHQ reset code: 231 109',
         code: '231109',
         resetUrl: 'http://localhost:3000/auth/reset-password?token=abc',
       }),
@@ -58,7 +58,7 @@ describe('MailService', () => {
     expect(mockSendFn).toHaveBeenCalledTimes(1);
     const payload = mockSendFn.mock.calls[0]?.[0];
     expect(payload.to).toBe('guest@example.com');
-    expect(payload.subject).toBe('Your Disney World Tracker reset code: 123 456');
+    expect(payload.subject).toBe('Your ParkHQ reset code: 123 456');
     expect(payload.html).toContain('123 456');
     expect(payload.html).toContain('https://example.com/reset?token=xyz');
     expect(payload.text).toContain('123 456');
@@ -98,15 +98,15 @@ describe('MailService', () => {
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
     const mailArgs = mockSendMail.mock.calls[0]?.[0];
-    expect(mailArgs.from).toBe('Disney World Tracker <myaccount@gmail.com>');
+    expect(mailArgs.from).toBe('ParkHQ <myaccount@gmail.com>');
     expect(mailArgs.to).toBe('recipient@example.com');
-    expect(mailArgs.subject).toBe('Your Disney World Tracker reset code: 654 321');
+    expect(mailArgs.subject).toBe('Your ParkHQ reset code: 654 321');
     expect(mailArgs.html).toContain('654 321');
     expect(mailArgs.text).toContain('654 321');
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'recipient@example.com',
-        subject: 'Your Disney World Tracker reset code: 654 321',
+        subject: 'Your ParkHQ reset code: 654 321',
       }),
       'Transactional email dispatched via SMTP',
     );

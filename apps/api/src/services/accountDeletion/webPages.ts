@@ -135,7 +135,7 @@ export function renderWebAccountDeletionFormHtml(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Delete Your Account | Disney World Tracker</title>
+  <title>Delete Your Account | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; line-height: 1.55; }
     .card { max-width: 560px; margin: 24px auto; background: #ffffff; border-radius: 16px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
@@ -162,12 +162,12 @@ export function renderWebAccountDeletionFormHtml(
   <div class="card">
     <div class="header">
       <h1 class="title">Delete Your Account</h1>
-      <p class="subtitle">Disney World Tracker &mdash; Self-Service Account Deletion</p>
+      <p class="subtitle">ParkHQ &mdash; Self-Service Account Deletion</p>
     </div>
     ${errorAlert}
     <div class="info-box">
       <h2>How account deletion works</h2>
-      <p style="margin: 0 0 8px 0;">You can also delete your account directly inside the Disney World Tracker mobile app by opening <strong>You &amp; Crew &rarr; Delete account</strong>. If you have uninstalled the app, use the form below.</p>
+      <p style="margin: 0 0 8px 0;">You can also delete your account directly inside the ParkHQ mobile app by opening <strong>You &amp; Crew &rarr; Delete account</strong>. If you have uninstalled the app, use the form below.</p>
       <ul>
         <li><strong>${safeDays}-day grace period:</strong> Once you submit this form, every device is signed out immediately and your profile is hidden from friends and trip members. Your account is scheduled for permanent erasure after <strong>${safeDays} days</strong>.</li>
         <li><strong>How to cancel:</strong> Signing in again with your email and password (or completing a password reset) before the ${safeDays}-day grace period ends cancels the deletion and restores your account.</li>
@@ -219,7 +219,7 @@ export function renderWebAccountDeletionSuccessHtml(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Account Deletion Scheduled | Disney World Tracker</title>
+  <title>Account Deletion Scheduled | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; line-height: 1.6; }
     .card { max-width: 500px; margin: 40px auto; background: #ffffff; border-radius: 16px; padding: 40px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; text-align: center; }
@@ -239,7 +239,7 @@ export function renderWebAccountDeletionSuccessHtml(
     </div>
     <h1 class="title">Account Deletion Scheduled</h1>
     <p class="message">Your account has been signed out on all devices, hidden from friends and trips, and scheduled for permanent deletion on <strong>${formattedDate}</strong> (${safeDays}-day grace period).</p>
-    <p class="message">Changed your mind? Simply sign in to Disney World Tracker with your email and password (or reset your password) before <strong>${formattedDate}</strong> to cancel the deletion and restore your account.</p>
+    <p class="message">Changed your mind? Simply sign in to ParkHQ with your email and password (or reset your password) before <strong>${formattedDate}</strong> to cancel the deletion and restore your account.</p>
     <div class="footer-links">
       <a href="/privacy">Privacy Policy</a>
     </div>
@@ -267,7 +267,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy | Disney World Tracker</title>
+  <title>Privacy Policy | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; line-height: 1.65; }
     .card { max-width: 760px; margin: 24px auto; background: #ffffff; border-radius: 16px; padding: 36px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
@@ -287,7 +287,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
   <div class="card">
     <h1>Privacy Policy</h1>
     <div class="meta"><strong>Effective Date:</strong> October 18, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 13, 2026</div>
-    <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our <a href="/terms">Terms of Service</a>.</p>
+    <p>Welcome to <strong>ParkHQ</strong> (&ldquo;the App&rdquo;). We respect your privacy and are committed to protecting the personal information you share with us. This Privacy Policy explains what data we collect, how it is processed and stored, who it is shared with, and your rights regarding your photos and account data. For governing terms, user conduct rules, and our non-affiliation disclaimer, please review our <a href="/terms">Terms of Service</a>.</p>
 
     <h2>1. Information We Collect</h2>
     <h3>Account &amp; Profile Data</h3>
@@ -348,7 +348,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
     </ul>
 
     <h2>6. User-Generated Content &amp; Code of Conduct</h2>
-    <p>Disney World Tracker is a community dedicated to celebrating visits to Walt Disney World.</p>
+    <p>ParkHQ is a community dedicated to celebrating visits to Walt Disney World.</p>
     <h3>Objectionable Content Policy</h3>
     <p>Objectionable content is strictly prohibited. You may not upload photos or content that is:</p>
     <ul>
@@ -365,7 +365,7 @@ export function renderPrivacyPolicyHtml(opts: RenderPrivacyPolicyOptions): strin
     </ul>
 
     <h2>7. Disclaimer &amp; Non-Affiliation</h2>
-    <p>Disney World Tracker is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our <a href="/terms">Terms of Service</a>.</p>
+    <p>ParkHQ is an independent, unofficial fan application and is not affiliated with, endorsed by, or authorized by The Walt Disney Company. For full trademark notices and disclaimers, see our <a href="/terms">Terms of Service</a>.</p>
   </div>
 </body>
 </html>`;
@@ -388,7 +388,7 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terms of Service | Disney World Tracker</title>
+  <title>Terms of Service | ParkHQ</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 32px 16px; line-height: 1.65; }
     .card { max-width: 760px; margin: 24px auto; background: #ffffff; border-radius: 16px; padding: 36px 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
@@ -408,11 +408,11 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
   <div class="card">
     <h1>Terms of Service</h1>
     <div class="meta"><strong>Effective Date:</strong> October 23, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> November 4, 2026</div>
-    <p>Welcome to <strong>Disney World Tracker</strong> (&ldquo;the App&rdquo;). These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the Disney World Tracker application, website endpoints, and related services.</p>
+    <p>Welcome to <strong>ParkHQ</strong> (&ldquo;the App&rdquo;). These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the ParkHQ application, website endpoints, and related services.</p>
     <p>By creating an account, downloading, or using the App, you agree to be bound by these Terms. If you do not agree to these Terms, do not use the App.</p>
 
     <h2>1. Unofficial Companion App &amp; Disney Trademark Disclaimer</h2>
-    <p><strong>Disney World Tracker is an independent, unofficial companion application created by park enthusiasts. It is not affiliated with, authorized by, endorsed by, or in any way officially connected with The Walt Disney Company, Disney Enterprises, Inc., or any of their subsidiaries or affiliates. The official Disney website can be found at <a href="https://disney.com" target="_blank" rel="noopener noreferrer">https://disney.com</a>.</strong></p>
+    <p><strong>ParkHQ is an independent, unofficial companion application created by park enthusiasts. It is not affiliated with, authorized by, endorsed by, or in any way officially connected with The Walt Disney Company, Disney Enterprises, Inc., or any of their subsidiaries or affiliates. The official Disney website can be found at <a href="https://disney.com" target="_blank" rel="noopener noreferrer">https://disney.com</a>.</strong></p>
     <ul>
       <li>All Disney-related marks, names, character names, park names, attraction names, logos, and emblems (including Walt Disney World, Magic Kingdom, EPCOT, Disney&rsquo;s Hollywood Studios, Disney&rsquo;s Animal Kingdom, and Lightning Lane) are registered trademarks or copyrights of The Walt Disney Company or its respective affiliates.</li>
       <li>Any references to Disney trademarks, attraction names, or copyrighted works within the App are used strictly for informational, identification, and <strong>nominative fair use</strong> purposes.</li>
@@ -477,7 +477,7 @@ export function renderTermsOfServiceHtml(opts: RenderTermsOfServiceOptions): str
     <p>WE DO NOT WARRANT THAT THE APP WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE, OR THAT WAIT TIMES, SHOWTIMES, OR DINING STATUSES WILL BE ACCURATE OR REFLECT REAL-TIME PARK EXPERIENCES.</p>
 
     <h2>8. Limitation of Liability</h2>
-    <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL DISNEY WORLD TRACKER, ITS OPERATORS, OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE APP.</p>
+    <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL PARKHQ, ITS OPERATORS, OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, USE, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF OR INABILITY TO USE THE APP.</p>
 
     <h2>9. Changes to These Terms</h2>
     <p>We reserve the right to modify these Terms at any time. When changes are made, we will update the &ldquo;Last Updated&rdquo; date at the top of this document. Continued use of the App following any changes constitutes acceptance of the modified Terms.</p>

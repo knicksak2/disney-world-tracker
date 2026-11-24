@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Social Sharing Loop reworks the existing sharing feature of the Disney World Tracker into a coherent, end-to-end social experience. Today a User can send a Share to Friends, but the flow is broken in three ways: the Share is composed from a top-level button on the Friends page that forces the sender to type a raw Experience identifier as free text, a delivered Share lands in the recipient's Inbox as a dead end that shows only a raw identifier with no way to reach the referenced content, and there is no signal that a Share arrived and no way for a recipient to respond. This feature does not replace the already-implemented Friends system, Sharing_Service endpoints, or Friend_Profile_View; it builds on top of them.
+The Social Sharing Loop reworks the existing sharing feature of ParkHQ into a coherent, end-to-end social experience. Today a User can send a Share to Friends, but the flow is broken in three ways: the Share is composed from a top-level button on the Friends page that forces the sender to type a raw Experience identifier as free text, a delivered Share lands in the recipient's Inbox as a dead end that shows only a raw identifier with no way to reach the referenced content, and there is no signal that a Share arrived and no way for a recipient to respond. This feature does not replace the already-implemented Friends system, Sharing_Service endpoints, or Friend_Profile_View; it builds on top of them.
 
 The work is organized into three phases that ship independently and in order:
 
@@ -14,7 +14,7 @@ Requirements 1 through 6 constitute Phase 1 and are independently shippable. Req
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application (React Native / Expo) as a whole.
+- **App**: The ParkHQ mobile application (React Native / Expo) as a whole.
 - **User**: An authenticated account holder of the App.
 - **Friend**: A User who has an accepted, mutual relationship with another User via the existing Friends_Service.
 - **Experience**: An individual catalog item at Walt Disney World, identified by a stable internal identifier.

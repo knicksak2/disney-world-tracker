@@ -71,7 +71,7 @@ A canonical Markdown version of the Terms of Service stored in `docs/terms-of-se
 
 2. **In-App Legal Disclaimer Section**:
    - Rendered concisely in the Settings/About area of `YouAndCrewScreen`:
-     *"Disney World Tracker is an independent, unofficial fan application and is not affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney trademarks, service marks, and trade names are property of their respective owners. Wait times and park schedules are estimates for personal planning purposes."*
+     *"ParkHQ is an independent, unofficial fan application and is not affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney trademarks, service marks, and trade names are property of their respective owners. Wait times and park schedules are estimates for personal planning purposes."*
    - Styled with secondary typography (`t.color.textSecondary`) and accessible test ID `testID="you-and-crew-legal-disclaimer"`.
 
 3. **Constants & Configuration**:

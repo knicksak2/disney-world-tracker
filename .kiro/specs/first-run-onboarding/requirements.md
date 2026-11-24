@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Disney World Tracker now spans roughly 50 feature specs across catalog browsing, live wait times, crowd predictions, multi-day trip planning, budgets, dining plan math, food/ride logging, lists, collectible pins, Hidden Mickeys, and social sharing. First-time user feedback shows that landing straight on a dense dashboard with zero orientation — combined with repeated controls across Home, Explore, `MagicFab`, and `You` — leaves new users unsure where to start or where features live.
+ParkHQ now spans roughly 50 feature specs across catalog browsing, live wait times, crowd predictions, multi-day trip planning, budgets, dining plan math, food/ride logging, lists, collectible pins, Hidden Mickeys, and social sharing. First-time user feedback shows that landing straight on a dense dashboard with zero orientation — combined with repeated controls across Home, Explore, `MagicFab`, and `You` — leaves new users unsure where to start or where features live.
 
 This spec adds a **First-Run Onboarding & App Clarity** package that guides new accounts into the app in under 60 seconds without locking features behind a "Simple Mode" toggle, breaking muscle memory on returning screens, or interrupting existing users who already have activity.
 

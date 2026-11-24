@@ -2,7 +2,7 @@
 
 ## Overview
 
-Self-service account deletion for Disney World Tracker. A signed-in user re-enters their password, types `DELETE`, and the account moves to `pending_deletion`: every session is revoked, push registrations are removed, and the person disappears from everyone else's screens. Signing in (or completing a password reset) inside the grace period (`ACCOUNT_DELETION_GRACE_DAYS`, default 30) restores the account losslessly. After the grace period a dedicated, secret-gated cron endpoint (`202` fast, work async in-process, no worker) purges it: photos are soft-deleted for the existing sweep, owned trips are transferred or deleted, content other people rely on is kept under a per-account **tombstone** identity, and everything else is removed.
+Self-service account deletion for ParkHQ. A signed-in user re-enters their password, types `DELETE`, and the account moves to `pending_deletion`: every session is revoked, push registrations are removed, and the person disappears from everyone else's screens. Signing in (or completing a password reset) inside the grace period (`ACCOUNT_DELETION_GRACE_DAYS`, default 30) restores the account losslessly. After the grace period a dedicated, secret-gated cron endpoint (`202` fast, work async in-process, no worker) purges it: photos are soft-deleted for the existing sweep, owned trips are transferred or deleted, content other people rely on is kept under a per-account **tombstone** identity, and everything else is removed.
 
 The design rests on six decisions. Each is explained in the sections that follow, and the alternatives are listed under "Key decisions".
 

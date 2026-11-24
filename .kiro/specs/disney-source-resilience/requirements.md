@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Disney World Tracker app previously sourced both its catalog and its live
+The ParkHQ app previously sourced both its catalog and its live
 operational data from the public ThemeParks.wiki API. The shipped
 `disney-facilities-catalog-source` spec replaced ThemeParks.wiki entirely,
 making Disney's undocumented internal sources (the Couchbase Sync Gateway and
@@ -157,7 +157,7 @@ supersessions are enumerated in Requirement 13.
   persistence) plus its sync metadata.
 - **Sync_Run_History**: The recorded outcome of every Catalog_Sync run
   (`catalog_sync_runs`), including its outcome discriminator.
-- **App**: The Disney World Tracker mobile application (`apps/mobile`).
+- **App**: The ParkHQ mobile application (`apps/mobile`).
 
 ## Requirements
 

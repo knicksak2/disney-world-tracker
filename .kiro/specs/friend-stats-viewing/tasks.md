@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan builds the Friend Stats Viewing feature additively on the existing Disney World Tracker backend and mobile app, in TypeScript (Fastify API + React Native/Expo client), matching the established service/repo/route and `*.prop.test.ts` conventions.
+This plan builds the Friend Stats Viewing feature additively on the existing ParkHQ backend and mobile app, in TypeScript (Fastify API + React Native/Expo client), matching the established service/repo/route and `*.prop.test.ts` conventions.
 
 The work proceeds bottom-up: schema and shared DTOs first, then the single shared owner-or-friend authorization helper (extracted from the two existing copies), then the new Friend Completions repository and route, then the minimal Note write-path extension, and finally the `Friend_Profile_View` mobile screen with its navigation and per-request state machine. Each step builds on the previous and ends wired into the running system. Property-based tests follow the design's Correctness Properties (Properties 1–9); each property is its own sub-task annotated with the property number and the requirements clause it validates.
 

@@ -38,7 +38,7 @@ describe('sendDeletionScheduled', () => {
     const mail = sent[0]!;
     expect(mail.to).toBe('pat@example.com');
     expect(mail.from).toBe('Tracker <noreply@example.com>');
-    expect(mail.subject).toBe('Your Disney World Tracker account is scheduled for deletion');
+    expect(mail.subject).toBe('Your ParkHQ account is scheduled for deletion');
     for (const body of [mail.text, mail.html]) {
       expect(body).toContain('May 1, 2026');
       expect(body).toContain('8:00 AM');
@@ -108,7 +108,7 @@ describe('sendDeletionCancelled', () => {
     expect(sent).toHaveLength(1);
     const mail = sent[0]!;
     expect(mail.to).toBe('pat@example.com');
-    expect(mail.subject).toBe('Your Disney World Tracker account deletion was cancelled');
+    expect(mail.subject).toBe('Your ParkHQ account deletion was cancelled');
     expect(mail.text).toContain('active again');
     expect(mail.text).toContain('Nothing was removed');
     expect(mail.html).toContain('Nothing was removed');
@@ -136,7 +136,7 @@ describe('MailService is unchanged', () => {
     const { mailer, sent } = capture();
     await mailer.sendPasswordReset({ to: 'guest@example.com', code: '231109', resetUrl: 'http://localhost:3000/auth/reset-password?token=abc' });
     expect(sent).toHaveLength(1);
-    expect(sent[0]!.subject).toBe('Your Disney World Tracker reset code: 231 109');
+    expect(sent[0]!.subject).toBe('Your ParkHQ reset code: 231 109');
     expect(sent[0]!.code).toBe('231109');
     expect(sent[0]!.resetUrl).toBe('http://localhost:3000/auth/reset-password?token=abc');
     expect(sent[0]!.text).toContain('231 109');
@@ -149,7 +149,7 @@ describe('MailService is unchanged', () => {
     await mailer.sendDeletionCancelled({ to: 'pat@example.com' });
     expect(logger.info).toHaveBeenCalledTimes(1);
     const logged = logger.info.mock.calls[0]![0] as Record<string, unknown>;
-    expect(logged.subject).toBe('Your Disney World Tracker account deletion was cancelled');
+    expect(logged.subject).toBe('Your ParkHQ account deletion was cancelled');
     expect(logged.code).toBeUndefined();
     expect(logged.resetUrl).toBeUndefined();
   });

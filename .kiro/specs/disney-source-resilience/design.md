@@ -2,7 +2,7 @@
 
 ## Overview
 
-This feature re-architects data sourcing for the Disney World Tracker along a
+This feature re-architects data sourcing for ParkHQ along a
 **data-by-change-rate** principle and hardens every Disney access path. It is a
 refactor and extension of the shipped `disney-facilities-catalog-source`
 implementation, not a green-field build. The guiding split:

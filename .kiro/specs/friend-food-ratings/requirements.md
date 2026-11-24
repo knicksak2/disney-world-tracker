@@ -35,7 +35,7 @@ This spec **deliberately widens** who can read a Guest's per-dish food logs, to 
 
 ## Glossary
 
-- **App**: The mobile client (`apps/mobile`) of the Disney World Tracker.
+- **App**: The mobile client (`apps/mobile`) of ParkHQ.
 - **User** / **Guest**: An authenticated user of the App.
 - **Friend**: A User for whom a row exists in `friendships` with the requester (canonical pair `user_lo_id < user_hi_id`). The `friendships` table has **no status column**: a row *is* an accepted friendship. A pending request lives in `friend_requests`; there is no block and no soft-remove (`removeFriend` hard-deletes the row). "Accepted Friend" and "Friend" are the same thing in this spec.
 - **Owner**: The User who logged the dishes being read.

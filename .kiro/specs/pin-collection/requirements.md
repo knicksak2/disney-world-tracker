@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Pin Collection system introduces gamification, achievements, and collectible digital trading pins to the Disney World Tracker. Users earn beautifully rendered pins across six distinct tiers (**bronze**, **silver**, **gold**, **amethyst**, **pearl**, and **prism**) by exploring parks, conquering roller coasters, sampling World Showcase country pavilions, dining at restaurants, staying at resorts, and touring efficiently with friends.
+The Pin Collection system introduces gamification, achievements, and collectible digital trading pins to ParkHQ. Users earn beautifully rendered pins across six distinct tiers (**bronze**, **silver**, **gold**, **amethyst**, **pearl**, and **prism**) by exploring parks, conquering roller coasters, sampling World Showcase country pavilions, dining at restaurants, staying at resorts, and touring efficiently with friends.
 
 This feature consumes the `experience-activity-logging` data foundation to evaluate both lifetime catalog milestones and single-day touring feats (such as *Four Parks in One Day* or *15-Ride Marathon*), rendering each pin via a parametric SVG system with rich metallic frames, recessed enamel, and intra-tier visual upgrades.
 

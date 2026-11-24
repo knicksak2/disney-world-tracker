@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This feature enriches the Experience detail view in the Disney World Tracker App with live, category-specific operational information sourced from the ThemeParks.wiki API. Today the detail view shows only static catalog fields (name, Park, Experience_Category, description, and an optional image). This feature adds a live layer that surfaces information relevant to each Experience_Category: current operating status and standby wait times for rides and character meet-and-greets, current-day performance schedules for shows and parades, and operating status and operating hours for restaurants.
+This feature enriches the Experience detail view in the ParkHQ App with live, category-specific operational information sourced from the ThemeParks.wiki API. Today the detail view shows only static catalog fields (name, Park, Experience_Category, description, and an optional image). This feature adds a live layer that surfaces information relevant to each Experience_Category: current operating status and standby wait times for rides and character meet-and-greets, current-day performance schedules for shows and parades, and operating status and operating hours for restaurants.
 
 Live operational data is provided by the existing upstream source, the ThemeParks.wiki API, through its per-entity live endpoint (`/entity/{id}/live`). Unlike the catalog data — which changes slowly and is refreshed at most once every 24 hours — live data is volatile (wait times and statuses change minute to minute). This feature therefore introduces a separate retrieval and short-lived caching path, distinct from the existing Catalog_Sync, so that the detail view reflects near-real-time conditions without overwhelming the upstream API.
 
@@ -10,7 +10,7 @@ Live operational data is provided by the existing upstream source, the ThemePark
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application as a whole.
+- **App**: The ParkHQ mobile application as a whole.
 - **Experience**: An individual catalog item at Walt Disney World, such as a ride, show, restaurant, parade, character meet-and-greet, or other activity.
 - **Experience_Category**: The classification of an Experience. Allowed values are Ride, Show, Restaurant, Parade, Character_Meet, and Other.
 - **Park**: One of the four Walt Disney World theme parks (Magic Kingdom, EPCOT, Hollywood Studios, Animal Kingdom), the two water parks (Typhoon Lagoon, Blizzard Beach), or Disney Springs.

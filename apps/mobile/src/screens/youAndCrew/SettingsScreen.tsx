@@ -321,7 +321,7 @@ export default function SettingsScreen(): JSX.Element {
 
         <View style={styles.disclaimerBlock} testID="you-and-crew-legal-disclaimer">
           <Text style={styles.disclaimerText}>
-            Disney World Tracker is an independent, unofficial companion application and is not
+            ParkHQ is an independent, unofficial companion application and is not
             affiliated with, endorsed by, or sponsored by The Walt Disney Company. All Disney
             trademarks, service marks, and trade names are the property of their respective owners.
             Wait times, park schedules, and price estimates are for personal planning purposes.

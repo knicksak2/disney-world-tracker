@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Disney World Tracker backend (`apps/api`) has accumulated a wide surface of operationally
+The ParkHQ backend (`apps/api`) has accumulated a wide surface of operationally
 important state that is currently visible only through `psql`, `redis-cli`, log scraping, or
 re-running CLI scripts by hand: Disney catalog sync outcomes, the Disney egress rate-limiter's
 live budget usage, the ThemeParks.wiki entity directory's cache state, the intelligence/

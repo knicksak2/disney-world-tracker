@@ -3,7 +3,7 @@
 ## Overview
 
 This feature replaces ThemeParks.wiki entirely with Disney's own internal data sources as the sole
-origin of both catalog and live data for the Disney World Tracker. After the migration completes, no
+origin of both catalog and live data for ParkHQ. After the migration completes, no
 part of the app reads from ThemeParks.wiki. The Disney sources are the ones the `mousetools` library
 uses and that discovery verified live: a Couchbase **Sync Gateway** (`Disney_Sync_Gateway`) for
 facilities, status, schedules, forecasts, and dining status, plus a public **dining-menu service**

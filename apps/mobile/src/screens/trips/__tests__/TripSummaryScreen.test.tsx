@@ -399,7 +399,7 @@ describe('Trip_Summary screen — Send to friends (photo-uploads R15.1, R15.8, R
       '1. Space Mountain — 9.5 ★',
       '2. Soarin Around the World — 9 ★',
       '',
-      'Tracked with Disney World Tracker ✨',
+      'Tracked with ParkHQ ✨',
     ].join('\n');
     expect(shareSpy).toHaveBeenCalledTimes(1);
     expect(shareSpy).toHaveBeenCalledWith({

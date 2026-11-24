@@ -54,7 +54,7 @@ export interface MailServiceOptions {
   }) => Promise<void>;
 }
 
-const DEFAULT_FROM = 'Disney World Tracker <auth@disneytracker.app>';
+const DEFAULT_FROM = 'ParkHQ <auth@disneytracker.app>';
 
 /**
  * A purge date for an email: the park calendar's zone (`America/New_York`), with the zone abbreviation so the
@@ -94,7 +94,7 @@ function simpleHtml(subject: string, title: string, paragraphs: readonly string[
   <div class="card">
     <div class="header">
       <h1 class="title">${title}</h1>
-      <p class="subtitle">Disney World Tracker</p>
+      <p class="subtitle">ParkHQ</p>
     </div>
 ${body}
   </div>
@@ -120,7 +120,7 @@ export function createMailService(options: MailServiceOptions = {}): MailService
       ? options.smtp.secure
       : process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 
-  const defaultFrom = smtpUser ? `Disney World Tracker <${smtpUser}>` : DEFAULT_FROM;
+  const defaultFrom = smtpUser ? `ParkHQ <${smtpUser}>` : DEFAULT_FROM;
   const from = options.from ?? process.env.MAIL_FROM ?? defaultFrom;
   const logger = options.logger;
 
@@ -234,12 +234,12 @@ export function createMailService(options: MailServiceOptions = {}): MailService
   return {
     async sendPasswordReset({ to, code, resetUrl }: SendPasswordResetInput): Promise<void> {
       const formattedCode = `${code.slice(0, 3)} ${code.slice(3)}`;
-      const subject = `Your Disney World Tracker reset code: ${formattedCode}`;
+      const subject = `Your ParkHQ reset code: ${formattedCode}`;
 
       const text = [
         'Hi there,',
         '',
-        `Your verification code to reset your Disney World Tracker password is: ${formattedCode}`,
+        `Your verification code to reset your ParkHQ password is: ${formattedCode}`,
         '',
         'Enter this 6-digit code in the app to choose a new password. This code expires in 15 minutes.',
         '',
@@ -273,7 +273,7 @@ export function createMailService(options: MailServiceOptions = {}): MailService
   <div class="card">
     <div class="header">
       <h1 class="title">Reset Your Password</h1>
-      <p class="subtitle">Disney World Tracker</p>
+      <p class="subtitle">ParkHQ</p>
     </div>
     <div class="code-box">
       <div class="code-label">Verification Code</div>
@@ -297,10 +297,10 @@ export function createMailService(options: MailServiceOptions = {}): MailService
 
     async sendDeletionScheduled({ to, scheduledPurgeAt, graceDays }): Promise<void> {
       const when = formatPurgeDate(scheduledPurgeAt);
-      const subject = 'Your Disney World Tracker account is scheduled for deletion';
+      const subject = 'Your ParkHQ account is scheduled for deletion';
       const lines = [
         'Hi there,',
-        `We received your request to delete your Disney World Tracker account. Your account is now deactivated and will be permanently deleted after ${when}.`,
+        `We received your request to delete your ParkHQ account. Your account is now deactivated and will be permanently deleted after ${when}.`,
         `Changed your mind? Just sign in again before then, and the deletion is cancelled and your account is restored with everything in it. You have ${graceDays} days.`,
         'You have been signed out on every device. If you did not ask for this, sign in now to cancel it, and change your password.',
       ];
@@ -310,10 +310,10 @@ export function createMailService(options: MailServiceOptions = {}): MailService
     },
 
     async sendDeletionCancelled({ to }): Promise<void> {
-      const subject = 'Your Disney World Tracker account deletion was cancelled';
+      const subject = 'Your ParkHQ account deletion was cancelled';
       const lines = [
         'Hi there,',
-        'Your Disney World Tracker account is active again and the scheduled deletion was cancelled. Nothing was removed.',
+        'Your ParkHQ account is active again and the scheduled deletion was cancelled. Nothing was removed.',
         'If this was not you, change your password right away.',
       ];
       const text = lines.join('\n\n');

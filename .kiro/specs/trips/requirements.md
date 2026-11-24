@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Trips feature introduces shared, multi-person Walt Disney World visits into the Disney World Tracker application. A Trip groups a set of Friends around a named visit with a start date and an end date, gives that group a shared planned list of Experiences they want to do, a shared log of what they actually did, a per-Trip activity feed with reactions and comments, and a summary/highlights view of the group's accomplishments.
+The Trips feature introduces shared, multi-person Walt Disney World visits into the ParkHQ application. A Trip groups a set of Friends around a named visit with a start date and an end date, gives that group a shared planned list of Experiences they want to do, a shared log of what they actually did, a per-Trip activity feed with reactions and comments, and a summary/highlights view of the group's accomplishments.
 
 The standout mechanic is the "rode with" tag on a logged Completion. When a Trip Member logs an Experience they completed during a Trip, they may tag other Trip Members they rode with. Tagging never silently writes to another User's data: each tagged Member receives a notification and must confirm the tag. On confirmation, the completion trickles down into the tagged Member's real, canonical Tracking data, and the Member is offered the chance to add or update their one canonical Rating for that Experience. There is exactly one canonical Rating per User per Experience; a Trip references that Rating rather than storing a frozen copy, so a Rating edited through a Trip updates everywhere it appears (catalog, personal stats, aggregate ratings, and leaderboard).
 
@@ -14,7 +14,7 @@ The following capabilities are explicitly out of scope for v1 and are noted as f
 
 ## Glossary
 
-- **App**: The Disney World Tracker mobile application (React Native / Expo) as a whole.
+- **App**: The ParkHQ mobile application (React Native / Expo) as a whole.
 - **User**: An authenticated account holder of the App.
 - **Profile**: The public-facing account information for a User, including display name and avatar preset.
 - **Friend**: A User who has an accepted, mutual relationship with another User via the Friends_Service.

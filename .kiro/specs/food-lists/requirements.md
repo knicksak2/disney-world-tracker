@@ -12,7 +12,7 @@ This is a live-access model, not the point-in-time `shares`/`share_recipients` p
 
 ## Glossary
 
-- **App**: The mobile client and web interfaces of the Disney World Tracker.
+- **App**: The mobile client and web interfaces of ParkHQ.
 - **User**: An authenticated user of the App.
 - **Food_Item**: A dish catalog entry scoped to a Restaurant_Experience, as defined by `food-item-logging`.
 - **Food_List**: A named, owned collection of Food_Items, persisted in `food_lists`, with a `visibility` of `private` or `public`, and an `isChecklist` flag (Requirement 13) distinguishing a goal-oriented checklist (e.g. "Food & Wine 26") from a plain collection (e.g. "Favorite Snacks").

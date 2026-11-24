@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Disney World Tracker app currently sources both its catalog and its live operational data from the public ThemeParks.wiki API. That source exposes no imagery, no hotel/resort information, no menus, and a coarser hierarchy than the app would like. This feature replaces ThemeParks.wiki entirely with Disney's own internal data sources (the Couchbase Sync Gateway and public dining-menu service used by the `mousetools` library and verified live during discovery) as the sole origin of both catalog and live data.
+The ParkHQ app currently sources both its catalog and its live operational data from the public ThemeParks.wiki API. That source exposes no imagery, no hotel/resort information, no menus, and a coarser hierarchy than the app would like. This feature replaces ThemeParks.wiki entirely with Disney's own internal data sources (the Couchbase Sync Gateway and public dining-menu service used by the `mousetools` library and verified live during discovery) as the sole origin of both catalog and live data.
 
 This is a full, single-ecosystem migration. After it completes, no part of the app reads from ThemeParks.wiki. The motivations, in priority order, are: (1) surface hotel/resort information the app cannot obtain today; (2) use Disney's native imagery; (3) add richer metadata (accessibility and price facets, coordinates, full dining menus); and (4) source live wait times from Disney directly, which discovery showed to be fresher than the ThemeParks.wiki mirror.
 
@@ -45,7 +45,7 @@ The Disney sources are undocumented, protected by static reverse-engineered cred
 - **Catalog_Sync**: The orchestrator that fetches upstream data, classifies it, reconciles it against the local cache, and records the run outcome.
 - **Catalog_Cache**: The local persisted catalog (`experiences` table and the new resort persistence) plus its sync metadata.
 - **Bridge_Map**: A one-time mapping from Enterprise_Id to the existing ThemeParks.wiki-derived Internal_Id, used only during migration to guarantee id continuity.
-- **App**: The Disney World Tracker mobile application (`apps/mobile`).
+- **App**: The ParkHQ mobile application (`apps/mobile`).
 
 ## Requirements
 

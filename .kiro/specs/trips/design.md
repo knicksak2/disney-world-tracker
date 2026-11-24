@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Trips feature adds shared, multi-person Walt Disney World visits to the Disney World Tracker.
+The Trips feature adds shared, multi-person Walt Disney World visits to ParkHQ.
 A `Trip` groups a set of Friends around a named visit with a start/end date, a shared `Planned_List`,
 a single `Trip_Activity` surface — a reverse-chronological feed with reactions and comments that also
 hosts logging Completions (the `Shared_Log`'s `Trip_Log_Entries` presented inline) — and a derived

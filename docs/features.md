@@ -1,8 +1,8 @@
-# Disney World Tracker: Feature Inventory
+# ParkHQ: Feature Inventory
 
 What the app does, grouped by area, with where each feature lives and which spec owns it. This is a map, not a spec. The specs in `.kiro/specs/` are the source of truth for exact behavior.
 
-**Snapshot:** commit `ab60f90` base + `SettingsScreen` relocation (2026-11-21). 51 specs, 80 API migrations.
+**Snapshot:** commit `9807a3f` base + ParkHQ product rename (2026-11-24). 51 specs, 80 API migrations.
 
 **Keeping it current:** update this file in the same change that ships, removes or re-statuses a feature (rule in `.kiro/steering/tech-conventions.md`, "Keep `docs/features.md` current"). Bump the snapshot line when you do.
 
