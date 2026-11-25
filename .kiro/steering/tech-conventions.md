@@ -84,6 +84,16 @@ When you revise a spec that already exists, **add or amend; do not delete or ren
 
 Ordinary bug fixes and refactors inside an existing feature do not need an edit. Check status against the code (screen registered, route exists), not only `tasks.md` checkboxes; a stale checkbox is not evidence either way. Bump the snapshot line (commit and date) at the top when you edit. In your completion report, say which rows you changed, or state that none apply.
 
+## Keep the Home search bar current
+
+`apps/mobile/src/screens/home/HomeSearchBar.tsx` is how users jump to any tool. Its tool list is a hand-written array of `tool-*` entries (plus the `makeTripTool` helper for trip-scoped tools), and nothing enforces it. Add or update an entry **in the same change** whenever you:
+
+- add a user-facing screen, a Trip hub section (new `TripScopedScreen` value), a Stats/Collection/You & Crew page, or a Settings page,
+- rename a screen or move it to a different stack or tab (the entry's `breadcrumb` and `navigation.navigate(...)` target must still resolve),
+- remove a screen (delete its entry).
+
+Each entry needs a plain-words `title` and `subtitle`, a `breadcrumb` matching where the screen lives, `keywords` with the synonyms a user would type, an `icon`, a `tag`, and an `onPress` that navigates to the real route. Screens that need params the search bar cannot supply (e.g. `ExperienceDetail`, which is reached through catalog results) and admin pages (`/admin/*`, which are not in the app) do not get an entry. Add a case to `screens/home/__tests__/HomeSearchBar.test.tsx` that types a keyword and asserts the navigate call. In your completion report, say which entry you added, or state why none applies.
+
 ## Keep `README.md` current
 
 `README.md` is the setup and operations guide. Update it **in the same change** whenever you:

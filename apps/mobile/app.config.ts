@@ -94,7 +94,7 @@ const config: ExpoConfig = {
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.dwt.mobile',
+    bundleIdentifier: 'com.parkhq',
     infoPlist: {
       NSCameraUsageDescription:
         'Take photos of your Disney World food and trip memories to share with your crew.',
@@ -103,13 +103,13 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: 'com.dwt.mobile',
+    package: 'com.parkhq',
     softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#5b2a86',
     },
-    // FCM config for the `com.dwt.mobile` Firebase app. Expo's prebuild reads
+    // FCM config for the `com.parkhq` Firebase app. Expo's prebuild reads
     // this file and wires the Google Services Gradle plugin automatically, so
     // the native FCM SDK can obtain a device push token in a dev/production
     // build (remote push is unsupported in Expo Go, SDK 53+).

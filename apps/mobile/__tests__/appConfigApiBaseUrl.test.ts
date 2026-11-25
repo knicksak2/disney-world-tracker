@@ -123,6 +123,18 @@ describe('app.config.ts apiBaseUrl resolution', () => {
     expect(resolveApiBaseUrl()).toBe(LOCAL_DEFAULT);
   });
 
+  it('sets ParkHQ display name and com.parkhq iOS/Android identifiers', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const config = require('../app.config').default as {
+      name?: string;
+      ios?: { bundleIdentifier?: string };
+      android?: { package?: string };
+    };
+    expect(config.name).toBe('ParkHQ');
+    expect(config.ios?.bundleIdentifier).toBe('com.parkhq');
+    expect(config.android?.package).toBe('com.parkhq');
+  });
+
   it('sets pre-release version 0.1.0 and iOS camera/photo-library usage strings', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const config = require('../app.config').default as {
